@@ -19,6 +19,8 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showTimeSeries, setShowTimeSeries] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [compareHistoryData, setCompareHistoryData] = useState(null);
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
@@ -62,6 +64,14 @@ export default function App() {
     setShowHistory(false);
   };
 
+  const handleLoadCompareHistory = (data) => {
+    // data = { slots, results } — open Compare view and pre-load results
+    setShowCompare(true);
+    setShowHistory(false);
+    // Store in a ref so ComparisonView can pick it up
+    setCompareHistoryData(data);
+  };
+
   const handleMapStationSelect = (stationId) => {
     setSelectedStation(stationId);
   };
@@ -100,6 +110,8 @@ export default function App() {
           onToggleMap={() => setShowMap((v) => !v)}
           showTimeSeries={showTimeSeries}
           onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
+          showCompare={showCompare}
+          onToggleCompare={() => setShowCompare((v) => !v)}
           selectedStation={selectedStation}
           onStationChange={handleStationChange}
           onSourceChange={handleSourceChange}
@@ -108,6 +120,7 @@ export default function App() {
         {showHistory && (
           <HistoryPanel
             onLoad={handleLoadHistory}
+            onLoadCompare={handleLoadCompareHistory}
             onClose={() => setShowHistory(false)}
           />
         )}
@@ -119,6 +132,11 @@ export default function App() {
           showMap={showMap}
           showTimeSeries={showTimeSeries}
           onCloseTimeSeries={() => setShowTimeSeries(false)}
+          showCompare={showCompare}
+          onCloseCompare={() => setShowCompare(false)}
+          compareHistoryData={compareHistoryData}
+          onCompareHistoryConsumed={() => setCompareHistoryData(null)}
+          stations={stations}
           selectedStation={selectedStation}
           source={source}
           mapProps={{

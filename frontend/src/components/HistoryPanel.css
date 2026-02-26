@@ -84,6 +84,54 @@
   background: var(--bg-hover);
 }
 
+/* Tabs */
+.hp-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 10px;
+  background: var(--bg-secondary, #1a1a1a);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.hp-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hp-tab:hover {
+  color: var(--text-primary);
+}
+
+.hp-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-hover, #252525);
+}
+
+.hp-tab-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.hp-compare-icon {
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+
 /* Empty state */
 .hp-empty {
   display: flex;

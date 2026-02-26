@@ -51,6 +51,7 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - Automatically saves last 20 soundings to localStorage
 - Quick-load previous soundings with one click
 - Relative timestamps ("3m ago", "2h ago")
+- Tabbed view: **Soundings** and **Comparisons** tabs
 
 ### Favorite Stations
 - Star icon to pin frequently used stations
@@ -60,6 +61,24 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 ### Feedback & Suggestions
 - Built-in feedback modal (Suggestion / Bug Report / Feature Request)
 - Submitted to backend API for developer review
+- Feedback logged to Cloud Run stdout for persistence across ephemeral containers
+
+### Parameter Time-Series Charts
+- Plot CAPE, SRH, STP, shear, lapse rates over a date range
+- Date range picker (up to 14 days)
+- 00Z + 12Z resolution for ≤7 days, 12Z only for >7 days
+- Grouped parameter selector with exclusive group selection
+- Custom dark-themed Recharts line charts with tooltips
+
+### Multi-Sounding Comparison
+- Compare up to 4 soundings side-by-side
+- Slot-based UI: pick station, source, and date for each sounding
+- Side-by-side Skew-T plots in a responsive grid
+- Full parameter comparison table with Δ (difference) column
+- Highlights highest/lowest values across soundings
+- 00Z/12Z toggle for observed/ACARS sources
+- **Download comparison** — Tiles all sounding plots into a single composite PNG
+- **Comparison history** — Automatically saved to localStorage; reload previous comparisons from the History panel's "Comparisons" tab
 
 ---
 
@@ -80,10 +99,12 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 ```
 ├── sounding.py          # Core: data fetching, parameter computation, plotting
 ├── app.py               # Flask API serving the React frontend
-├── Dockerfile           # Docker config for Koyeb deployment
-├── gunicorn.conf.py     # Gunicorn config for production
+├── Dockerfile           # Docker config for Cloud Run deployment
+├── gunicorn.conf.py     # Gunicorn config (reads PORT from env)
 ├── requirements.txt     # Python dependencies
 ├── deploy.ps1           # Build frontend + deploy to GitHub Pages
+├── deploy-cloudrun.ps1  # Deploy backend to Google Cloud Run
+├── .gcloudignore        # Exclude frontend from Cloud Build uploads
 ├── feedback.json        # Server-side feedback storage
 └── frontend/            # React + Vite frontend
     ├── src/
@@ -92,12 +113,14 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
     │   ├── history.js           # localStorage sounding history
     │   ├── favorites.js         # localStorage station favorites
     │   └── components/
-    │       ├── ControlPanel.jsx  # Station/source/date controls + favorites
-    │       ├── Header.jsx        # App header with feedback & GitHub links
-    │       ├── ResultsView.jsx   # Plot image + parameter display + map
-    │       ├── StationMap.jsx    # Interactive Leaflet station map
-    │       ├── HistoryPanel.jsx  # Sounding history sidebar
-    │       └── *.css             # Component styles (dark theme)
+    │       ├── ControlPanel.jsx   # Station/source/date controls + favorites
+    │       ├── Header.jsx         # App header with feedback & GitHub links
+    │       ├── ResultsView.jsx    # Plot image + parameter display + map
+    │       ├── StationMap.jsx     # Interactive Leaflet station map
+    │       ├── HistoryPanel.jsx   # Sounding history sidebar
+    │       ├── TimeSeriesChart.jsx # Recharts time-series parameter charts
+    │       ├── ComparisonView.jsx  # Multi-sounding comparison view
+    │       └── *.css              # Component styles (dark theme)
     ├── public/
     │   └── favicon.svg          # Custom skew-T favicon
     ├── package.json
@@ -158,16 +181,23 @@ Set `VITE_API_URL` to point to your backend (defaults to localhost:5000).
 
 | Component | Platform | URL |
 |---|---|---|
-| **Backend API** | Koyeb | `https://constitutional-lissi-mypersonalprojs-de5b9491.koyeb.app` |
+| **Backend API** | Google Cloud Run | `https://soundinganalysis-uvktu4ziyq-as.a.run.app` |
 | **Frontend** | GitHub Pages | `https://shianmike.github.io/SoundingAnalysis/` |
 
-To redeploy:
+To redeploy frontend:
 
 ```powershell
 .\deploy.ps1
 ```
 
-This builds the frontend with Vite, then force-pushes to the `gh-pages` branch.
+To redeploy backend:
+
+```powershell
+.\deploy-cloudrun.ps1
+```
+
+The frontend build uses Vite and force-pushes to the `gh-pages` branch.  
+The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 
 ---
 
@@ -179,6 +209,8 @@ This builds the frontend with Vite, then force-pushes to the `gh-pages` branch.
 | `GET` | `/api/sources` | List available data sources and BUFKIT models |
 | `POST` | `/api/sounding` | Fetch sounding, compute params, return base64 plot + data |
 | `POST` | `/api/risk-scan` | Scan stations and return tornado risk scores |
+| `POST` | `/api/time-series` | Fetch parameter trends over a date range |
+| `POST` | `/api/compare` | Fetch multiple soundings for side-by-side comparison |
 | `POST` | `/api/feedback` | Submit user feedback/suggestion |
 | `GET`  | `/api/feedback` | Retrieve all submitted feedback |
 
@@ -201,15 +233,13 @@ This builds the frontend with Vite, then force-pushes to the `gh-pages` branch.
 ## Dependencies
 
 - **Python:** Flask, MetPy, Matplotlib, NumPy, Requests
-- **Frontend:** React 18, Vite, Lucide React, Leaflet, React-Leaflet
+- **Frontend:** React 18, Vite, Lucide React, Leaflet, React-Leaflet, Recharts
 - **Optional:** siphon (RAP), cdsapi + netCDF4 (ERA5)
 
 ---
 
 ## Upcoming Features
 
-- [ ] **Parameter Time-Series Charts** — Plot CAPE, SRH, STP trends over multiple sounding times for a station (e.g. last 5 days of 00Z/12Z)
-- [ ] **Multi-Sounding Comparison** — Load two soundings side-by-side (00Z vs 12Z, or two stations) with split-view parameter cards
 - [ ] **Export Parameters to CSV** — One-click download of computed parameters and risk scan tables as CSV
 - [ ] **Severe Weather Outlook Overlay** — Display SPC Day 1/2/3 convective outlooks on the station map
 - [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
