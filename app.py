@@ -6,10 +6,13 @@ Exposes endpoints to fetch sounding data and return analysis results
 
 import base64
 import io
+import os
+import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
+import requests as http_requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -41,6 +44,36 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
+
+
+# ─── Keep-alive ping (prevents Render free-tier cold starts) ──────
+KEEP_ALIVE_URL = os.environ.get(
+    "RENDER_EXTERNAL_URL",
+    "https://soundinganalysis-1.onrender.com",
+)
+KEEP_ALIVE_INTERVAL = 13 * 60  # seconds (Render sleeps after 15 min)
+
+
+def _keep_alive():
+    """Background thread: pings /api/health every 13 minutes."""
+    import time
+
+    while True:
+        time.sleep(KEEP_ALIVE_INTERVAL)
+        try:
+            r = http_requests.get(f"{KEEP_ALIVE_URL}/api/health", timeout=10)
+            print(f"[keep-alive] pinged {KEEP_ALIVE_URL} -> {r.status_code}")
+        except Exception as exc:
+            print(f"[keep-alive] ping failed: {exc}")
+
+
+threading.Thread(target=_keep_alive, daemon=True).start()
+
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    """Lightweight health-check endpoint."""
+    return jsonify({"status": "ok"})
 
 
 # ─── Helper ────────────────────────────────────────────────────────
@@ -212,6 +245,9 @@ def _serialize_params(params, data, station, dt, source):
         "frzLevel": round(params["frz_level"]) if params.get("frz_level") is not None else None,
         "wbo": round(params["wbo"]) if params.get("wbo") is not None else None,
         "stp": round(params.get("stp", 0), 1),
+        "scp": round(params.get("scp", 0), 1),
+        "ship": round(params.get("ship", 0), 1),
+        "dcp": round(params.get("dcp", 0), 1),
         "rh01": round(params["rh_0_1km"]) if params.get("rh_0_1km") is not None else None,
         "rh13": round(params["rh_1_3km"]) if params.get("rh_1_3km") is not None else None,
         "rh36": round(params["rh_3_6km"]) if params.get("rh_3_6km") is not None else None,
@@ -254,7 +290,7 @@ def risk_scan():
             score = _quick_tornado_score(sid, dt)
             if score is None:
                 return None
-            stp_score, raw_score, cape, srh, bwd = score
+            stp_score, raw_score, cape, srh, bwd, scp, ship, dcp = score
             return {
                 "id": sid,
                 "name": STATIONS.get(sid, (sid,))[0],
@@ -265,6 +301,9 @@ def risk_scan():
                 "cape": round(cape),
                 "srh": round(srh),
                 "bwd": round(bwd),
+                "scp": round(scp, 2),
+                "ship": round(ship, 2),
+                "dcp": round(dcp, 2),
             }
         except Exception:
             return None

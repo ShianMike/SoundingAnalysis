@@ -529,6 +529,36 @@
   cursor: not-allowed;
 }
 
+/* History toggle button */
+.cp-history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 16px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cp-history-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.cp-history-btn.active {
+  background: var(--accent-muted);
+  color: var(--text-accent);
+  border-color: var(--accent);
+}
+
 @media (max-width: 1024px) {
   .control-panel {
     width: 100%;

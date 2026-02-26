@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Zap,
   ArrowUpDown,
+  History,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import "./ControlPanel.css";
@@ -48,6 +49,8 @@ export default function ControlPanel({
   connectError,
   riskData,
   onRiskDataChange,
+  showHistory,
+  onToggleHistory,
 }) {
   const [source, setSource] = useState("obs");
   const [station, setStation] = useState("OUN");
@@ -450,6 +453,16 @@ export default function ControlPanel({
               Generate Sounding
             </>
           )}
+        </button>
+
+        {/* History */}
+        <button
+          type="button"
+          className={`cp-history-btn ${showHistory ? "active" : ""}`}
+          onClick={onToggleHistory}
+        >
+          <History size={14} />
+          {showHistory ? "Hide History" : "View History"}
         </button>
       </form>
     </aside>

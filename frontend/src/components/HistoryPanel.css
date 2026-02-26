@@ -1,0 +1,231 @@
+/* HistoryPanel */
+.history-panel {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 100px);
+}
+
+.hp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.hp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+}
+
+.hp-header-left h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hp-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-weight: 500;
+}
+
+.hp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hp-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hp-clear-btn:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.hp-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hp-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Empty state */
+.hp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.hp-empty p {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hp-empty-hint {
+  font-size: 11px !important;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* List */
+.hp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+.hp-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+  position: relative;
+}
+
+.hp-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
+.hp-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hp-item-station {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-accent);
+  font-family: var(--font-mono);
+  background: var(--accent-muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.hp-item-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hp-item-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hp-item-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.hp-item-source {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.hp-item-right {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hp-item-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.hp-item-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.hp-item:hover .hp-item-delete {
+  opacity: 1;
+}
+
+.hp-item-delete:hover {
+  color: var(--red);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+@media (max-width: 1024px) {
+  .history-panel {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 16px;
+    max-height: 300px;
+  }
+}
