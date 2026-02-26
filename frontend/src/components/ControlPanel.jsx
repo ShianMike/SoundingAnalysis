@@ -44,6 +44,10 @@ export default function ControlPanel({
   onSubmit,
   loading,
   initialLoading,
+  onRetry,
+  connectError,
+  riskData,
+  onRiskDataChange,
 }) {
   const [source, setSource] = useState("obs");
   const [station, setStation] = useState("OUN");
@@ -54,7 +58,6 @@ export default function ControlPanel({
   const [fhour, setFhour] = useState("0");
   const [stationSearch, setStationSearch] = useState("");
   const [hoveredSource, setHoveredSource] = useState(null);
-  const [riskData, setRiskData] = useState(null); // { date, stations: [{id,stp,raw,cape,srh,bwd}] }
   const [scanning, setScanning] = useState(false);
   const [sortMode, setSortMode] = useState("az"); // az | za | risk-high | risk-low
   const listRef = useRef(null);
@@ -118,7 +121,7 @@ export default function ControlPanel({
     try {
       const dateParam = date ? date.replace(/[-T:]/g, "").slice(0, 10) : undefined;
       const data = await fetchRiskScan(dateParam);
-      setRiskData(data);
+      onRiskDataChange(data);
       setSortMode("risk-high");
       // Auto-select the highest risk station
       if (data.stations.length > 0) {
@@ -149,7 +152,7 @@ export default function ControlPanel({
     onSubmit(params);
   };
 
-  const handleStationSelect = (id) => {
+  const handleStationSelect = (id, autoFetch = false) => {
     setStation(id);
     setStationSearch("");
     const stn = stations.find((s) => s.id === id);
@@ -157,14 +160,53 @@ export default function ControlPanel({
       setLat(String(stn.lat));
       setLon(String(stn.lon));
     }
+    if (autoFetch && !loading) {
+      const params = { source, station: id };
+      if (date) params.date = date.replace(/[-T:]/g, "").slice(0, 10);
+      if (source === "bufkit") {
+        params.model = model;
+        params.fhour = parseInt(fhour) || 0;
+      }
+      if (source === "rap" || source === "era5") {
+        const s = stations.find((st) => st.id === id);
+        if (s) {
+          params.lat = s.lat;
+          params.lon = s.lon;
+        }
+      }
+      onSubmit(params);
+    }
   };
 
-  if (initialLoading) {
+  if (initialLoading || connectError) {
     return (
       <aside className="control-panel">
         <div className="cp-loading">
-          <Loader2 className="spin" size={20} />
-          <span>Connecting to API...</span>
+          {initialLoading ? (
+            <>
+              <Loader2 className="spin" size={20} />
+              <span>Connecting to API...</span>
+            </>
+          ) : (
+            <>
+              <span style={{ color: "var(--danger, #e74c3c)" }}>{connectError}</span>
+              <button
+                type="button"
+                onClick={onRetry}
+                style={{
+                  marginTop: 8,
+                  padding: "6px 16px",
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  border: "1px solid var(--border, #555)",
+                  background: "var(--surface, #2a2a2a)",
+                  color: "inherit",
+                }}
+              >
+                Retry
+              </button>
+            </>
+          )}
         </div>
       </aside>
     );
@@ -270,7 +312,7 @@ export default function ControlPanel({
                     key={s.id}
                     type="button"
                     className={`cp-station-item ${station === s.id ? "active" : ""}`}
-                    onClick={() => handleStationSelect(s.id)}
+                    onClick={() => handleStationSelect(s.id, !!riskData)}
                   >
                     <span className="cp-station-item-id">{s.id}</span>
                     <span className="cp-station-item-name">{s.name}</span>

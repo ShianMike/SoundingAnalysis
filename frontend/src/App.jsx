@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
@@ -13,17 +13,24 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [riskData, setRiskData] = useState(null);
 
-  useEffect(() => {
+  const loadInitialData = useCallback(() => {
+    setInitialLoading(true);
+    setError(null);
     Promise.all([fetchStations(), fetchSources()])
       .then(([stationsData, sourcesData]) => {
         setStations(stationsData);
         setSources(sourcesData.sources);
         setModels(sourcesData.models);
       })
-      .catch((e) => setError("Failed to connect to API. Is the backend running on port 5000?"))
+      .catch(() => setError("Failed to connect to API. Is the backend running?"))
       .finally(() => setInitialLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   const handleSubmit = async (params) => {
     setLoading(true);
@@ -50,8 +57,12 @@ export default function App() {
           onSubmit={handleSubmit}
           loading={loading}
           initialLoading={initialLoading}
+          onRetry={loadInitialData}
+          connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
+          riskData={riskData}
+          onRiskDataChange={setRiskData}
         />
-        <ResultsView result={result} loading={loading} error={error} />
+        <ResultsView result={result} loading={loading} error={error} riskData={riskData} />
       </main>
     </div>
   );
