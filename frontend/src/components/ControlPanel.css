@@ -542,6 +542,39 @@
   border-color: var(--text-muted);
 }
 
+/* 00Z / 12Z toggle row */
+.cp-sounding-hour-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.cp-hour-btn {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cp-hour-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.cp-hour-btn.active {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
 .cp-submit:hover:not(:disabled) {
   background: var(--accent-hover);
   box-shadow: 0 0 0 3px var(--accent-muted);
@@ -552,27 +585,30 @@
   cursor: not-allowed;
 }
 
-/* Toggle row (Map / History) */
+/* Toggle row (Map / Trends / Compare / History) */
 .cp-toggle-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .cp-toggle-btn {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 9px 12px;
+  gap: 4px;
+  padding: 8px 8px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .cp-toggle-btn:hover {

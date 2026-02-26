@@ -77,3 +77,14 @@ export async function fetchTimeSeries(params) {
   if (!res.ok) throw new Error(data.error || "Time-series request failed");
   return data;
 }
+
+export async function fetchCompare(soundings) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ soundings }),
+  }, 300000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Comparison request failed");
+  return data;
+}

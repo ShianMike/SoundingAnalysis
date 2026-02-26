@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Github, MessageSquarePlus, X, Send, Loader2 } from "lucide-react";
 import "./Header.css";
 
@@ -53,6 +54,7 @@ export default function Header() {
   };
 
   return (
+    <>
     <header className="header">
       <div className="header-inner">
         <div className="header-brand">
@@ -103,7 +105,8 @@ export default function Header() {
         </div>
       </div>
 
-      {showFeedback && (
+    </header>
+      {showFeedback && createPortal(
         <div className="fb-overlay" onClick={() => setShowFeedback(false)}>
           <div className="fb-modal" onClick={(e) => e.stopPropagation()}>
             <div className="fb-header">
@@ -158,8 +161,9 @@ export default function Header() {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </header>
+    </>
   );
 }

@@ -114,3 +114,126 @@ function _pruneOldImages(entries, count) {
   const toRemove = entries.slice(-count);
   toRemove.forEach((e) => localStorage.removeItem(IMAGE_PREFIX + e.id));
 }
+
+/* ── Comparison History ─────────────────────────────────────────── */
+
+const COMPARE_KEY = "comparison_history";
+const COMPARE_IMG_PREFIX = "compare_img_";
+const MAX_COMPARE = 15;
+
+/**
+ * Get all comparison history entries (without images). Newest-first.
+ */
+export function getCompareHistory() {
+  try {
+    const raw = localStorage.getItem(COMPARE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save a comparison to history.
+ * @param {Array} slots - The slot configs [{source, station, date, hour}, ...]
+ * @param {Array} results - The comparison results from the API
+ */
+export function saveCompareToHistory(slots, results) {
+  try {
+    const entries = getCompareHistory();
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+    // Build a summary of the results (without images)
+    const summary = results.map((r) => ({
+      meta: r.meta,
+      params: r.params,
+      error: r.error || null,
+    }));
+
+    const entry = {
+      id,
+      timestamp: Date.now(),
+      slots: slots.filter((s) => s.station),
+      summary,
+    };
+
+    // Store images as a JSON array of base64 strings
+    const images = results.map((r) => r.image || null);
+    try {
+      localStorage.setItem(COMPARE_IMG_PREFIX + id, JSON.stringify(images));
+    } catch {
+      _pruneCompareImages(entries, 3);
+      try {
+        localStorage.setItem(COMPARE_IMG_PREFIX + id, JSON.stringify(images));
+      } catch {
+        // skip images
+      }
+    }
+
+    entries.unshift(entry);
+    while (entries.length > MAX_COMPARE) {
+      const removed = entries.pop();
+      localStorage.removeItem(COMPARE_IMG_PREFIX + removed.id);
+    }
+
+    localStorage.setItem(COMPARE_KEY, JSON.stringify(entries));
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load a comparison entry including images.
+ */
+export function loadCompareFromHistory(id) {
+  const entries = getCompareHistory();
+  const entry = entries.find((e) => e.id === id);
+  if (!entry) return null;
+
+  let images = [];
+  try {
+    images = JSON.parse(localStorage.getItem(COMPARE_IMG_PREFIX + id) || "[]");
+  } catch {
+    images = [];
+  }
+
+  // Reconstruct results array
+  const results = entry.summary.map((s, i) => ({
+    ...s,
+    image: images[i] || null,
+  }));
+
+  return { slots: entry.slots, results };
+}
+
+/**
+ * Delete a single comparison history entry.
+ */
+export function deleteCompareFromHistory(id) {
+  try {
+    const entries = getCompareHistory().filter((e) => e.id !== id);
+    localStorage.setItem(COMPARE_KEY, JSON.stringify(entries));
+    localStorage.removeItem(COMPARE_IMG_PREFIX + id);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Clear all comparison history.
+ */
+export function clearCompareHistory() {
+  try {
+    const entries = getCompareHistory();
+    entries.forEach((e) => localStorage.removeItem(COMPARE_IMG_PREFIX + e.id));
+    localStorage.removeItem(COMPARE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function _pruneCompareImages(entries, count) {
+  const toRemove = entries.slice(-count);
+  toRemove.forEach((e) => localStorage.removeItem(COMPARE_IMG_PREFIX + e.id));
+}

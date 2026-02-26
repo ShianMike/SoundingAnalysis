@@ -452,8 +452,115 @@ def time_series():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Compare endpoint ────────────────────────────────────────────────
+@app.route("/api/compare", methods=["POST", "OPTIONS"])
+def compare_soundings():
+    """
+    Fetch multiple soundings in parallel for side-by-side comparison.
+
+    Expected JSON body:
+      {
+        "soundings": [
+          { "source": "obs", "station": "OUN", "date": "2024061200" },
+          { "source": "obs", "station": "FWD", "date": "2024061200" },
+          ...
+        ]
+      }
+    Max 4 soundings at a time.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True)
+    items = body.get("soundings", [])
+
+    if not items or not isinstance(items, list):
+        return jsonify({"error": "Provide a 'soundings' array."}), 400
+    if len(items) > 4:
+        return jsonify({"error": "Maximum 4 soundings per comparison."}), 400
+
+    compare_workers = int(os.environ.get("COMPARE_WORKERS", "2"))
+
+    def _fetch_one_compare(item):
+        """Fetch + compute + plot a single sounding item."""
+        src = item.get("source", "obs").lower()
+        stn = item.get("station")
+        date_str = item.get("date")
+        lat_v = item.get("lat")
+        lon_v = item.get("lon")
+        mdl = item.get("model", "rap")
+        fhr = item.get("fhour", 0)
+
+        if date_str:
+            dt = datetime.strptime(str(date_str), "%Y%m%d%H").replace(
+                tzinfo=timezone.utc
+            )
+        else:
+            dt = get_latest_sounding_time()
+
+        if src == "obs" and stn is None and lat_v is not None and lon_v is not None:
+            stn = find_nearest_station(lat_v, lon_v)
+        if stn:
+            stn = stn.upper()
+
+        if src in ("rap", "era5") and lat_v is None and lon_v is None:
+            if stn and stn in STATIONS:
+                _, lat_v, lon_v = STATIONS[stn]
+
+        data = fetch_sounding(
+            station_id=stn, dt=dt, source=src,
+            lat=lat_v, lon=lon_v, model=mdl, fhour=fhr,
+        )
+        params = compute_parameters(data)
+
+        plot_id = stn or src.upper()
+        fig = plot_sounding(data, params, plot_id, dt)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor="#0d0d0d")
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+        serialized = _serialize_params(params, data, stn, dt, src)
+
+        return {
+            "image": image_b64,
+            "params": serialized,
+            "meta": {
+                "station": stn,
+                "stationName": STATIONS.get(stn, (stn or src.upper(),))[0],
+                "source": src,
+                "date": dt.strftime("%Y-%m-%d %HZ"),
+                "levels": len(data["pressure"]),
+                "sfcPressure": round(float(data["pressure"][0].magnitude)),
+                "topPressure": round(float(data["pressure"][-1].magnitude)),
+            },
+        }
+
+    try:
+        results = []
+        with ThreadPoolExecutor(max_workers=compare_workers) as executor:
+            futures = {executor.submit(_fetch_one_compare, item): i for i, item in enumerate(items)}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results.append((idx, future.result()))
+                except Exception as e:
+                    results.append((idx, {"error": str(e), "meta": items[idx]}))
+
+        # Sort by original order
+        results.sort(key=lambda x: x[0])
+        return jsonify({"soundings": [r[1] for r in results]})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Feedback ───────────────────────────────────────────────────────
-FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), "feedback.json")
+# Use /tmp on Cloud Run (ephemeral but always writable)
+_fb_dir = "/tmp" if os.environ.get("K_SERVICE") else os.path.dirname(__file__)
+FEEDBACK_FILE = os.path.join(_fb_dir, "feedback.json")
 
 
 def _load_feedback():
@@ -486,6 +593,9 @@ def submit_feedback():
         "date": datetime.now(timezone.utc).isoformat(),
         "userAgent": body.get("userAgent", ""),
     }
+
+    # Log to stdout so it appears in Cloud Run logs (file is ephemeral)
+    print(f"[FEEDBACK] type={entry['type']} | {entry['text'][:200]}")
 
     feedback = _load_feedback()
     feedback.append(entry)

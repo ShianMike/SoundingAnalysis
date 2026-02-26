@@ -14,6 +14,7 @@ import {
   Map,
   Star,
   TrendingUp,
+  GitCompareArrows,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -59,6 +60,8 @@ export default function ControlPanel({
   onToggleMap,
   showTimeSeries,
   onToggleTimeSeries,
+  showCompare,
+  onToggleCompare,
   selectedStation,
   onStationChange,
   onSourceChange,
@@ -76,6 +79,7 @@ export default function ControlPanel({
   const [scanning, setScanning] = useState(false);
   const [sortMode, setSortMode] = useState("az");
   const [favorites, setFavorites] = useState(() => getFavorites());
+  const [soundingHour, setSoundingHour] = useState("12");
   const listRef = useRef(null);
 
   // Sync source to parent
@@ -478,27 +482,85 @@ export default function ControlPanel({
             <Calendar size={14} />
             Date / Time (UTC)
           </label>
-          <div className="cp-date-row">
-            <input
-              type="datetime-local"
-              className="cp-input cp-calendar-input"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-            {date && (
-              <button
-                type="button"
-                className="cp-date-clear"
-                onClick={() => setDate("")}
-                title="Clear date"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          <p className="cp-hint">
-            Leave blank to use the most recent sounding time
-          </p>
+          {source === "obs" || source === "acars" ? (
+            <>
+              <div className="cp-date-row">
+                <input
+                  type="date"
+                  className="cp-input cp-calendar-input"
+                  value={date ? date.slice(0, 10) : ""}
+                  onChange={(e) => {
+                    const d = e.target.value;
+                    if (d) {
+                      const hour = soundingHour === "12" ? "12:00" : "00:00";
+                      setDate(`${d}T${hour}`);
+                    } else {
+                      setDate("");
+                    }
+                  }}
+                />
+                {date && (
+                  <button
+                    type="button"
+                    className="cp-date-clear"
+                    onClick={() => setDate("")}
+                    title="Clear date"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div className="cp-sounding-hour-row">
+                <button
+                  type="button"
+                  className={`cp-hour-btn ${soundingHour === "00" ? "active" : ""}`}
+                  onClick={() => {
+                    setSoundingHour("00");
+                    if (date) setDate(`${date.slice(0, 10)}T00:00`);
+                  }}
+                >
+                  00Z
+                </button>
+                <button
+                  type="button"
+                  className={`cp-hour-btn ${soundingHour === "12" ? "active" : ""}`}
+                  onClick={() => {
+                    setSoundingHour("12");
+                    if (date) setDate(`${date.slice(0, 10)}T12:00`);
+                  }}
+                >
+                  12Z
+                </button>
+              </div>
+              <p className="cp-hint">
+                Radiosondes launch at 00Z and 12Z only
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="cp-date-row">
+                <input
+                  type="datetime-local"
+                  className="cp-input cp-calendar-input"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+                {date && (
+                  <button
+                    type="button"
+                    className="cp-date-clear"
+                    onClick={() => setDate("")}
+                    title="Clear date"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <p className="cp-hint">
+                Leave blank to use the most recent time
+              </p>
+            </>
+          )}
         </div>
 
         {/* Submit */}
@@ -537,6 +599,14 @@ export default function ControlPanel({
           >
             <TrendingUp size={14} />
             {showTimeSeries ? "Hide" : "Trends"}
+          </button>
+          <button
+            type="button"
+            className={`cp-toggle-btn ${showCompare ? "active" : ""}`}
+            onClick={onToggleCompare}
+          >
+            <GitCompareArrows size={14} />
+            {showCompare ? "Hide" : "Compare"}
           </button>
           <button
             type="button"

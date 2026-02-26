@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
+import ComparisonView from "./ComparisonView";
 import "./ResultsView.css";
 
 function ParamCard({ label, value, unit, color }) {
@@ -109,7 +110,7 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showMap, mapProps, showTimeSeries, onCloseTimeSeries, selectedStation, source }) {
+export default function ResultsView({ result, loading, error, riskData, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
   if (error) {
     return (
       <div className="results-view">
@@ -117,6 +118,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
         <RiskTable riskData={riskData} />
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
+        {showCompare && (
+          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
         )}
         <div className="rv-state rv-error">
           <AlertTriangle size={24} />
@@ -136,6 +140,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
         <RiskTable riskData={riskData} />
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
+        {showCompare && (
+          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
         )}
         <div className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
@@ -158,6 +165,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
         <RiskTable riskData={riskData} />
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
+        {showCompare && (
+          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
         )}
         {!riskData && (
           <div className="rv-state rv-empty">
@@ -266,6 +276,11 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
       {/* Time-Series Chart */}
       {showTimeSeries && (
         <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+      )}
+
+      {/* Comparison View */}
+      {showCompare && (
+        <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
       )}
 
       {/* Plot */}
