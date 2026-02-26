@@ -7,6 +7,7 @@ Exposes endpoints to fetch sounding data and return analysis results
 import base64
 import io
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
@@ -31,7 +32,15 @@ from sounding import (
 )
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 
 # ─── Helper ────────────────────────────────────────────────────────
@@ -72,8 +81,10 @@ def list_sources():
     return jsonify({"sources": sources, "models": models})
 
 
-@app.route("/api/sounding", methods=["POST"])
+@app.route("/api/sounding", methods=["POST", "OPTIONS"])
 def get_sounding():
+    if request.method == "OPTIONS":
+        return "", 204
     """
     Fetch sounding data, compute parameters, generate plot.
 
@@ -215,13 +226,15 @@ def _serialize_params(params, data, station, dt, source):
     }
 
 
-@app.route("/api/risk-scan", methods=["POST"])
+@app.route("/api/risk-scan", methods=["POST", "OPTIONS"])
 def risk_scan():
     """
-    Scan tornado-prone stations and return risk scores.
-    Optionally accepts {"date": "YYYYMMDDHH"} in body.
-    Returns a list of stations sorted by risk (highest first).
+    Scan stations and return risk scores.
+    Uses ThreadPoolExecutor for parallel fetching.
     """
+    if request.method == "OPTIONS":
+        return "", 204
+
     body = request.get_json(force=True) if request.data else {}
     date_str = body.get("date")
 
@@ -235,28 +248,44 @@ def risk_scan():
     else:
         dt = get_latest_sounding_time()
 
-    results = []
-    for sid in STATIONS:
-        score = _quick_tornado_score(sid, dt)
-        if score is None:
-            continue
-        stp_score, raw_score, cape, srh, bwd = score
-        name = STATIONS.get(sid, (sid,))[0]
-        lat = STATIONS.get(sid, ("", 0, 0))[1]
-        lon = STATIONS.get(sid, ("", 0, 0))[2]
-        results.append({
-            "id": sid,
-            "name": name,
-            "lat": lat,
-            "lon": lon,
-            "stp": round(stp_score, 2),
-            "raw": round(raw_score, 2),
-            "cape": round(cape),
-            "srh": round(srh),
-            "bwd": round(bwd),
-        })
+    def _scan_one(sid):
+        """Score a single station; returns dict or None."""
+        try:
+            score = _quick_tornado_score(sid, dt)
+            if score is None:
+                return None
+            stp_score, raw_score, cape, srh, bwd = score
+            return {
+                "id": sid,
+                "name": STATIONS.get(sid, (sid,))[0],
+                "lat": STATIONS.get(sid, ("", 0, 0))[1],
+                "lon": STATIONS.get(sid, ("", 0, 0))[2],
+                "stp": round(stp_score, 2),
+                "raw": round(raw_score, 2),
+                "cape": round(cape),
+                "srh": round(srh),
+                "bwd": round(bwd),
+            }
+        except Exception:
+            return None
 
-    # Sort by STP desc, then raw desc
+    results = []
+    station_ids = list(STATIONS.keys())
+
+    try:
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(_scan_one, sid): sid for sid in station_ids}
+            for future in as_completed(futures, timeout=150):
+                try:
+                    r = future.result(timeout=30)
+                    if r is not None:
+                        results.append(r)
+                except Exception:
+                    pass
+    except Exception as exc:
+        # If timeout/error, return whatever we collected so far
+        print(f"[risk-scan] partial results due to: {exc}")
+
     results.sort(key=lambda r: (r["stp"], r["raw"]), reverse=True)
 
     return jsonify({

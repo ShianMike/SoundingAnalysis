@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$API_URL = "https://soundinganalysis-2.onrender.com"
+$API_URL = "https://soundinganalysis-1.onrender.com"
 $REPO    = "https://github.com/ShianMike/SoundingAnalysis.git"
 $BASE    = "/SoundingAnalysis/"
 
@@ -25,7 +25,7 @@ git checkout -b gh-pages
 git add -A
 git commit -m "Deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
 git remote add origin $REPO
-git push origin gh-pages --force 2>&1
+$null = git push origin gh-pages --force 2>&1
 Pop-Location
 
 Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue

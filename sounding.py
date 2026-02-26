@@ -1496,12 +1496,14 @@ def compute_parameters(data):
     except:
         params["pwat"] = None
     
-    # DCAPE (Downdraft CAPE)
+    # DCAPE (Downdraft CAPE) and downdraft parcel profile
     try:
         dcape_val, dtemp = mpcalc.downdraft_cape(p, T, Td)
         params["dcape"] = dcape_val
+        params["dcape_profile"] = dtemp.to("degC")
     except:
         params["dcape"] = None
+        params["dcape_profile"] = None
     
     # Lapse rates (Γ0-3, Γ3-6) in °C/km
     try:
@@ -1662,39 +1664,25 @@ def plot_sounding(data, params, station_id, dt):
                  fontsize=11, color=FG, fontfamily="monospace",
                  fontweight="bold", va="top", ha="left", alpha=0)  # hidden, merged into legend title
     
-    # Temperature & Dewpoint (main traces)
-    skew.plot(p, T, "r", linewidth=3.5, zorder=6)
-    skew.plot(p, Td, color="#4488ff", linewidth=3.5, zorder=6)
+    # Temperature (red, solid thick)
+    skew.plot(p, T, color="red", linewidth=3.5, zorder=6, label="TEMPERATURE")
+    # Dewpoint (blue, solid thick)
+    skew.plot(p, Td, color="blue", linewidth=3.5, zorder=6, label="DEWPOINT")
     
-    # Wet-bulb temperature
+    # Wet-bulb temperature (cyan, solid thin)
     if params.get("wetbulb") is not None:
-        skew.plot(p, params["wetbulb"], color="#44bbdd", linewidth=1.5,
-                  linestyle="--", alpha=0.7, zorder=5)
+        skew.plot(p, params["wetbulb"], color="cyan", linewidth=1.5,
+                  linestyle="-", alpha=0.85, zorder=5, label="WETBULB TEMP")
     
-    # Virtual temperature
+    # Virtual temperature (red, dotted)
     if params.get("virtual_temp") is not None:
-        skew.plot(p, params["virtual_temp"], color="#ff8888", linewidth=1.0,
-                  linestyle="--", alpha=0.4, zorder=4)
+        skew.plot(p, params["virtual_temp"], color="red", linewidth=1.5,
+                  linestyle=":", alpha=0.7, zorder=4, label="VIRTUAL TEMP")
     
-    # Parcel traces
-    if "sb_profile" in params:
-        skew.plot(p, params["sb_profile"], color="#ff8800", linewidth=2.5,
-                  linestyle="--", zorder=7, label="SB Parcel")
-        try:
-            skew.shade_cape(p, T, params["sb_profile"], alpha=0.25)
-            skew.shade_cin(p, T, params["sb_profile"], alpha=0.18)
-        except:
-            pass
-    
-    if "ml_profile" in params:
-        skew.plot(p, params["ml_profile"], color="#dd44dd", linewidth=2.0,
-                  linestyle="--", alpha=0.8, zorder=7, label="ML Parcel")
-    
-    if "mu_profile" in params:
-        idx = params.get("mu_start_idx", 0)
-        skew.plot(p[idx:], params["mu_profile"], color="#aaaaaa",
-                  linewidth=1.5, linestyle=":", alpha=0.6, zorder=7,
-                  label="MU Parcel")
+    # Downdraft parcel trace (gray, dashed)
+    if params.get("dcape_profile") is not None:
+        skew.plot(p, params["dcape_profile"], color="gray", linewidth=1.5,
+                  linestyle="--", alpha=0.85, zorder=7, label="DWNDRFT PARCEL")
     
     # Wind barbs
     barb_interval = max(1, len(p) // 40)
