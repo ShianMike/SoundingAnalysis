@@ -50,7 +50,7 @@ export async function fetchRiskScan(date) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(date ? { date } : {}),
-  }, 30000);
+  }, 180000);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Risk scan failed");
   return data;
@@ -61,7 +61,7 @@ export async function fetchSounding(params) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
-  }, 30000);
+  }, 120000);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;

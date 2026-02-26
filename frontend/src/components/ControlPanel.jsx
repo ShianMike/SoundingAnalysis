@@ -11,8 +11,11 @@ import {
   Zap,
   ArrowUpDown,
   History,
+  Map,
+  Star,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
+import { getFavorites, toggleFavorite } from "../favorites";
 import "./ControlPanel.css";
 
 const SOURCE_META = {
@@ -51,9 +54,15 @@ export default function ControlPanel({
   onRiskDataChange,
   showHistory,
   onToggleHistory,
+  showMap,
+  onToggleMap,
+  selectedStation,
+  onStationChange,
+  onSourceChange,
+  mapLatLon,
 }) {
-  const [source, setSource] = useState("obs");
-  const [station, setStation] = useState("OUN");
+  const [source, setSourceLocal] = useState("obs");
+  const [station, setStationLocal] = useState("OUN");
   const [date, setDate] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
@@ -62,8 +71,41 @@ export default function ControlPanel({
   const [stationSearch, setStationSearch] = useState("");
   const [hoveredSource, setHoveredSource] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const [sortMode, setSortMode] = useState("az"); // az | za | risk-high | risk-low
+  const [sortMode, setSortMode] = useState("az");
+  const [favorites, setFavorites] = useState(() => getFavorites());
   const listRef = useRef(null);
+
+  // Sync source to parent
+  const setSource = (src) => {
+    setSourceLocal(src);
+    if (onSourceChange) onSourceChange(src);
+  };
+
+  // Sync station to parent
+  const setStation = (id) => {
+    setStationLocal(id);
+    if (onStationChange) onStationChange(id);
+  };
+
+  // Sync station from parent (map click)
+  useEffect(() => {
+    if (selectedStation && selectedStation !== station) {
+      setStationLocal(selectedStation);
+      const stn = stations.find((s) => s.id === selectedStation);
+      if (stn) {
+        setLat(String(stn.lat));
+        setLon(String(stn.lon));
+      }
+    }
+  }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync lat/lon from map click
+  useEffect(() => {
+    if (mapLatLon) {
+      setLat(String(mapLatLon.lat));
+      setLon(String(mapLatLon.lon));
+    }
+  }, [mapLatLon]);
 
   // Scroll selected station into view on mount
   useEffect(() => {
@@ -96,6 +138,12 @@ export default function ControlPanel({
     switch (sortMode) {
       case "za":
         return b.id.localeCompare(a.id);
+      case "favs": {
+        const aFav = favorites.includes(a.id) ? 0 : 1;
+        const bFav = favorites.includes(b.id) ? 0 : 1;
+        if (aFav !== bFav) return aFav - bFav;
+        return a.id.localeCompare(b.id);
+      }
       case "risk-high":
         // Stations with risk first (highest STP first), then unscanned at end
         if (a.risk && !b.risk) return -1;
@@ -126,6 +174,8 @@ export default function ControlPanel({
       const data = await fetchRiskScan(dateParam);
       onRiskDataChange(data);
       setSortMode("risk-high");
+      // Auto-open the map
+      if (!showMap && onToggleMap) onToggleMap();
       // Auto-select the highest risk station
       if (data.stations.length > 0) {
         handleStationSelect(data.stations[0].id);
@@ -301,6 +351,7 @@ export default function ControlPanel({
                   >
                     <option value="az">A → Z</option>
                     <option value="za">Z → A</option>
+                    <option value="favs">★ Favs</option>
                     <option value="risk-high">Risk ↓</option>
                     <option value="risk-low">Risk ↑</option>
                   </select>
@@ -317,6 +368,17 @@ export default function ControlPanel({
                     className={`cp-station-item ${station === s.id ? "active" : ""}`}
                     onClick={() => handleStationSelect(s.id, !!riskData)}
                   >
+                    <span
+                      className={`cp-fav-star ${favorites.includes(s.id) ? "faved" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const { favorites: newFavs } = toggleFavorite(s.id);
+                        setFavorites(newFavs);
+                      }}
+                      title={favorites.includes(s.id) ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      <Star size={12} fill={favorites.includes(s.id) ? "currentColor" : "none"} />
+                    </span>
                     <span className="cp-station-item-id">{s.id}</span>
                     <span className="cp-station-item-name">{s.name}</span>
                     {s.risk ? (
@@ -455,15 +517,25 @@ export default function ControlPanel({
           )}
         </button>
 
-        {/* History */}
-        <button
-          type="button"
-          className={`cp-history-btn ${showHistory ? "active" : ""}`}
-          onClick={onToggleHistory}
-        >
-          <History size={14} />
-          {showHistory ? "Hide History" : "View History"}
-        </button>
+        {/* Map / History */}
+        <div className="cp-toggle-row">
+          <button
+            type="button"
+            className={`cp-toggle-btn ${showMap ? "active" : ""}`}
+            onClick={onToggleMap}
+          >
+            <Map size={14} />
+            {showMap ? "Hide Map" : "Map"}
+          </button>
+          <button
+            type="button"
+            className={`cp-toggle-btn ${showHistory ? "active" : ""}`}
+            onClick={onToggleHistory}
+          >
+            <History size={14} />
+            {showHistory ? "Hide" : "History"}
+          </button>
+        </div>
       </form>
     </aside>
   );

@@ -6,13 +6,12 @@ Exposes endpoints to fetch sounding data and return analysis results
 
 import base64
 import io
+import json
 import os
-import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-import requests as http_requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -44,30 +43,6 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
-
-
-# ─── Keep-alive ping (prevents Render free-tier cold starts) ──────
-KEEP_ALIVE_URL = os.environ.get(
-    "RENDER_EXTERNAL_URL",
-    "https://soundinganalysis-1.onrender.com",
-)
-KEEP_ALIVE_INTERVAL = 13 * 60  # seconds (Render sleeps after 15 min)
-
-
-def _keep_alive():
-    """Background thread: pings /api/health every 13 minutes."""
-    import time
-
-    while True:
-        time.sleep(KEEP_ALIVE_INTERVAL)
-        try:
-            r = http_requests.get(f"{KEEP_ALIVE_URL}/api/health", timeout=10)
-            print(f"[keep-alive] pinged {KEEP_ALIVE_URL} -> {r.status_code}")
-        except Exception as exc:
-            print(f"[keep-alive] ping failed: {exc}")
-
-
-threading.Thread(target=_keep_alive, daemon=True).start()
 
 
 @app.route("/api/health", methods=["GET"])
@@ -331,6 +306,54 @@ def risk_scan():
         "date": dt.strftime("%Y-%m-%d %HZ"),
         "stations": results,
     })
+
+
+# ─── Feedback ───────────────────────────────────────────────────────
+FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), "feedback.json")
+
+
+def _load_feedback():
+    if os.path.exists(FEEDBACK_FILE):
+        try:
+            with open(FEEDBACK_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
+
+def _save_feedback(data):
+    with open(FEEDBACK_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+@app.route("/api/feedback", methods=["POST"])
+def submit_feedback():
+    """Store user feedback/suggestions."""
+    body = request.get_json(force=True)
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Feedback text is required"}), 400
+
+    entry = {
+        "id": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "type": body.get("type", "suggestion"),
+        "text": text,
+        "date": datetime.now(timezone.utc).isoformat(),
+        "userAgent": body.get("userAgent", ""),
+    }
+
+    feedback = _load_feedback()
+    feedback.append(entry)
+    _save_feedback(feedback)
+
+    return jsonify({"ok": True, "id": entry["id"]})
+
+
+@app.route("/api/feedback", methods=["GET"])
+def get_feedback():
+    """Retrieve all feedback (for admin/developer review)."""
+    return jsonify(_load_feedback())
 
 
 if __name__ == "__main__":

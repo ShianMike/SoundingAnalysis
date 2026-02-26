@@ -376,6 +376,29 @@
   font-size: 12px;
 }
 
+/* Favorite star */
+.cp-fav-star {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  border-radius: 3px;
+  transition: color 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+
+.cp-fav-star:hover {
+  color: #facc15;
+  transform: scale(1.2);
+}
+
+.cp-fav-star.faved {
+  color: #facc15;
+}
+
 /* Risk scan */
 .cp-risk-btn {
   display: flex;
@@ -529,14 +552,19 @@
   cursor: not-allowed;
 }
 
-/* History toggle button */
-.cp-history-btn {
+/* Toggle row (Map / History) */
+.cp-toggle-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cp-toggle-btn {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100%;
-  padding: 9px 16px;
+  padding: 9px 12px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -547,13 +575,13 @@
   transition: all 0.15s ease;
 }
 
-.cp-history-btn:hover {
+.cp-toggle-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-focus);
 }
 
-.cp-history-btn.active {
+.cp-toggle-btn.active {
   background: var(--accent-muted);
   color: var(--text-accent);
   border-color: var(--accent);

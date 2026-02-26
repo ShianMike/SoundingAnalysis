@@ -1,6 +1,7 @@
-# Gunicorn configuration for Render deployment
+# Gunicorn configuration for deployment
 # gunicorn auto-discovers this file by name.
 
+bind = "0.0.0.0:8000"
 timeout = 180        # seconds – risk scan can take a while
 workers = 1          # keep memory usage low on free tier
 threads = 4          # concurrency within the single worker
