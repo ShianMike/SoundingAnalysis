@@ -88,3 +88,13 @@ export async function fetchCompare(soundings) {
   if (!res.ok) throw new Error(data.error || "Comparison request failed");
   return data;
 }
+
+/**
+ * Fetch SPC convective outlook GeoJSON for a given day (1, 2, or 3).
+ */
+export async function fetchSpcOutlook(day = 1) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/spc-outlook?day=${day}`, {}, 15000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch SPC outlook");
+  return data;
+}

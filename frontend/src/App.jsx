@@ -17,7 +17,7 @@ export default function App() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [riskData, setRiskData] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(true);
   const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [compareHistoryData, setCompareHistoryData] = useState(null);

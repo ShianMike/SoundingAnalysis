@@ -12,6 +12,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import time
+import requests as _requests
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -555,6 +556,42 @@ def compare_soundings():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+# ─── SPC Convective Outlook ────────────────────────────────────────
+_SPC_OUTLOOK_URLS = {
+    "1": "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson",
+    "2": "https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson",
+    "3": "https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson",
+}
+
+# Simple in-memory cache: { day: { "data": ..., "ts": ... } }
+_spc_cache = {}
+_SPC_CACHE_TTL = 600  # 10 minutes
+
+
+@app.route("/api/spc-outlook", methods=["GET"])
+def spc_outlook():
+    """Proxy SPC categorical outlook GeoJSON (avoids CORS)."""
+    day = request.args.get("day", "1")
+    if day not in _SPC_OUTLOOK_URLS:
+        return jsonify({"error": f"Invalid day: {day}. Use 1, 2, or 3."}), 400
+
+    # Return cached if fresh
+    cached = _spc_cache.get(day)
+    if cached and (time.time() - cached["ts"]) < _SPC_CACHE_TTL:
+        return jsonify(cached["data"])
+
+    url = _SPC_OUTLOOK_URLS[day]
+    try:
+        resp = _requests.get(url, timeout=15)
+        resp.raise_for_status()
+        geojson = resp.json()
+        _spc_cache[day] = {"data": geojson, "ts": time.time()}
+        return jsonify(geojson)
+    except Exception as e:
+        print(f"[SPC] Failed to fetch Day {day} outlook: {e}")
+        return jsonify({"error": f"Failed to fetch SPC outlook: {e}"}), 502
 
 
 # ─── Feedback ───────────────────────────────────────────────────────

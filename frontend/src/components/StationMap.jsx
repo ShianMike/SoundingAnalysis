@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { X, Crosshair, CloudLightning } from "lucide-react";
+import { fetchSpcOutlook } from "../api";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
 
@@ -17,6 +18,33 @@ function riskColor(stp) {
   if (stp >= 1)    return RISK_COLORS.high;
   if (stp >= 0.3)  return RISK_COLORS.med;
   return RISK_COLORS.low;
+}
+
+/* ── SPC outlook category styling ───────────────────────────── */
+const SPC_CATEGORIES = [
+  { label: "TSTM", name: "General Thunder", color: "#55BB55", fill: "#C1E9C1" },
+  { label: "MRGL", name: "Marginal",        color: "#005500", fill: "#66A366" },
+  { label: "SLGT", name: "Slight",          color: "#DDB600", fill: "#FFE066" },
+  { label: "ENH",  name: "Enhanced",        color: "#FF6600", fill: "#FFA366" },
+  { label: "MDT",  name: "Moderate",        color: "#CC0000", fill: "#E06666" },
+  { label: "HIGH", name: "High",            color: "#FF00FF", fill: "#FF99FF" },
+];
+
+function spcStyle(feature) {
+  const label = feature.properties?.LABEL || "";
+  const cat = SPC_CATEGORIES.find((c) => c.label === label);
+  return {
+    color: cat?.color || feature.properties?.stroke || "#888",
+    fillColor: cat?.fill || feature.properties?.fill || "#888",
+    fillOpacity: 0.25,
+    weight: 1.5,
+  };
+}
+
+/* ── GeoJSON overlay (keyed so it re-renders on data change) ── */
+function OutlookLayer({ data }) {
+  if (!data || !data.features || data.features.length === 0) return null;
+  return <GeoJSON key={JSON.stringify(data).slice(0, 100)} data={data} style={spcStyle} />;
 }
 
 /* ── click-for-coords layer ─────────────────────────────────── */
@@ -52,6 +80,41 @@ export default function StationMap({
   latLonMode,   // true when source is rap/era5
   onClose,
 }) {
+  const [outlookDay, setOutlookDay] = useState(1);
+  const [outlookData, setOutlookData] = useState(null);
+  const [outlookLoading, setOutlookLoading] = useState(false);
+  const [showOutlook, setShowOutlook] = useState(true);
+
+  // Fetch SPC outlook on mount and when day changes
+  useEffect(() => {
+    if (!showOutlook) return;
+    let cancelled = false;
+    setOutlookLoading(true);
+    fetchSpcOutlook(outlookDay)
+      .then((data) => { if (!cancelled) setOutlookData(data); })
+      .catch(() => { if (!cancelled) setOutlookData(null); })
+      .finally(() => { if (!cancelled) setOutlookLoading(false); });
+    return () => { cancelled = true; };
+  }, [outlookDay, showOutlook]);
+
+  // Determine which SPC categories are present in the current data
+  const activeCategories = useMemo(() => {
+    if (!outlookData?.features) return [];
+    const labels = new Set(outlookData.features.map((f) => f.properties?.LABEL));
+    return SPC_CATEGORIES.filter((c) => labels.has(c.label));
+  }, [outlookData]);
+
+  // Get outlook metadata (valid/expire/forecaster)
+  const outlookMeta = useMemo(() => {
+    if (!outlookData?.features?.length) return null;
+    const p = outlookData.features[0].properties;
+    return {
+      valid: p.VALID_ISO ? new Date(p.VALID_ISO).toUTCString().slice(0, 22) : "",
+      expire: p.EXPIRE_ISO ? new Date(p.EXPIRE_ISO).toUTCString().slice(0, 22) : "",
+      forecaster: p.FORECASTER || "",
+    };
+  }, [outlookData]);
+
   const riskMap = useMemo(() => {
     const m = {};
     if (riskData) {
@@ -80,23 +143,68 @@ export default function StationMap({
         </button>
       </header>
 
-      {/* Legend */}
-      {riskData && (
-        <div className="smap-legend">
-          <span className="smap-legend-item">
-            <span className="smap-dot" style={{ background: RISK_COLORS.high }} />
-            STP &ge; 1
+      {/* SPC Outlook controls */}
+      <div className="smap-outlook-bar">
+        <button
+          className={`smap-outlook-toggle ${showOutlook ? "active" : ""}`}
+          onClick={() => setShowOutlook((v) => !v)}
+          title="Toggle SPC outlook overlay"
+        >
+          <CloudLightning size={12} />
+          SPC Outlook
+        </button>
+        {showOutlook && (
+          <div className="smap-day-btns">
+            {[1, 2, 3].map((d) => (
+              <button
+                key={d}
+                className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
+                onClick={() => setOutlookDay(d)}
+              >
+                Day {d}
+              </button>
+            ))}
+          </div>
+        )}
+        {showOutlook && outlookLoading && (
+          <span className="smap-outlook-loading">Loading…</span>
+        )}
+        {showOutlook && outlookMeta && !outlookLoading && (
+          <span className="smap-outlook-meta">
+            {outlookMeta.forecaster} · Valid {outlookMeta.valid}
           </span>
-          <span className="smap-legend-item">
-            <span className="smap-dot" style={{ background: RISK_COLORS.med }} />
-            0.3 &ndash; 1
-          </span>
-          <span className="smap-legend-item">
-            <span className="smap-dot" style={{ background: RISK_COLORS.low }} />
-            &lt; 0.3
-          </span>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Legends */}
+      <div className="smap-legends">
+        {riskData && (
+          <div className="smap-legend">
+            <span className="smap-legend-item">
+              <span className="smap-dot" style={{ background: RISK_COLORS.high }} />
+              STP &ge; 1
+            </span>
+            <span className="smap-legend-item">
+              <span className="smap-dot" style={{ background: RISK_COLORS.med }} />
+              0.3 &ndash; 1
+            </span>
+            <span className="smap-legend-item">
+              <span className="smap-dot" style={{ background: RISK_COLORS.low }} />
+              &lt; 0.3
+            </span>
+          </div>
+        )}
+        {showOutlook && activeCategories.length > 0 && (
+          <div className="smap-legend smap-legend-outlook">
+            {activeCategories.map((c) => (
+              <span key={c.label} className="smap-legend-item">
+                <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
+                {c.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="smap-container">
         <MapContainer
@@ -110,6 +218,9 @@ export default function StationMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             maxZoom={18}
           />
+
+          {/* SPC outlook polygons (render first so stations sit on top) */}
+          {showOutlook && outlookData && <OutlookLayer data={outlookData} />}
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <FlyToStation station={selectedStation} stations={stations} />
