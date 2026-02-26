@@ -1,0 +1,14 @@
+# Ignore frontend source (not needed on backend)
+frontend/
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Dev files
+*.md
+*.ps1
+__pycache__/
+*.pyc
+.env

@@ -14,4 +14,5 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000"]
+# gunicorn.conf.py is auto-discovered and handles PORT env var
+CMD ["gunicorn", "app:app"]
