@@ -13,6 +13,7 @@ import {
   History,
   Map,
   Star,
+  TrendingUp,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -56,6 +57,8 @@ export default function ControlPanel({
   onToggleHistory,
   showMap,
   onToggleMap,
+  showTimeSeries,
+  onToggleTimeSeries,
   selectedStation,
   onStationChange,
   onSourceChange,
@@ -517,7 +520,7 @@ export default function ControlPanel({
           )}
         </button>
 
-        {/* Map / History */}
+        {/* Map / Trends / History */}
         <div className="cp-toggle-row">
           <button
             type="button"
@@ -526,6 +529,14 @@ export default function ControlPanel({
           >
             <Map size={14} />
             {showMap ? "Hide Map" : "Map"}
+          </button>
+          <button
+            type="button"
+            className={`cp-toggle-btn ${showTimeSeries ? "active" : ""}`}
+            onClick={onToggleTimeSeries}
+          >
+            <TrendingUp size={14} />
+            {showTimeSeries ? "Hide" : "Trends"}
           </button>
           <button
             type="button"

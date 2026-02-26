@@ -17,6 +17,7 @@ import {
   Zap,
 } from "lucide-react";
 import StationMap from "./StationMap";
+import TimeSeriesChart from "./TimeSeriesChart";
 import "./ResultsView.css";
 
 function ParamCard({ label, value, unit, color }) {
@@ -108,12 +109,15 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showMap, mapProps }) {
+export default function ResultsView({ result, loading, error, riskData, showMap, mapProps, showTimeSeries, onCloseTimeSeries, selectedStation, source }) {
   if (error) {
     return (
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
+        {showTimeSeries && (
+          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
         <div className="rv-state rv-error">
           <AlertTriangle size={24} />
           <div>
@@ -130,6 +134,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
+        {showTimeSeries && (
+          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
         <div className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
           <div>
@@ -149,6 +156,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
+        {showTimeSeries && (
+          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
         {!riskData && (
           <div className="rv-state rv-empty">
             <Wind size={32} />
@@ -252,6 +262,11 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
       {/* Map + Risk scan table */}
       {showMap && mapProps && <StationMap {...mapProps} />}
       <RiskTable riskData={riskData} />
+
+      {/* Time-Series Chart */}
+      {showTimeSeries && (
+        <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+      )}
 
       {/* Plot */}
       <div

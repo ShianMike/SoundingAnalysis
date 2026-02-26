@@ -18,6 +18,7 @@ export default function App() {
   const [riskData, setRiskData] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
@@ -97,6 +98,8 @@ export default function App() {
           onToggleHistory={() => setShowHistory((v) => !v)}
           showMap={showMap}
           onToggleMap={() => setShowMap((v) => !v)}
+          showTimeSeries={showTimeSeries}
+          onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
           selectedStation={selectedStation}
           onStationChange={handleStationChange}
           onSourceChange={handleSourceChange}
@@ -114,6 +117,10 @@ export default function App() {
           error={error}
           riskData={riskData}
           showMap={showMap}
+          showTimeSeries={showTimeSeries}
+          onCloseTimeSeries={() => setShowTimeSeries(false)}
+          selectedStation={selectedStation}
+          source={source}
           mapProps={{
             stations,
             riskData,

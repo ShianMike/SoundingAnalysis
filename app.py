@@ -10,7 +10,8 @@ import json
 import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import time
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -306,6 +307,146 @@ def risk_scan():
         "date": dt.strftime("%Y-%m-%d %HZ"),
         "stations": results,
     })
+
+
+# ─── Time-Series ────────────────────────────────────────────────────
+
+@app.route("/api/time-series", methods=["POST", "OPTIONS"])
+def time_series():
+    """
+    Fetch sounding parameters for a station across a date range.
+    Returns a time-series array of parameter snapshots.
+
+    Expected JSON body:
+      {
+        "station": "OUN",
+        "source": "obs",
+        "startDate": "2026021200",   // YYYYMMDDHH  (optional – defaults to 7 days ago)
+        "endDate": "2026022600",     // YYYYMMDDHH  (optional – defaults to latest)
+        "days": 7,                   // fallback if no dates given (max 14)
+        "lat": 35.22,
+        "lon": -97.46,
+        "model": "hrrr",
+        "fhour": 0
+      }
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True)
+
+    try:
+        station = body.get("station")
+        source = body.get("source", "obs").lower()
+        lat = body.get("lat")
+        lon = body.get("lon")
+        model = body.get("model", "rap")
+        fhour = body.get("fhour", 0)
+
+        if station:
+            station = station.upper()
+
+        # Validate
+        if source == "obs" and (not station or station not in STATION_WMO):
+            return jsonify({"error": f"Unknown station '{station}'."}), 400
+
+        if source in ("rap", "era5") and lat is None and lon is None:
+            if station and station in STATIONS:
+                _, lat, lon = STATIONS[station]
+            else:
+                return jsonify({"error": "RAP/ERA5 requires lat/lon or a known station."}), 400
+
+        # Resolve date range
+        latest = get_latest_sounding_time()
+        start_str = body.get("startDate")
+        end_str = body.get("endDate")
+
+        if end_str:
+            try:
+                end_dt = datetime.strptime(str(end_str)[:10], "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            except ValueError:
+                end_dt = latest
+        else:
+            end_dt = latest
+
+        if start_str:
+            try:
+                start_dt = datetime.strptime(str(start_str)[:10], "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            except ValueError:
+                start_dt = end_dt - timedelta(days=7)
+        else:
+            days = min(int(body.get("days", 7)), 14)
+            start_dt = end_dt - timedelta(days=days)
+
+        # Cap range at 14 days
+        if (end_dt - start_dt).days > 14:
+            start_dt = end_dt - timedelta(days=14)
+
+        span_days = (end_dt - start_dt).days
+
+        # Build sounding times: both 00Z+12Z for ≤7 days, 12Z only for >7
+        times = []
+        hours = (0, 12) if span_days <= 7 else (12,)
+        d = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        while d <= end_dt:
+            for h in hours:
+                t = d.replace(hour=h)
+                if start_dt <= t <= end_dt:
+                    times.append(t)
+            d += timedelta(days=1)
+        times.sort()
+
+        def _fetch_one(dt):
+            """Fetch + compute params for one time step."""
+            try:
+                data = fetch_sounding(
+                    station_id=station, dt=dt, source=source,
+                    lat=lat, lon=lon, model=model, fhour=fhour,
+                )
+                params = compute_parameters(data)
+                return {
+                    "date": dt.strftime("%Y-%m-%d %HZ"),
+                    "ts": dt.isoformat(),
+                    "params": _serialize_params(params, data, station, dt, source),
+                }
+            except Exception:
+                return None
+
+        points = []
+        wall_start = time.monotonic()
+        WALL_LIMIT = 85  # must finish before Koyeb's 100s proxy timeout
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {executor.submit(_fetch_one, t): t for t in times}
+            for future in as_completed(futures, timeout=80):
+                # Bail if we're running out of time
+                if time.monotonic() - wall_start > WALL_LIMIT:
+                    break
+                try:
+                    r = future.result(timeout=20)
+                    if r is not None:
+                        points.append(r)
+                except Exception:
+                    pass
+
+        # Sort chronologically
+        points.sort(key=lambda p: p["ts"])
+
+        station_name = STATIONS.get(station, (station or source.upper(),))[0]
+
+        return jsonify({
+            "station": station or f"{lat},{lon}",
+            "stationName": station_name,
+            "source": source,
+            "startDate": start_dt.strftime("%Y-%m-%d"),
+            "endDate": end_dt.strftime("%Y-%m-%d %HZ"),
+            "resolution": "00Z & 12Z" if span_days <= 7 else "12Z only",
+            "points": points,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # ─── Feedback ───────────────────────────────────────────────────────

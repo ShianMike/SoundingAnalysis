@@ -28,7 +28,7 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 |---|---|
 | **Thermodynamic** | SB/ML/MU CAPE & CIN, DCAPE, LCL height, LFC, EL, Lapse rates (0–3 km, 3–6 km), Precipitable water, Freezing level, Wet-bulb zero height, RH by layer |
 | **Kinematic** | Bulk wind difference (500 m, 1 km, 3 km, 6 km), Storm-relative helicity (500 m, 1 km, 3 km), Bunkers storm motion |
-| **Composite** | Significant Tornado Parameter (STP) |
+| **Composite** | Significant Tornado Parameter (STP), Supercell Composite Parameter (SCP), Significant Hail Parameter (SHIP), Derecho Composite Parameter (DCP) |
 
 ### Additional Panels
 - Storm-relative wind & streamwise vorticity profiles
@@ -36,8 +36,30 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 
 ### Risk Scanner
 - Scans all CONUS upper-air stations in parallel
-- Scores sites by STP / tornado potential
+- Scores sites by STP, SCP, SHIP, DCP / tornado potential
 - Returns ranked results via API
+- Auto-opens interactive station map with color-coded risk markers
+
+### Interactive Station Map
+- Dark-themed Leaflet map centered on CONUS
+- Station markers color-coded by risk scan data (STP thresholds)
+- Click station markers to select them
+- Click anywhere on map to set lat/lon for RAP/ERA5 sources
+- Fly-to animation on station selection
+
+### Sounding History
+- Automatically saves last 20 soundings to localStorage
+- Quick-load previous soundings with one click
+- Relative timestamps ("3m ago", "2h ago")
+
+### Favorite Stations
+- Star icon to pin frequently used stations
+- Persisted in localStorage
+- Sort stations by favorites
+
+### Feedback & Suggestions
+- Built-in feedback modal (Suggestion / Bug Report / Feature Request)
+- Submitted to backend API for developer review
 
 ---
 
@@ -58,17 +80,26 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 ```
 ├── sounding.py          # Core: data fetching, parameter computation, plotting
 ├── app.py               # Flask API serving the React frontend
-├── gunicorn.conf.py     # Gunicorn config for Render deployment
+├── Dockerfile           # Docker config for Koyeb deployment
+├── gunicorn.conf.py     # Gunicorn config for production
 ├── requirements.txt     # Python dependencies
 ├── deploy.ps1           # Build frontend + deploy to GitHub Pages
+├── feedback.json        # Server-side feedback storage
 └── frontend/            # React + Vite frontend
     ├── src/
     │   ├── App.jsx              # Main app shell
-    │   ├── api.js               # API client
+    │   ├── api.js               # API client with timeouts & retries
+    │   ├── history.js           # localStorage sounding history
+    │   ├── favorites.js         # localStorage station favorites
     │   └── components/
-    │       ├── ControlPanel.jsx  # Station/source/date controls
-    │       ├── Header.jsx        # App header
-    │       └── ResultsView.jsx   # Plot image + parameter display
+    │       ├── ControlPanel.jsx  # Station/source/date controls + favorites
+    │       ├── Header.jsx        # App header with feedback & GitHub links
+    │       ├── ResultsView.jsx   # Plot image + parameter display + map
+    │       ├── StationMap.jsx    # Interactive Leaflet station map
+    │       ├── HistoryPanel.jsx  # Sounding history sidebar
+    │       └── *.css             # Component styles (dark theme)
+    ├── public/
+    │   └── favicon.svg          # Custom skew-T favicon
     ├── package.json
     └── vite.config.js
 ```
@@ -127,7 +158,7 @@ Set `VITE_API_URL` to point to your backend (defaults to localhost:5000).
 
 | Component | Platform | URL |
 |---|---|---|
-| **Backend API** | Render | `https://soundinganalysis-1.onrender.com` |
+| **Backend API** | Koyeb | `https://constitutional-lissi-mypersonalprojs-de5b9491.koyeb.app` |
 | **Frontend** | GitHub Pages | `https://shianmike.github.io/SoundingAnalysis/` |
 
 To redeploy:
@@ -148,6 +179,8 @@ This builds the frontend with Vite, then force-pushes to the `gh-pages` branch.
 | `GET` | `/api/sources` | List available data sources and BUFKIT models |
 | `POST` | `/api/sounding` | Fetch sounding, compute params, return base64 plot + data |
 | `POST` | `/api/risk-scan` | Scan stations and return tornado risk scores |
+| `POST` | `/api/feedback` | Submit user feedback/suggestion |
+| `GET`  | `/api/feedback` | Retrieve all submitted feedback |
 
 ### `POST /api/sounding` — Request Body
 
@@ -168,8 +201,19 @@ This builds the frontend with Vite, then force-pushes to the `gh-pages` branch.
 ## Dependencies
 
 - **Python:** Flask, MetPy, Matplotlib, NumPy, Requests
-- **Frontend:** React 18, Vite, Lucide React
+- **Frontend:** React 18, Vite, Lucide React, Leaflet, React-Leaflet
 - **Optional:** siphon (RAP), cdsapi + netCDF4 (ERA5)
+
+---
+
+## Upcoming Features
+
+- [ ] **Parameter Time-Series Charts** — Plot CAPE, SRH, STP trends over multiple sounding times for a station (e.g. last 5 days of 00Z/12Z)
+- [ ] **Multi-Sounding Comparison** — Load two soundings side-by-side (00Z vs 12Z, or two stations) with split-view parameter cards
+- [ ] **Export Parameters to CSV** — One-click download of computed parameters and risk scan tables as CSV
+- [ ] **Severe Weather Outlook Overlay** — Display SPC Day 1/2/3 convective outlooks on the station map
+- [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
+- [ ] **Dark/Light Theme Toggle** — Switchable color theme
 
 ---
 
