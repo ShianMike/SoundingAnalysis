@@ -66,3 +66,14 @@ export async function fetchSounding(params) {
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 }
+
+export async function fetchTimeSeries(params) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/time-series`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  }, 300000);   // 5 min timeout — multiple fetches
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Time-series request failed");
+  return data;
+}

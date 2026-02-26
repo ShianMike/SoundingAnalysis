@@ -1,0 +1,368 @@
+/* ── Time-Series Panel ────────────────────────────────── */
+.ts-panel {
+  background: #151518;
+  border: 1px solid #2a2a2e;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+/* Header */
+.ts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ts-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e0e0e0;
+}
+
+.ts-header-left h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.ts-header-meta {
+  font-size: 0.75rem;
+  color: #888;
+  margin-left: 4px;
+}
+
+.ts-close {
+  background: none;
+  border: 1px solid #333;
+  color: #999;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ts-close:hover {
+  background: #2a2a2e;
+  color: #fff;
+  border-color: #555;
+}
+
+/* Controls row */
+.ts-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ts-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
+}
+
+.ts-date-range {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ts-date-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-date-input {
+  background: #1e1e22;
+  border: 1px solid #333;
+  color: #ddd;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  outline: none;
+  color-scheme: dark;
+}
+
+.ts-date-input:focus {
+  border-color: #60a5fa;
+}
+
+.ts-date-arrow {
+  color: #555;
+  font-size: 0.9rem;
+  padding-bottom: 6px;
+}
+
+/* Info banner */
+.ts-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 10px;
+  background: rgba(96, 165, 250, 0.06);
+  border: 1px solid rgba(96, 165, 250, 0.15);
+  border-radius: 6px;
+  color: #8bb8e8;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.ts-info svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ts-days-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ts-select {
+  background: #1e1e22;
+  border: 1px solid #333;
+  color: #ddd;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.ts-select:focus {
+  border-color: #60a5fa;
+}
+
+.ts-fetch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #1a3a5c 0%, #1a2a4c 100%);
+  border: 1px solid #2a4a6c;
+  color: #93c5fd;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ts-fetch-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e4a7c 0%, #1e3a6c 100%);
+  border-color: #3a6a9c;
+}
+
+.ts-fetch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Parameter selector */
+.ts-param-selector {
+  margin-bottom: 12px;
+  border: 1px solid #2a2a2e;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ts-param-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  background: #1a1a1e;
+  border: none;
+  border-bottom: 1px solid #2a2a2e;
+  color: #bbb;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: background 0.15s;
+}
+
+.ts-param-group-header:hover {
+  background: #222226;
+}
+
+.ts-param-group-header svg {
+  transition: transform 0.2s;
+  color: #666;
+}
+
+.ts-param-group-header.expanded svg {
+  transform: rotate(180deg);
+}
+
+.ts-param-group-header.has-active {
+  color: #ddd;
+  background: #1e1e24;
+}
+
+.ts-group-badge {
+  margin-left: auto;
+  background: #2a3a4e;
+  color: #93c5fd;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.ts-param-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #111114;
+}
+
+.ts-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #1a1a1e;
+  border: 1px solid #333;
+  color: #999;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ts-chip:hover {
+  border-color: #555;
+  color: #ccc;
+}
+
+.ts-chip.active {
+  background: #1a1a2e;
+}
+
+.ts-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Chart */
+.ts-chart-wrap {
+  margin-top: 4px;
+  border: 1px solid #2a2a2e;
+  border-radius: 8px;
+  padding: 12px 8px 4px;
+  background: #111114;
+}
+
+/* Tooltip */
+.ts-tooltip {
+  background: #1a1a1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.ts-tooltip-date {
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+}
+
+.ts-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.ts-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ts-tooltip-label {
+  color: #bbb;
+  flex: 1;
+}
+
+.ts-tooltip-value {
+  color: #fff;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Empty / Error states */
+.ts-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: #666;
+  text-align: center;
+}
+
+.ts-empty p {
+  margin: 0;
+  font-size: 0.82rem;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.ts-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
+/* Recharts overrides for dark theme */
+.ts-chart-wrap .recharts-legend-item-text {
+  color: #bbb !important;
+}
+
+.ts-chart-wrap .recharts-default-legend {
+  padding-top: 4px !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ts-controls {
+    flex-wrap: wrap;
+  }
+
+  .ts-chart-wrap {
+    padding: 8px 0;
+  }
+}
