@@ -49,7 +49,7 @@ function RiskTable({ riskData }) {
     <div className="rv-risk-table-wrap">
       <div className="rv-risk-table-header">
         <Zap size={14} />
-        <h3>Tornado Risk Scan</h3>
+        <h3>Severe Weather Risk Scan</h3>
         <span className="rv-risk-table-date">{riskData.date}</span>
         <span className="rv-risk-table-count">{riskData.stations.length} stations</span>
       </div>
@@ -61,7 +61,9 @@ function RiskTable({ riskData }) {
               <th>Station</th>
               <th>Name</th>
               <th className="rv-rt-num">STP</th>
-              <th className="rv-rt-num">Raw</th>
+              <th className="rv-rt-num">SCP</th>
+              <th className="rv-rt-num">SHIP</th>
+              <th className="rv-rt-num">DCP</th>
               <th className="rv-rt-num">CAPE</th>
               <th className="rv-rt-num">SRH</th>
               <th className="rv-rt-num">BWD</th>
@@ -78,7 +80,21 @@ function RiskTable({ riskData }) {
                     {s.stp.toFixed(2)}
                   </span>
                 </td>
-                <td className="rv-rt-num">{s.raw.toFixed(2)}</td>
+                <td className="rv-rt-num">
+                  <span className={`rv-rt-stp ${s.scp >= 4 ? "high" : s.scp >= 1 ? "med" : "low"}`}>
+                    {s.scp.toFixed(2)}
+                  </span>
+                </td>
+                <td className="rv-rt-num">
+                  <span className={`rv-rt-stp ${s.ship >= 1.5 ? "high" : s.ship >= 0.5 ? "med" : "low"}`}>
+                    {s.ship.toFixed(2)}
+                  </span>
+                </td>
+                <td className="rv-rt-num">
+                  <span className={`rv-rt-stp ${s.dcp >= 4 ? "high" : s.dcp >= 2 ? "med" : "low"}`}>
+                    {s.dcp.toFixed(2)}
+                  </span>
+                </td>
                 <td className="rv-rt-num">{s.cape}</td>
                 <td className="rv-rt-num">{s.srh}</td>
                 <td className="rv-rt-num">{s.bwd}</td>
@@ -266,6 +282,9 @@ export default function ResultsView({ result, loading, error, riskData }) {
           <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" />
           <ParamCard label="DCAPE" value={params.dcape} unit="J/kg" />
           <ParamCard label="STP" value={params.stp} unit="" color="#60a5fa" />
+          <ParamCard label="SCP" value={params.scp} unit="" color="#f59e0b" />
+          <ParamCard label="SHIP" value={params.ship} unit="" color="#10b981" />
+          <ParamCard label="DCP" value={params.dcp} unit="" color="#a78bfa" />
         </ParamSection>
 
         <ParamSection

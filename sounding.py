@@ -1071,9 +1071,8 @@ TORNADO_SCAN_STATIONS = [
 
 def _quick_tornado_score(station_id, dt):
     """
-    Fetch sounding for a station and compute a quick tornado composite score.
-    Returns (score, cape, srh, bwd) or None on failure.
-    Score = STP if computable, else composite of CAPE * SRH * BWD.
+    Fetch sounding for a station and compute quick severe weather composite scores.
+    Returns (stp_score, raw_score, cape, srh, bwd, scp, ship, dcp) or None on failure.
     """
     try:
         data = fetch_iem_sounding(station_id, dt, quiet=True)
@@ -1095,17 +1094,45 @@ def _quick_tornado_score(station_id, dt):
         cape_val = sb_cape.magnitude if hasattr(sb_cape, "magnitude") else 0
         cin_val = sb_cin.magnitude if hasattr(sb_cin, "magnitude") else 0
 
-        # 0-1 km SRH
+        # Most-Unstable CAPE (search lowest 300 hPa)
+        try:
+            mu_search_top = p[0] - 300 * units.hPa
+            mu_mask = p >= mu_search_top
+            mu_n = int(np.sum(mu_mask))
+            if mu_n < 2:
+                mu_n = min(30, len(p))
+            mu_idx = np.argmax(
+                np.array(mpcalc.equivalent_potential_temperature(
+                    p[:mu_n], T[:mu_n], Td[:mu_n]
+                ).magnitude)
+            )
+            mu_prof = mpcalc.parcel_profile(p[mu_idx:], T[mu_idx], Td[mu_idx]).to("degC")
+            mu_cape_v, mu_cin_v = mpcalc.cape_cin(p[mu_idx:], T[mu_idx:], Td[mu_idx:], mu_prof)
+            mu_cape_val = float(mu_cape_v.magnitude)
+            mu_cin_val = float(mu_cin_v.magnitude)
+        except Exception:
+            mu_cape_val = cape_val
+            mu_cin_val = cin_val
+
+        # Height AGL
         h_agl = (h - h[0]).to("meter")
+
+        # Bunkers & SRH
         try:
             rm_u, rm_v, _, _ = mpcalc.bunkers_storm_motion(p, u_wind, v_wind, h)
-            pos_srh, neg_srh, total_srh = mpcalc.storm_relative_helicity(
+            _, _, total_srh_1km = mpcalc.storm_relative_helicity(
                 h_agl, u_wind, v_wind, 1000 * units.meter,
                 storm_u=rm_u, storm_v=rm_v
             )
-            srh_val = total_srh.magnitude if hasattr(total_srh, "magnitude") else 0
+            _, _, total_srh_3km = mpcalc.storm_relative_helicity(
+                h_agl, u_wind, v_wind, 3000 * units.meter,
+                storm_u=rm_u, storm_v=rm_v
+            )
+            srh_val = total_srh_1km.magnitude if hasattr(total_srh_1km, "magnitude") else 0
+            srh3_val = total_srh_3km.magnitude if hasattr(total_srh_3km, "magnitude") else 0
         except Exception:
             srh_val = 0
+            srh3_val = 0
 
         # 0-6 km BWD
         try:
@@ -1113,26 +1140,58 @@ def _quick_tornado_score(station_id, dt):
                                              height=h_agl,
                                              depth=6000 * units.meter)
             bwd_val = np.sqrt(bwd_u**2 + bwd_v**2).to("knot").magnitude
+            bwd_ms = np.sqrt(bwd_u**2 + bwd_v**2).to("m/s").magnitude
         except Exception:
             bwd_val = 0
+            bwd_ms = 0
 
         # STP-like composite
-        # STP = (CAPE/1500) * (SRH/150) * (BWD/20 kt) * ((200 + CIN)/150)
         cape_term = min(cape_val / 1500.0, 3.0)
         srh_term = min(srh_val / 150.0, 3.0)
         bwd_term = min(bwd_val / 20.0, 3.0) if bwd_val >= 12 else 0
         cin_term = min((200.0 + cin_val) / 150.0, 1.0) if cin_val > -250 else 0
-
-        # Primary: STP-like multiplicative score (may be 0 in benign wx)
         stp_score = cape_term * srh_term * bwd_term * cin_term
 
-        # Secondary: additive composite so individual parameters still
-        # differentiate stations when the STP score ties at 0.
+        # Additive raw score
         raw_score = (max(cape_val, 0) / 1500.0
                      + max(srh_val, 0) / 150.0
                      + bwd_val / 40.0)
 
-        return (float(stp_score), float(raw_score), cape_val, srh_val, bwd_val)
+        # SCP = (muCAPE/1000) * (SRH_3km/50) * (BWD_6km_ms/20)
+        _scp_bwd = bwd_ms / 20.0 if bwd_ms >= 10.0 else 0.0
+        scp_score = (mu_cape_val / 1000.0) * (srh3_val / 50.0) * _scp_bwd
+
+        # SHIP = (muCAPE * mixRatio * LR_7-5 * (-T500) * BWD_6km) / 42M
+        try:
+            _sfc_mr = float(mpcalc.mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
+            _p700_i = int(np.argmin(np.abs(p.magnitude - 700.0)))
+            _p500_i = int(np.argmin(np.abs(p.magnitude - 500.0)))
+            _t700 = float(T.magnitude[_p700_i])
+            _t500 = float(T.magnitude[_p500_i])
+            _lr75 = (_t700 - _t500) / ((h.magnitude[_p500_i] - h.magnitude[_p700_i]) / 1000.0)
+            _neg500 = max(-_t500, 0)
+            ship_raw = (mu_cape_val * _sfc_mr * _lr75 * _neg500 * bwd_ms) / 42_000_000.0
+            if mu_cape_val < 1300 or mu_cin_val < -200:
+                ship_raw = 0.0
+            ship_score = max(ship_raw, 0)
+        except Exception:
+            ship_score = 0
+
+        # DCP = (DCAPE/980) * (muCAPE/2000) * (BWD/20) * (meanWind_0-6/16)
+        try:
+            dcape_v, _ = mpcalc.downdraft_cape(p, T, Td)
+            _dcape_f = float(dcape_v.magnitude)
+            # Mean wind 0-6 km
+            _mask06 = h_agl.magnitude <= 6000.0
+            _u06 = u_wind[_mask06].to("m/s").magnitude
+            _v06 = v_wind[_mask06].to("m/s").magnitude
+            _mw06 = np.sqrt(np.mean(_u06)**2 + np.mean(_v06)**2)
+            dcp_score = (_dcape_f / 980.0) * (mu_cape_val / 2000.0) * (bwd_ms / 20.0) * (_mw06 / 16.0)
+        except Exception:
+            dcp_score = 0
+
+        return (float(stp_score), float(raw_score), cape_val, srh_val, bwd_val,
+                float(scp_score), float(ship_score), float(dcp_score))
 
     except Exception:
         return None
@@ -1150,15 +1209,15 @@ def find_highest_tornado_risk(dt, stations=None):
     print(f"\n  Scanning {len(stations)} stations for tornado risk parameters...")
     print(f"  (this fetches a quick sounding from each site - may take a moment)\n")
 
-    # Collect results: (station_id, stp, raw, cape, srh, bwd, name)
+    # Collect results: (station_id, stp, raw, cape, srh, bwd, name, scp, ship, dcp)
     results = []
     for sid in stations:
         result = _quick_tornado_score(sid, dt)
         if result is None:
             continue
-        stp_score, raw_score, cape, srh, bwd = result
+        stp_score, raw_score, cape, srh, bwd, scp, ship, dcp = result
         name = STATIONS.get(sid, (sid,))[0]
-        results.append((sid, stp_score, raw_score, cape, srh, bwd, name))
+        results.append((sid, stp_score, raw_score, cape, srh, bwd, name, scp, ship, dcp))
 
     if not results:
         raise ValueError("Could not fetch data from any station")
@@ -1167,13 +1226,13 @@ def find_highest_tornado_risk(dt, stations=None):
     results.sort(key=lambda r: (r[1], r[2]), reverse=True)
 
     # ── Print ranked table ──────────────────────────────────────────
-    print(f"  {'#':>3s}  {'ID':5s}  {'Station':22s}  {'STP':>7s}  {'CAPE':>8s}  "
+    print(f"  {'#':>3s}  {'ID':5s}  {'Station':22s}  {'STP':>7s}  {'SCP':>7s}  {'SHIP':>7s}  {'DCP':>7s}  {'CAPE':>8s}  "
           f"{'0-1 SRH':>8s}  {'0-6 BWD':>7s}")
-    print(f"  {'-'*68}")
+    print(f"  {'-'*92}")
 
-    for idx, (sid, stp, raw, cape, srh, bwd, name) in enumerate(results, 1):
+    for idx, (sid, stp, raw, cape, srh, bwd, name, scp, ship, dcp) in enumerate(results, 1):
         highlight = " <--" if idx == 1 else ""
-        print(f"  {idx:3d}  {sid:5s}  {name:22s}  {stp:7.2f}  "
+        print(f"  {idx:3d}  {sid:5s}  {name:22s}  {stp:7.2f}  {scp:7.2f}  {ship:7.2f}  {dcp:7.2f}  "
               f"{cape:8.0f}  {srh:8.0f}  {bwd:7.0f}{highlight}")
 
     best_sid = results[0][0]
@@ -1476,6 +1535,64 @@ def compute_parameters(data):
         ).magnitude)
     except:
         params["stp"] = 0
+    
+    # ── Supercell Composite Parameter (SCP) ──
+    # SCP = (muCAPE / 1000) × (SRH_3km / 50) × (BWD_6km_ms / 20)
+    try:
+        _mu_cape_val = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _srh3_val = float(params.get("srh_3km", 0 * units("m^2/s^2")).magnitude)
+        _bwd6_ms = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        _scp_cape = _mu_cape_val / 1000.0
+        _scp_srh = _srh3_val / 50.0
+        _scp_bwd = _bwd6_ms / 20.0 if _bwd6_ms >= 10.0 else 0.0
+        params["scp"] = round(_scp_cape * _scp_srh * _scp_bwd, 2)
+    except:
+        params["scp"] = 0
+    
+    # ── Significant Hail Parameter (SHIP) ──
+    # SHIP = (muCAPE × mixRatio × LR_7-5 × (-T500) × BWD_6km) / 42_000_000
+    # Capped at 0 when muCAPE < 1300 or muCIN > -50 (per SPC guidelines)
+    try:
+        _mu_cape_ship = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _mu_cin_ship = float(params.get("mu_cin", 0 * units("J/kg")).magnitude)
+        # Surface mixing ratio (g/kg)
+        _sfc_mr = float(mpcalc.mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
+        # 700-500 hPa lapse rate
+        _p700_idx = int(np.argmin(np.abs(p.magnitude - 700.0)))
+        _p500_idx = int(np.argmin(np.abs(p.magnitude - 500.0)))
+        _t700 = float(T.magnitude[_p700_idx])
+        _t500 = float(T.magnitude[_p500_idx])
+        _lr_75 = (_t700 - _t500) / ((h.magnitude[_p500_idx] - h.magnitude[_p700_idx]) / 1000.0)
+        _neg_t500 = max(-_t500, 0)  # magnitude of T500 below freezing
+        _bwd6_ship = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        _ship_raw = (_mu_cape_ship * _sfc_mr * _lr_75 * _neg_t500 * _bwd6_ship) / 42_000_000.0
+        # Zero out if CAPE is too low or CIN is too weak (too much inhibition)
+        if _mu_cape_ship < 1300 or _mu_cin_ship < -200:
+            _ship_raw = 0.0
+        params["ship"] = round(max(_ship_raw, 0), 2)
+    except:
+        params["ship"] = 0
+    
+    # ── Derecho Composite Parameter (DCP) ──
+    # DCP = (DCAPE/980) × (muCAPE/2000) × (BWD_6km_ms/20) × (meanWind_0-6km/16 m/s)
+    try:
+        _dcape_val = float(params.get("dcape", 0 * units("J/kg")).magnitude) if params.get("dcape") is not None else 0.0
+        _mu_cape_dcp = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _bwd6_dcp = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        # Mean wind 0-6 km from interpolated grid
+        _mask_06 = h_interp.magnitude <= 6000.0
+        _u06 = u_interp[_mask_06].to("m/s").magnitude
+        _v06 = v_interp[_mask_06].to("m/s").magnitude
+        _mean_u06 = np.mean(_u06)
+        _mean_v06 = np.mean(_v06)
+        _mean_wind_06 = np.sqrt(_mean_u06**2 + _mean_v06**2)
+        params["dcp"] = round(
+            (_dcape_val / 980.0) * (_mu_cape_dcp / 2000.0) *
+            (_bwd6_dcp / 20.0) * (_mean_wind_06 / 16.0),
+            2
+        )
+    except:
+        params["dcp"] = 0
     
     # Freezing level (AGL)
     try:
@@ -2273,7 +2390,7 @@ def plot_sounding(data, params, station_id, dt):
         (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.37),
         (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.27),
         (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.17),
-        (f"   STP: {stp_v}", ACCENT, 0.07),
+        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.07),
     ]
     
     for text, color, y_pos in thermo_rows:
