@@ -286,9 +286,10 @@ def risk_scan():
 
     results = []
     station_ids = list(STATIONS.keys())
+    scan_workers = int(os.environ.get("SCAN_WORKERS", "3"))
 
     try:
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=scan_workers) as executor:
             futures = {executor.submit(_scan_one, sid): sid for sid in station_ids}
             for future in as_completed(futures, timeout=150):
                 try:
@@ -414,9 +415,11 @@ def time_series():
 
         points = []
         wall_start = time.monotonic()
-        WALL_LIMIT = 85  # must finish before Koyeb's 100s proxy timeout
+        # Cloud Run allows 300s; Koyeb has 100s proxy timeout
+        WALL_LIMIT = int(os.environ.get("TS_WALL_LIMIT", "85"))
+        ts_workers = int(os.environ.get("TS_WORKERS", "2"))
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=ts_workers) as executor:
             futures = {executor.submit(_fetch_one, t): t for t in times}
             for future in as_completed(futures, timeout=80):
                 # Bail if we're running out of time
