@@ -16,6 +16,7 @@ import {
   Gauge,
   Zap,
 } from "lucide-react";
+import StationMap from "./StationMap";
 import "./ResultsView.css";
 
 function ParamCard({ label, value, unit, color }) {
@@ -107,10 +108,11 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData }) {
+export default function ResultsView({ result, loading, error, riskData, showMap, mapProps }) {
   if (error) {
     return (
       <div className="results-view">
+        {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
         <div className="rv-state rv-error">
           <AlertTriangle size={24} />
@@ -126,6 +128,7 @@ export default function ResultsView({ result, loading, error, riskData }) {
   if (loading) {
     return (
       <div className="results-view">
+        {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
         <div className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
@@ -144,6 +147,7 @@ export default function ResultsView({ result, loading, error, riskData }) {
   if (!result) {
     return (
       <div className="results-view">
+        {showMap && mapProps && <StationMap {...mapProps} />}
         <RiskTable riskData={riskData} />
         {!riskData && (
           <div className="rv-state rv-empty">
@@ -245,7 +249,8 @@ export default function ResultsView({ result, loading, error, riskData }) {
         </div>
       </div>
 
-      {/* Risk scan table */}
+      {/* Map + Risk scan table */}
+      {showMap && mapProps && <StationMap {...mapProps} />}
       <RiskTable riskData={riskData} />
 
       {/* Plot */}

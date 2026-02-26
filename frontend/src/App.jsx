@@ -17,7 +17,10 @@ export default function App() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [riskData, setRiskData] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [lastParams, setLastParams] = useState(null);
+  const [selectedStation, setSelectedStation] = useState("OUN");
+  const [source, setSource] = useState("obs");
 
   const loadInitialData = useCallback(() => {
     setInitialLoading(true);
@@ -58,6 +61,23 @@ export default function App() {
     setShowHistory(false);
   };
 
+  const handleMapStationSelect = (stationId) => {
+    setSelectedStation(stationId);
+  };
+
+  const handleMapLatLonSelect = (lat, lon) => {
+    // stored for ControlPanel to pick up via props
+    setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
+  };
+
+  const handleSourceChange = (src) => {
+    setSource(src);
+  };
+
+  const handleStationChange = (id) => {
+    setSelectedStation(id);
+  };
+
   return (
     <div className="app">
       <Header />
@@ -75,6 +95,12 @@ export default function App() {
           onRiskDataChange={setRiskData}
           showHistory={showHistory}
           onToggleHistory={() => setShowHistory((v) => !v)}
+          showMap={showMap}
+          onToggleMap={() => setShowMap((v) => !v)}
+          selectedStation={selectedStation}
+          onStationChange={handleStationChange}
+          onSourceChange={handleSourceChange}
+          mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
         />
         {showHistory && (
           <HistoryPanel
@@ -82,7 +108,22 @@ export default function App() {
             onClose={() => setShowHistory(false)}
           />
         )}
-        <ResultsView result={result} loading={loading} error={error} riskData={riskData} />
+        <ResultsView
+          result={result}
+          loading={loading}
+          error={error}
+          riskData={riskData}
+          showMap={showMap}
+          mapProps={{
+            stations,
+            riskData,
+            selectedStation,
+            onStationSelect: handleMapStationSelect,
+            onLatLonSelect: handleMapLatLonSelect,
+            latLonMode: source === "rap" || source === "era5",
+            onClose: () => setShowMap(false),
+          }}
+        />
       </main>
     </div>
   );

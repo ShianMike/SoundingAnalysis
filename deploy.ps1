@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$API_URL = "https://soundinganalysis-1.onrender.com"
+$API_URL = "https://constitutional-lissi-mypersonalprojs-de5b9491.koyeb.app"
 $REPO    = "https://github.com/ShianMike/SoundingAnalysis.git"
 $BASE    = "/SoundingAnalysis/"
 
