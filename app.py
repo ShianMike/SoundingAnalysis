@@ -247,6 +247,10 @@ def _serialize_params(params, data, station, dt, source):
         "dcp": round(params.get("dcp", 0), 1),
         "ecape": round(params.get("ecape", 0), 1),
         "piecewiseCape": params.get("piecewise_cape", []),
+        "cape3km": params.get("cape_3km", 0),
+        "cape6km": params.get("cape_6km", 0),
+        "dcin": params.get("dcin", 0),
+        "ncape": params.get("ncape", 0),
         "surfaceModified": params.get("surface_modified", False),
         "customStormMotion": params.get("custom_storm_motion", False),
         "rh01": round(params["rh_0_1km"]) if params.get("rh_0_1km") is not None else None,
@@ -260,6 +264,10 @@ def _serialize_params(params, data, station, dt, source):
         "srh500m": _fmt(params.get("srh_500m")),
         "srh1km": _fmt(params.get("srh_1km")),
         "srh3km": _fmt(params.get("srh_3km")),
+        "esrh": _fmt(params.get("esrh")),
+        "ebwd": _fmt(params.get("ebwd")),
+        "eilBot": round(params["eil_bot_h"]) if params.get("eil_bot_h") is not None else None,
+        "eilTop": round(params["eil_top_h"]) if params.get("eil_top_h") is not None else None,
     }
 
 
