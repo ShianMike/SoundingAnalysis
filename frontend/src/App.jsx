@@ -18,6 +18,7 @@ export default function App() {
   const [riskData, setRiskData] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [showRisk, setShowRisk] = useState(false);
   const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [compareHistoryData, setCompareHistoryData] = useState(null);
@@ -104,7 +105,9 @@ export default function App() {
           onRetry={loadInitialData}
           connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
           riskData={riskData}
-          onRiskDataChange={setRiskData}
+          onRiskDataChange={(data) => { setRiskData(data); if (data) setShowRisk(true); }}
+          showRisk={showRisk}
+          onToggleRisk={() => setShowRisk((v) => !v)}
           showHistory={showHistory}
           onToggleHistory={() => setShowHistory((v) => !v)}
           showMap={showMap}
@@ -132,6 +135,7 @@ export default function App() {
           loading={loading}
           error={error}
           riskData={riskData}
+          showRisk={showRisk}
           showMap={showMap}
           showTimeSeries={showTimeSeries}
           onCloseTimeSeries={() => setShowTimeSeries(false)}
