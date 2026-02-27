@@ -390,6 +390,7 @@ export default function ControlPanel({
             <>
               <Loader2 className="spin" size={20} />
               <span>Connecting to API...</span>
+              <span style={{ fontSize: "0.85em", opacity: 0.7 }}>May take a moment, be patient</span>
             </>
           ) : (
             <>
@@ -885,17 +886,16 @@ export default function ControlPanel({
           </button>
           {smoothEnabled && (
             <div className="cp-accordion-body" style={{ padding: "6px 10px" }}>
-              <label className="cp-field-label" style={{ marginBottom: 0 }}>
-                Sigma
+              <label className="cp-field-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 50 }}>σ = {smoothSigma}</span>
                 <input
-                  type="number"
+                  type="range"
                   min="1"
                   max="10"
                   step="0.5"
                   value={smoothSigma}
                   onChange={(e) => setSmoothSigma(e.target.value)}
-                  className="cp-input"
-                  style={{ width: 60, marginLeft: 8 }}
+                  style={{ flex: 1 }}
                   title="Gaussian sigma in data levels (higher = smoother). Typical: 2-5"
                 />
               </label>
