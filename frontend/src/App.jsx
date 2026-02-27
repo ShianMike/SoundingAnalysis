@@ -3,7 +3,7 @@ import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
 import HistoryPanel from "./components/HistoryPanel";
-import { fetchStations, fetchSources, fetchSounding } from "./api";
+import { fetchStations, fetchSources, fetchSounding, fetchIntlStations } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
 
@@ -24,6 +24,8 @@ export default function App() {
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
+  const [intlStations, setIntlStations] = useState([]);
+  const [intlLoaded, setIntlLoaded] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
   const loadInitialData = useCallback(() => {
@@ -82,6 +84,18 @@ export default function App() {
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
   };
 
+  // Fetch intl stations lazily when IGRAv2 is first selected
+  useEffect(() => {
+    if (source === "igrav2" && !intlLoaded) {
+      fetchIntlStations()
+        .then((data) => { setIntlStations(data); setIntlLoaded(true); })
+        .catch(() => {});
+    }
+  }, [source, intlLoaded]);
+
+  // Pick station list based on source
+  const activeStations = source === "igrav2" ? intlStations : stations;
+
   const handleSourceChange = (src) => {
     setSource(src);
   };
@@ -95,7 +109,7 @@ export default function App() {
       <Header showFeedback={showFeedback} onCloseFeedback={() => setShowFeedback(false)} />
       <main className="app-main">
         <ControlPanel
-          stations={stations}
+          stations={activeStations}
           sources={sources}
           models={models}
           onSubmit={handleSubmit}
@@ -139,16 +153,17 @@ export default function App() {
           onCloseCompare={() => setShowCompare(false)}
           compareHistoryData={compareHistoryData}
           onCompareHistoryConsumed={() => setCompareHistoryData(null)}
-          stations={stations}
+          stations={activeStations}
           selectedStation={selectedStation}
           source={source}
           mapProps={{
-            stations,
+            stations: activeStations,
             riskData,
             selectedStation,
             onStationSelect: handleMapStationSelect,
             onLatLonSelect: handleMapLatLonSelect,
             latLonMode: source === "rap" || source === "era5",
+            globalMode: source === "igrav2",
             onClose: () => setShowMap(false),
           }}
         />

@@ -85,6 +85,19 @@ function FlyToStation({ station, stations }) {
   return null;
 }
 
+/* ── re-center map when switching global/CONUS mode ─────────── */
+function RecenterMap({ center, zoom, globalMode }) {
+  const map = useMap();
+  const prevMode = useRef(globalMode);
+  useEffect(() => {
+    if (prevMode.current !== globalMode) {
+      map.setView(center, zoom, { animate: true, duration: 0.6 });
+      prevMode.current = globalMode;
+    }
+  }, [globalMode, center, zoom, map]);
+  return null;
+}
+
 /* ── main component ─────────────────────────────────────────── */
 export default function StationMap({
   stations = [],
@@ -93,6 +106,7 @@ export default function StationMap({
   onStationSelect,
   onLatLonSelect,
   latLonMode,   // true when source is rap/era5
+  globalMode,   // true when source is igrav2
   onClose,
 }) {
   const [outlookDay, setOutlookDay] = useState(1);
@@ -143,6 +157,11 @@ export default function StationMap({
 
   const CONUS_CENTER = [39.0, -96.0];
   const CONUS_ZOOM = 4;
+  const GLOBAL_CENTER = [20, 0];
+  const GLOBAL_ZOOM = 2;
+
+  const mapCenter = globalMode ? GLOBAL_CENTER : CONUS_CENTER;
+  const mapZoom = globalMode ? GLOBAL_ZOOM : CONUS_ZOOM;
 
   return (
     <section className="station-map-panel">
@@ -233,8 +252,8 @@ export default function StationMap({
 
       <div className="smap-container">
         <MapContainer
-          center={CONUS_CENTER}
-          zoom={CONUS_ZOOM}
+          center={mapCenter}
+          zoom={mapZoom}
           className="smap-leaflet"
           zoomControl={true}
           attributionControl={false}
@@ -259,6 +278,7 @@ export default function StationMap({
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <FlyToStation station={selectedStation} stations={stations} />
+          <RecenterMap center={mapCenter} zoom={mapZoom} globalMode={globalMode} />
 
           {stations.map((s) => {
             const risk = riskMap[s.id];
