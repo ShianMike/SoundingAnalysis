@@ -3,7 +3,7 @@ import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
 import HistoryPanel from "./components/HistoryPanel";
-import { fetchStations, fetchSources, fetchSounding, fetchIntlStations, fetchIntlRegions } from "./api";
+import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
 
@@ -24,10 +24,6 @@ export default function App() {
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
-  const [intlStations, setIntlStations] = useState([]);
-  const [intlRegions, setIntlRegions] = useState([]);
-  const [intlRegion, setIntlRegion] = useState("");
-  const [intlLoading, setIntlLoading] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
   const loadInitialData = useCallback(() => {
@@ -86,36 +82,6 @@ export default function App() {
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
   };
 
-  // Fetch intl region list once when IGRAv2 is first selected
-  useEffect(() => {
-    if (source === "igrav2" && intlRegions.length === 0) {
-      fetchIntlRegions()
-        .then((data) => setIntlRegions(data))
-        .catch(() => {});
-    }
-  }, [source, intlRegions.length]);
-
-  // Fetch intl stations when region changes
-  useEffect(() => {
-    if (source === "igrav2" && intlRegion) {
-      setIntlLoading(true);
-      fetchIntlStations(intlRegion)
-        .then((data) => setIntlStations(data))
-        .catch(() => setIntlStations([]))
-        .finally(() => setIntlLoading(false));
-    } else if (source === "igrav2" && !intlRegion) {
-      setIntlStations([]);
-    }
-  }, [source, intlRegion]);
-
-  // Pick station list based on source
-  const activeStations = source === "igrav2" ? intlStations : stations;
-
-  const handleRegionChange = (region) => {
-    setIntlRegion(region);
-    setIntlStations([]);
-  };
-
   const handleSourceChange = (src) => {
     setSource(src);
   };
@@ -129,7 +95,7 @@ export default function App() {
       <Header showFeedback={showFeedback} onCloseFeedback={() => setShowFeedback(false)} />
       <main className="app-main">
         <ControlPanel
-          stations={activeStations}
+          stations={stations}
           sources={sources}
           models={models}
           onSubmit={handleSubmit}
@@ -150,10 +116,6 @@ export default function App() {
           selectedStation={selectedStation}
           onStationChange={handleStationChange}
           onSourceChange={handleSourceChange}
-          intlRegions={intlRegions}
-          intlRegion={intlRegion}
-          onRegionChange={handleRegionChange}
-          intlLoading={intlLoading}
           mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
           onFeedbackClick={() => setShowFeedback((v) => !v)}
           showFeedback={showFeedback}
@@ -177,17 +139,16 @@ export default function App() {
           onCloseCompare={() => setShowCompare(false)}
           compareHistoryData={compareHistoryData}
           onCompareHistoryConsumed={() => setCompareHistoryData(null)}
-          stations={activeStations}
+          stations={stations}
           selectedStation={selectedStation}
           source={source}
           mapProps={{
-            stations: activeStations,
+            stations,
             riskData,
             selectedStation,
             onStationSelect: handleMapStationSelect,
             onLatLonSelect: handleMapLatLonSelect,
-            latLonMode: source === "rap" || source === "era5",
-            globalMode: source === "igrav2",
+            latLonMode: source === "rap",
             onClose: () => setShowMap(false),
           }}
         />

@@ -39,17 +39,9 @@ const SOURCE_META = {
     label: "BUFKIT Forecast",
     desc: "Station-based forecast soundings from HRRR, RAP, NAM, GFS, and other models via Iowa State archive.",
   },
-  era5: {
-    label: "ERA5 Reanalysis",
-    desc: "ECMWF ERA5 global reanalysis at any lat/lon. Covers 1940 to near-present. Requires CDS API key.",
-  },
   acars: {
     label: "ACARS Aircraft Obs",
     desc: "ACARS/AMDAR aircraft observation profiles at major airports from the IEM archive.",
-  },
-  igrav2: {
-    label: "IGRAv2 Global",
-    desc: "IGRA v2 global radiosonde archive via UWyo. Enter a WMO station ID for any station worldwide.",
   },
 };
 
@@ -75,10 +67,6 @@ export default function ControlPanel({
   selectedStation,
   onStationChange,
   onSourceChange,
-  intlRegions,
-  intlRegion,
-  onRegionChange,
-  intlLoading,
   mapLatLon,
   onFeedbackClick,
   showFeedback: feedbackActive,
@@ -109,9 +97,6 @@ export default function ControlPanel({
   const [smEnabled, setSmEnabled] = useState(false);
   const [smDirection, setSmDirection] = useState("");
   const [smSpeed, setSmSpeed] = useState("");
-
-  // IGRAv2 WMO ID input
-  const [wmoId, setWmoId] = useState("");
 
   // Sync source to parent
   const setSource = (src) => {
@@ -153,10 +138,9 @@ export default function ControlPanel({
     }
   }, [stations]);
 
-  const needsLatLon = source === "rap" || source === "era5";
-  const needsStation = source === "obs" || source === "bufkit" || source === "acars" || source === "igrav2";
+  const needsLatLon = source === "rap";
+  const needsStation = source === "obs" || source === "bufkit" || source === "acars";
   const needsModel = source === "bufkit";
-  const needsWmoId = source === "igrav2";
 
   // Build risk lookup from scan results
   const riskMap = {};
@@ -231,7 +215,6 @@ export default function ControlPanel({
     const params = { source };
 
     if (needsStation) params.station = station;
-    if (needsWmoId && wmoId) params.station = wmoId;  // WMO override
     if (needsLatLon) {
       params.lat = parseFloat(lat);
       params.lon = parseFloat(lon);
@@ -270,13 +253,6 @@ export default function ControlPanel({
     if (stn) {
       setLat(String(stn.lat));
       setLon(String(stn.lon));
-      // Auto-fill WMO ID for IGRAv2
-      // For intl stations, the id IS the WMO ID; for US stations, use stn.wmo
-      if (source === "igrav2") {
-        setWmoId(stn.wmo || id);
-      } else if (stn.wmo) {
-        setWmoId(stn.wmo);
-      }
     }
     if (autoFetch && !loading) {
       const params = { source, station: id };
@@ -285,7 +261,7 @@ export default function ControlPanel({
         params.model = model;
         params.fhour = parseInt(fhour) || 0;
       }
-      if (source === "rap" || source === "era5") {
+      if (source === "rap") {
         const s = stations.find((st) => st.id === id);
         if (s) {
           params.lat = s.lat;
@@ -403,30 +379,6 @@ export default function ControlPanel({
               Station
             </label>
             <div className="cp-station-picker">
-              {/* Region selector for IGRAv2 */}
-              {needsWmoId && (
-                <div className="cp-region-picker">
-                  <label className="cp-region-label">Region</label>
-                  <select
-                    className="cp-input cp-region-select"
-                    value={intlRegion || ""}
-                    onChange={(e) => onRegionChange(e.target.value)}
-                  >
-                    <option value="">— Select a region —</option>
-                    {(intlRegions || []).map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name} ({r.count})
-                      </option>
-                    ))}
-                  </select>
-                  {intlLoading && (
-                    <span className="cp-region-loading">
-                      <Loader2 size={12} className="spin" /> Loading stations…
-                    </span>
-                  )}
-                </div>
-              )}
-              {!needsWmoId && (
               <button
                 type="button"
                 className="cp-risk-btn"
@@ -445,7 +397,6 @@ export default function ControlPanel({
                   </>
                 )}
               </button>
-              )}
               {riskData && (
                 <p className="cp-risk-hint">
                   Scanned {riskData.stations.length} stations at {riskData.date}
@@ -501,11 +452,7 @@ export default function ControlPanel({
                     </span>
                     <span className="cp-station-item-id">{s.id}</span>
                     <span className="cp-station-item-name">{s.name}</span>
-                    {needsWmoId && s.wmo ? (
-                      <span className="cp-station-item-wmo" title="WMO ID (auto-filled)">
-                        {s.wmo}
-                      </span>
-                    ) : s.risk ? (
+                    {s.risk ? (
                       <span className={`cp-risk-score ${s.risk.stp >= 1 ? "high" : s.risk.stp >= 0.3 ? "med" : "low"}`}>
                         {s.risk.stp.toFixed(1)}
                       </span>
@@ -679,29 +626,6 @@ export default function ControlPanel({
             </>
           )}
         </div>
-
-        {/* IGRAv2 WMO Station ID */}
-        {needsWmoId && (
-          <div className="cp-section">
-            <label className="cp-label">
-              <Database size={14} />
-              WMO Station ID
-            </label>
-            <input
-              type="text"
-              className="cp-input"
-              placeholder="e.g. 72451, 47646"
-              value={wmoId}
-              onChange={(e) => setWmoId(e.target.value)}
-              required
-            />
-            <p className="cp-hint">
-              {wmoId
-                ? `WMO ${wmoId} selected — click Analyze to fetch`
-                : "Select a station above or type a WMO number"}
-            </p>
-          </div>
-        )}
 
         {/* Surface Modification */}
         <div className={`cp-accordion ${sfcModEnabled ? "cp-accordion--active" : ""}`}>
