@@ -174,49 +174,29 @@
   letter-spacing: 0.04em;
 }
 
-/* Source hover card */
-.cp-source-card {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 8px);
-  transform: translateX(-50%);
-  z-index: 30;
-  width: 240px;
-  padding: 12px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+/* Source info bar (below grid) */
+.cp-source-info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  pointer-events: none;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   animation: fadeIn 0.12s ease;
 }
 
-.cp-source-card::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%) rotate(45deg);
-  width: 8px;
-  height: 8px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-}
-
-.cp-source-card-title {
-  font-size: 12px;
+.cp-source-info-title {
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.cp-source-card-desc {
+.cp-source-info-desc {
   font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 @keyframes fadeIn {
