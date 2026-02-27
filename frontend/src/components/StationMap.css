@@ -101,6 +101,17 @@
   background: rgba(250, 204, 21, 0.08);
 }
 
+.smap-radar-badge {
+  font-size: 0.6rem;
+  background: rgba(250, 204, 21, 0.25);
+  color: #facc15;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-left: 3px;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
 .smap-day-btns {
   display: flex;
   gap: 2px;

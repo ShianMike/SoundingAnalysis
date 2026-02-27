@@ -101,7 +101,6 @@ function SlotCard({ slot, index, stations, onUpdate, onRemove, canRemove }) {
           <option value="obs">OBS</option>
           <option value="rap">RAP</option>
           <option value="bufkit">BUFKIT</option>
-          <option value="era5">ERA5</option>
           <option value="acars">ACARS</option>
         </select>
       </div>

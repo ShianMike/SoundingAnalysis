@@ -929,30 +929,3 @@
   }
 }
 
-/* ── Region picker for IGRAv2 ─────────────────────────────── */
-.cp-region-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 6px;
-}
-
-.cp-region-label {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.cp-region-select {
-  font-size: 0.82rem;
-  padding: 6px 8px;
-}
-
-.cp-region-loading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  color: var(--accent);
-}

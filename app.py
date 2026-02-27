@@ -86,32 +86,6 @@ def list_stations():
     return jsonify(stations)
 
 
-@app.route("/api/stations/intl", methods=["GET"])
-def list_intl_stations():
-    """Return IGRAv2 international stations, optionally filtered by region."""
-    from sounding import INTL_STATIONS, _classify_intl_region
-    region_filter = request.args.get("region", "").strip()
-    stations = []
-    for wmo_id, (name, lat, lon) in sorted(INTL_STATIONS.items()):
-        region = _classify_intl_region(wmo_id)
-        if region_filter and region != region_filter:
-            continue
-        stations.append({"id": wmo_id, "name": name, "lat": lat, "lon": lon, "region": region})
-    return jsonify(stations)
-
-
-@app.route("/api/stations/intl/regions", methods=["GET"])
-def list_intl_regions():
-    """Return available international station regions with station counts."""
-    from sounding import INTL_STATIONS, INTL_REGIONS, _classify_intl_region
-    counts = {}
-    for wmo_id in INTL_STATIONS:
-        r = _classify_intl_region(wmo_id)
-        counts[r] = counts.get(r, 0) + 1
-    regions = [{"id": r, "name": r, "count": counts.get(r, 0)} for r in INTL_REGIONS if counts.get(r, 0) > 0]
-    return jsonify(regions)
-
-
 @app.route("/api/sources", methods=["GET"])
 def list_sources():
     """Return available data sources and BUFKIT models."""
@@ -129,10 +103,10 @@ def get_sounding():
 
     Expected JSON body:
       {
-        "source": "obs",           // obs | rap | bufkit | era5 | acars
-        "station": "OUN",          // 3-letter station ID (optional for rap/era5)
+        "source": "obs",           // obs | rap | bufkit | acars
+        "station": "OUN",          // 3-letter station ID (optional for rap)
         "date": "2024061200",      // YYYYMMDDHH  (optional, defaults to latest)
-        "lat": 35.22,              // required for rap/era5 when no station
+        "lat": 35.22,              // required for rap when no station
         "lon": -97.46,
         "model": "hrrr",           // for bufkit only
         "fhour": 0                 // for bufkit only
@@ -179,18 +153,11 @@ def get_sounding():
     if source == "obs" and (not station or station not in STATION_WMO):
         return jsonify({"error": f"Unknown station '{station}'. Provide a valid 3-letter ID."}), 400
 
-    # IGRAv2 accepts any WMO station ID; auto-convert 3-letter code if known
-    if source == "igrav2":
-        if station and station in STATION_WMO:
-            station = STATION_WMO[station]
-        if not station:
-            return jsonify({"error": "IGRAv2 requires a WMO station ID (e.g. 72451, 47646)."}), 400
-
-    if source in ("rap", "era5") and lat is None and lon is None:
+    if source == "rap" and lat is None and lon is None:
         if station and station in STATIONS:
             _, lat, lon = STATIONS[station]
         else:
-            return jsonify({"error": "RAP/ERA5 source requires lat/lon or a known station."}), 400
+            return jsonify({"error": "RAP source requires lat/lon or a known station."}), 400
 
     try:
         # 1) Fetch

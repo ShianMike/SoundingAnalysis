@@ -104,27 +104,6 @@ export async function fetchComposite(soundings) {
 }
 
 /**
- * Fetch international (IGRAv2) station list, optionally filtered by region.
- */
-export async function fetchIntlStations(region = "") {
-  const url = region
-    ? `${API_BASE}/api/stations/intl?region=${encodeURIComponent(region)}`
-    : `${API_BASE}/api/stations/intl`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error("Failed to fetch international stations");
-  return res.json();
-}
-
-/**
- * Fetch available international station regions with counts.
- */
-export async function fetchIntlRegions() {
-  const res = await fetchWithTimeout(`${API_BASE}/api/stations/intl/regions`);
-  if (!res.ok) throw new Error("Failed to fetch regions");
-  return res.json();
-}
-
-/**
  * Fetch SPC convective outlook GeoJSON for a given day (1, 2, or 3).
  */
 export async function fetchSpcOutlook(day = 1) {

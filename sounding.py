@@ -1,4 +1,4 @@
-"""
+﻿"""
 VERTICAL PROFILE ANALYSIS TOOL
 ===============================
 Fetches real upper-air sounding data from multiple sources
@@ -8,7 +8,6 @@ Data Sources:
   - Observed radiosondes (IEM / University of Wyoming)
   - RAP model analysis for any lat/lon (NCEI THREDDS, requires siphon)
   - BUFKIT forecast soundings: HRRR, RAP, NAM, GFS, etc. (Iowa State)
-  - ERA5 global reanalysis for any lat/lon (CDS API, requires cdsapi + key)
   - ACARS/AMDAR aircraft observations at airports (IEM)
 
 Features:
@@ -25,7 +24,6 @@ Usage:
   python sounding.py --station OUN --date 2024061200               # Specific date
   python sounding.py --source rap --lat 36.4 --lon -99.4           # RAP at any point
   python sounding.py --source bufkit --model hrrr --station OUN    # HRRR forecast
-  python sounding.py --source era5 --lat 36.4 --lon -99.4 --date 2020050100
   python sounding.py --source acars --station KDFW                 # Aircraft obs
   python sounding.py --list-sources                                # Show all sources
 """
@@ -684,159 +682,6 @@ def fetch_bufkit_sounding(station_id, dt, model="rap", fhour=0):
     return data
 
 
-# ─── ERA5 REANALYSIS ──────────────────────────────────────────────
-# ERA5 pressure levels (hPa) for retrieval
-_ERA5_LEVELS = [
-    "1000", "975", "950", "925", "900", "875", "850", "825", "800",
-    "775", "750", "700", "650", "600", "550", "500", "450", "400",
-    "350", "300", "250", "225", "200", "175", "150", "125", "100",
-    "70", "50", "30", "20", "10",
-]
-
-
-def fetch_era5_sounding(lat, lon, dt):
-    """
-    Fetch ERA5 global reanalysis sounding for any lat/lon.
-    Requires a free CDS API key — see https://cds.climate.copernicus.eu
-
-    Setup:
-      1. Create a free account at https://cds.climate.copernicus.eu
-      2. Accept the ERA5 licence terms.
-      3. Copy your API key from your profile page.
-      4. Create file  ~/.cdsapirc  with:
-            url: https://cds.climate.copernicus.eu/api
-            key: <YOUR-API-KEY>
-    """
-    try:
-        import cdsapi
-    except ImportError:
-        raise ImportError(
-            "cdsapi is required for ERA5 data. Install with: pip install cdsapi"
-        )
-    try:
-        import netCDF4
-    except ImportError:
-        raise ImportError(
-            "netCDF4 is required for ERA5 data. Install with: pip install netCDF4"
-        )
-
-    import tempfile, os
-
-    print(f"  Fetching ERA5 reanalysis for ({lat:.2f}, {lon:.2f}) "
-          f"at {dt:%Y-%m-%d %H}Z...")
-    print("  (ERA5 requests may take 1-5 minutes to process)")
-
-    c = cdsapi.Client(progress=False)
-
-    # Small bounding box around the point (0.5° pad)
-    area = [lat + 0.5, lon - 0.5, lat - 0.5, lon + 0.5]
-
-    tmp_file = os.path.join(tempfile.gettempdir(), "era5_sounding_tmp.nc")
-
-    c.retrieve(
-        "reanalysis-era5-pressure-levels",
-        {
-            "product_type": "reanalysis",
-            "variable": [
-                "temperature",
-                "u_component_of_wind",
-                "v_component_of_wind",
-                "specific_humidity",
-                "geopotential",
-            ],
-            "pressure_level": _ERA5_LEVELS,
-            "year":  f"{dt.year}",
-            "month": f"{dt.month:02d}",
-            "day":   f"{dt.day:02d}",
-            "time":  f"{dt.hour:02d}:00",
-            "area":  area,
-            "data_format": "netcdf",
-        },
-        tmp_file,
-    )
-
-    ds = netCDF4.Dataset(tmp_file, "r")
-
-    # Variable names in ERA5 netCDF: t, u, v, q, z  (or long names)
-    def _v(ds, *names):
-        for n in names:
-            if n in ds.variables:
-                return ds.variables[n][:]
-        raise KeyError(f"None of {names} in ERA5 file. "
-                       f"Available: {list(ds.variables.keys())}")
-
-    pres_pa  = _v(ds, "level", "pressure_level", "isobaric")
-    temp_k   = _v(ds, "t", "temperature")
-    u_ms     = _v(ds, "u", "u_component_of_wind")
-    v_ms     = _v(ds, "v", "v_component_of_wind")
-    q_kgkg   = _v(ds, "q", "specific_humidity")
-    z_m2s2   = _v(ds, "z", "geopotential")
-    ds.close()
-
-    # Remove temp file
-    try:
-        os.remove(tmp_file)
-    except OSError:
-        pass
-
-    # ERA5 arrays shape: (time, level, lat, lon)   — squeeze to (level,)
-    temp_k  = temp_k.squeeze()
-    u_ms    = u_ms.squeeze()
-    v_ms    = v_ms.squeeze()
-    q_kgkg  = q_kgkg.squeeze()
-    z_m2s2  = z_m2s2.squeeze()
-
-    # If still >1-D after squeeze (multiple lat/lon in box), pick nearest
-    if temp_k.ndim > 1:
-        # Take centre point of the small box
-        mid_lat = temp_k.shape[-2] // 2
-        mid_lon = temp_k.shape[-1] // 2
-        temp_k  = temp_k[:, mid_lat, mid_lon]
-        u_ms    = u_ms[:, mid_lat, mid_lon]
-        v_ms    = v_ms[:, mid_lat, mid_lon]
-        q_kgkg  = q_kgkg[:, mid_lat, mid_lon]
-        z_m2s2  = z_m2s2[:, mid_lat, mid_lon]
-
-    pres_hpa = np.array(pres_pa, dtype=float)        # levels are already in hPa
-    temp_c   = np.array(temp_k, dtype=float) - 273.15
-    hgt_m    = np.array(z_m2s2, dtype=float) / 9.80665   # geopotential → metres
-
-    # Specific humidity → dewpoint
-    # e = q * p / (0.622 + 0.378*q)     (vapour pressure in hPa)
-    q = np.clip(np.array(q_kgkg, dtype=float), 1e-10, None)
-    e_hpa = q * pres_hpa / (0.622 + 0.378 * q)
-    # Magnus invert: Td = b * ln(e/6.112) / (a - ln(e/6.112))
-    a, b = 17.625, 243.04
-    ln_e = np.log(np.clip(e_hpa / 6.112, 1e-10, None))
-    td_c = (b * ln_e) / (a - ln_e)
-
-    # Wind → speed & direction
-    wspd_kt  = np.sqrt(np.array(u_ms, dtype=float)**2
-                       + np.array(v_ms, dtype=float)**2) * 1.94384
-    wdir_deg = (np.degrees(np.arctan2(-np.array(u_ms, dtype=float),
-                                       -np.array(v_ms, dtype=float))) + 360) % 360
-
-    # Sort descending pressure (surface first), keep ≥ 10 hPa
-    order = np.argsort(pres_hpa)[::-1]
-    mask = pres_hpa[order] >= 10
-    idx = order[mask]
-
-    data = {
-        "pressure":       np.array(pres_hpa[idx])  * units.hPa,
-        "height":         np.array(hgt_m[idx])     * units.meter,
-        "temperature":    np.array(temp_c[idx])    * units.degC,
-        "dewpoint":       np.array(td_c[idx])      * units.degC,
-        "wind_direction": np.array(wdir_deg[idx])  * units.degree,
-        "wind_speed":     np.array(wspd_kt[idx])   * units.knot,
-        "has_wind":       np.ones(len(idx), dtype=bool),
-        "station_info": {
-            "lat": lat, "lon": lon,
-            "name": f"ERA5 Reanalysis ({lat:.2f}, {lon:.2f})",
-        },
-    }
-    return data
-
-
 # ─── ACARS / AMDAR AIRCRAFT OBSERVATIONS ──────────────────────────
 def fetch_acars_sounding(airport, dt):
     """
@@ -963,462 +808,6 @@ def fetch_acars_sounding(airport, dt):
 
 
 # ─────────────────────────────────────────────────────────────────────
-# IGRAv2 / GLOBAL UPPER-AIR (via UWyo with region auto-detection)
-# ─────────────────────────────────────────────────────────────────────
-# UWyo region codes by geographic area
-_UWYO_REGIONS = {
-    "naconf": {"lat": (15, 75), "lon": (-170, -50)},   # North America
-    "samer":  {"lat": (-60, 15), "lon": (-90, -30)},    # South America
-    "europe": {"lat": (35, 75), "lon": (-15, 45)},      # Europe
-    "africa": {"lat": (-40, 40), "lon": (-20, 55)},     # Africa
-    "mideast":{"lat": (10, 45), "lon": (25, 65)},       # Middle East
-    "seasia": {"lat": (-15, 55), "lon": (60, 150)},     # South-East Asia
-    "pac":    {"lat": (-50, 50), "lon": (140, -120)},   # Pacific
-    "nz":     {"lat": (-55, -25), "lon": (155, 180)},   # New Zealand / Oceania
-    "ant":    {"lat": (-90, -60), "lon": (-180, 180)},  # Antarctic
-    "np":     {"lat": (60, 90), "lon": (-180, 180)},    # Arctic
-}
-
-# A comprehensive set of global radiosonde stations (WMO ID, Name, Lat, Lon)
-# Covers all UWyo regions for worldwide upper-air analysis
-INTL_STATIONS = {
-    # ── Europe ──────────────────────────────────────────────────────
-    "03005": ("Lerwick, UK", 60.13, -1.18),
-    "03354": ("Nottingham, UK", 53.00, -1.25),
-    "03808": ("Camborne, UK", 50.22, -5.32),
-    "03953": ("Valentia, Ireland", 51.93, -10.25),
-    "06260": ("De Bilt, Netherlands", 52.10, 5.18),
-    "06610": ("Payerne, Switzerland", 46.82, 6.95),
-    "07145": ("Trappes, France", 48.77, 2.01),
-    "07481": ("Bordeaux, France", 44.83, -0.69),
-    "07645": ("Nîmes, France", 43.86, 4.41),
-    "08221": ("Madrid, Spain", 40.45, -3.55),
-    "08302": ("Lisbon, Portugal", 38.77, -9.13),
-    "08495": ("Murcia, Spain", 38.00, -1.17),
-    "10035": ("Schleswig, Germany", 54.53, 9.55),
-    "10393": ("Lindenberg, Germany", 52.21, 14.12),
-    "10548": ("Meiningen, Germany", 50.56, 10.38),
-    "10739": ("Stuttgart, Germany", 48.83, 9.20),
-    "10868": ("Munich, Germany", 48.25, 11.55),
-    "11035": ("Wien, Austria", 48.25, 16.36),
-    "11520": ("Praha, Czech Republic", 50.02, 14.45),
-    "12374": ("Leba, Poland", 54.75, 17.53),
-    "12425": ("Legionowo, Poland", 52.40, 20.97),
-    "15420": ("Bucharest, Romania", 44.50, 26.13),
-    "16045": ("Udine, Italy", 46.03, 13.18),
-    "16245": ("Pratica di Mare, Italy", 41.66, 12.43),
-    "16320": ("Brindisi, Italy", 40.65, 17.95),
-    "16546": ("Cagliari, Italy", 39.25, 9.05),
-    "17064": ("Istanbul, Turkey", 40.90, 29.38),
-    "17130": ("Ankara, Turkey", 39.97, 32.86),
-    "17220": ("Izmir, Turkey", 38.50, 27.01),
-    "26038": ("St. Petersburg, Russia", 59.97, 30.30),
-    "27612": ("Moscow, Russia", 55.75, 37.63),
-    "01241": ("Jan Mayen, Norway", 70.93, -8.67),
-    "01001": ("Ny-Ålesund, Svalbard", 78.92, 11.93),
-    "01415": ("Bodø, Norway", 67.27, 14.40),
-    "02365": ("Sodankylä, Finland", 67.37, 26.63),
-    "02527": ("Jokioinen, Finland", 60.81, 23.50),
-    "02836": ("Visby, Sweden", 57.65, 18.35),
-    "04018": ("Keflavik, Iceland", 63.97, -22.60),
-    "04220": ("Narsarsuaq, Greenland", 61.18, -45.42),
-    "04320": ("Danmarkshavn, Greenland", 76.77, -18.67),
-    "04360": ("Tasiilaq, Greenland", 65.60, -37.63),
-    # ── Middle East ─────────────────────────────────────────────────
-    "40179": ("Bet Dagan, Israel", 32.00, 34.81),
-    "40373": ("Riyadh, Saudi Arabia", 24.93, 46.72),
-    "40437": ("Jeddah, Saudi Arabia", 21.67, 39.15),
-    "40706": ("Abu Dhabi, UAE", 24.43, 54.65),
-    "40745": ("Muscat, Oman", 23.61, 58.28),
-    "40582": ("Kuwait", 29.22, 47.97),
-    "40754": ("Seeb, Oman", 23.58, 58.28),
-    "41024": ("Karachi, Pakistan", 24.90, 67.13),
-    "41170": ("Jacobabad, Pakistan", 28.30, 68.47),
-    "41256": ("Lahore, Pakistan", 31.52, 74.40),
-    # ── South & Southeast Asia ──────────────────────────────────────
-    "43003": ("New Delhi, India", 28.58, 77.21),
-    "43128": ("Kolkata, India", 22.65, 88.45),
-    "43279": ("Mumbai, India", 19.12, 72.85),
-    "43311": ("Hyderabad, India", 17.45, 78.47),
-    "43353": ("Vishakhapatnam, India", 17.72, 83.23),
-    "43371": ("Nagpur, India", 21.10, 79.05),
-    "43466": ("Chennai, India", 13.00, 80.18),
-    "43014": ("Patiala, India", 30.33, 76.47),
-    "43185": ("Lucknow, India", 26.75, 80.88),
-    "43150": ("Bhopal, India", 23.28, 77.35),
-    "43369": ("Aurangabad, India", 19.85, 75.40),
-    "48455": ("Singapore", 1.37, 103.98),
-    "48568": ("Kuala Lumpur, Malaysia", 3.13, 101.55),
-    "48650": ("Bangkok, Thailand", 13.73, 100.57),
-    "48855": ("Ho Chi Minh City, Vietnam", 10.82, 106.65),
-    "48820": ("Hanoi, Vietnam", 21.02, 105.80),
-    "48900": ("Phnom Penh, Cambodia", 11.55, 104.85),
-    "96935": ("Jakarta, Indonesia", -6.17, 106.85),
-    "96749": ("Pontianak, Indonesia", -0.02, 109.33),
-    "98223": ("Laoag, Philippines", 18.18, 120.53),
-    "98444": ("Manila, Philippines", 14.52, 121.00),
-    "47918": ("Legaspi, Philippines", 13.14, 123.73),
-    # ── East Asia ───────────────────────────────────────────────────
-    "47646": ("Tateno, Japan", 36.06, 140.13),
-    "47412": ("Sapporo, Japan", 43.06, 141.33),
-    "47778": ("Kagoshima, Japan", 31.55, 130.55),
-    "47807": ("Naha, Japan", 26.33, 127.77),
-    "47600": ("Wajima, Japan", 37.39, 136.90),
-    "47740": ("Shionomisaki, Japan", 33.45, 135.76),
-    "47827": ("Minamidaitōjima, Japan", 25.83, 131.23),
-    "47187": ("Wakkanai, Japan", 45.42, 141.68),
-    "47158": ("Kushiro, Japan", 42.95, 144.40),
-    "47580": ("Hamamatsu, Japan", 34.75, 137.72),
-    "47401": ("Asahikawa, Japan", 43.77, 142.37),
-    "47682": ("Tokyo, Japan", 35.69, 139.77),
-    "47991": ("Chichijima, Japan", 27.09, 142.19),
-    "47945": ("Naze, Japan", 28.38, 129.50),
-    "47744": ("Fukuoka, Japan", 33.58, 130.38),
-    "47590": ("Hachijōjima, Japan", 33.12, 139.80),
-    "47971": ("Minamitorishima, Japan", 24.29, 153.97),
-    "47827": ("Minamidaito, Japan", 25.83, 131.23),
-    "47741": ("Hamada, Japan", 34.90, 132.07),
-    "47678": ("Shizuoka, Japan", 34.98, 138.40),
-    "47891": ("Ishigakijima, Japan", 24.34, 124.16),
-    "47909": ("Yonaguni, Japan", 24.47, 123.01),
-    "47827": ("Minamidaitojima, Japan", 25.83, 131.23),
-    "47945": ("Naze, Japan", 28.38, 129.50),
-    "58362": ("Shanghai, China", 31.40, 121.46),
-    "54511": ("Beijing, China", 39.93, 116.28),
-    "57083": ("Chengdu, China", 30.67, 104.02),
-    "58238": ("Nanjing, China", 32.00, 118.80),
-    "59287": ("Guangzhou, China", 23.00, 113.32),
-    "57494": ("Wuhan, China", 30.62, 114.13),
-    "50953": ("Harbin, China", 45.75, 126.77),
-    "54342": ("Shenyang, China", 41.73, 123.52),
-    "51463": ("Urumqi, China", 43.78, 87.65),
-    "56294": ("Kunming, China", 25.02, 102.68),
-    "59758": ("Haikou, China", 20.03, 110.35),
-    "45004": ("Hong Kong, China", 22.32, 114.17),
-    "47102": ("Osan, South Korea", 37.10, 127.03),
-    "47138": ("Pohang, South Korea", 36.03, 129.38),
-    "47122": ("Baengnyeongdo, S. Korea", 37.97, 124.63),
-    "47158": ("Gwangju, South Korea", 35.17, 126.90),
-    "47185": ("Gosan, S. Korea (Jeju)", 33.29, 126.16),
-    "47104": ("Baegryeongdo, S. Korea", 37.97, 124.63),
-    "30935": ("Vladivostok, Russia", 43.12, 131.90),
-    "47108": ("Pyongyang, North Korea", 39.03, 125.78),
-    "44292": ("Ulaanbaatar, Mongolia", 47.93, 106.98),
-    # ── Canada / N. America (non-US) ────────────────────────────────
-    "71109": ("Yarmouth, Canada", 43.87, -66.10),
-    "71082": ("Goose Bay, Canada", 53.30, -60.37),
-    "71836": ("Edmonton, Canada", 53.55, -114.10),
-    "71924": ("Whitehorse, Canada", 60.71, -135.07),
-    "71119": ("Maniwaki, Canada", 46.38, -76.00),
-    "71934": ("Inuvik, Canada", 68.32, -133.53),
-    "71917": ("Resolute, Canada", 74.72, -94.97),
-    "71816": ("Kelowna, Canada", 49.88, -119.48),
-    "71600": ("Alert, Canada", 82.50, -62.33),
-    "71603": ("Eureka, Canada", 79.98, -85.93),
-    "71722": ("Churchill, Canada", 58.75, -94.07),
-    "71913": ("Baker Lake, Canada", 64.30, -96.00),
-    "71945": ("Cambridge Bay, Canada", 69.10, -105.13),
-    "76644": ("Cancun, Mexico", 21.04, -86.87),
-    "76679": ("Mérida, Mexico", 20.98, -89.65),
-    "78762": ("Kingston, Jamaica", 17.94, -76.78),
-    "78384": ("Nassau, Bahamas", 25.05, -77.47),
-    "78988": ("Port of Spain, Trinidad", 10.62, -61.35),
-    "76612": ("Veracruz, Mexico", 19.20, -96.13),
-    "78526": ("San Juan, Puerto Rico", 18.43, -66.00),
-    "78954": ("Grantley Adams, Barbados", 13.07, -59.48),
-    "78897": ("Point-à-Pitre, Guadeloupe", 16.26, -61.52),
-    # ── South America ───────────────────────────────────────────────
-    "80222": ("Bogota, Colombia", 4.70, -74.13),
-    "80398": ("Leticia, Colombia", -4.20, -69.95),
-    "82193": ("Manaus, Brazil", -3.15, -59.98),
-    "82332": ("Fernando de Noronha, Brazil", -3.85, -32.42),
-    "82244": ("São Luiz, Brazil", -2.58, -44.22),
-    "82397": ("Fortaleza, Brazil", -3.78, -38.53),
-    "83378": ("Brasilia, Brazil", -15.87, -47.93),
-    "83779": ("São Paulo, Brazil", -23.50, -46.62),
-    "83612": ("Campo Grande, Brazil", -20.47, -54.67),
-    "83971": ("Porto Alegre, Brazil", -30.00, -51.18),
-    "83746": ("Curitiba, Brazil", -25.52, -49.17),
-    "84628": ("Lima, Peru", -12.00, -77.12),
-    "85442": ("Antofagasta, Chile", -23.42, -70.45),
-    "85543": ("Santiago, Chile", -33.38, -70.78),
-    "85799": ("Puerto Montt, Chile", -41.43, -73.08),
-    "85934": ("Punta Arenas, Chile", -53.00, -70.85),
-    "87155": ("Resistencia, Argentina", -27.45, -59.05),
-    "87166": ("Córdoba, Argentina", -31.32, -64.22),
-    "87344": ("Mendoza, Argentina", -32.83, -68.78),
-    "87418": ("Neuquén, Argentina", -38.95, -68.13),
-    "87576": ("Buenos Aires, Argentina", -34.82, -58.53),
-    "87715": ("Comodoro Rivadavia, Argentina", -45.78, -67.50),
-    "87860": ("Río Gallegos, Argentina", -51.62, -69.28),
-    "87938": ("Ushuaia, Argentina", -54.80, -68.32),
-    "86218": ("Asunción, Paraguay", -25.27, -57.63),
-    "86580": ("Montevideo, Uruguay", -34.83, -56.00),
-    "84008": ("Quito, Ecuador", -0.17, -78.48),
-    # ── Africa ──────────────────────────────────────────────────────
-    "60155": ("Dar el-Beida, Algeria", 36.68, 3.22),
-    "60390": ("Casablanca, Morocco", 33.57, -7.67),
-    "60680": ("Tamanrasset, Algeria", 22.80, 5.52),
-    "61052": ("Dakar, Senegal", -14.73, -17.50),
-    "61291": ("Bamako, Mali", 12.53, -7.95),
-    "61641": ("Abidjan, Ivory Coast", 5.25, -3.93),
-    "61052": ("Dakar, Senegal", 14.73, -17.50),
-    "65578": ("Lagos, Nigeria", 6.58, 3.33),
-    "65201": ("Niamey, Niger", 13.48, 2.17),
-    "63741": ("Nairobi, Kenya", -1.30, 36.75),
-    "63894": ("Dar es Salaam, Tanzania", -6.87, 39.20),
-    "64700": ("Brazzaville, Congo", -4.25, 15.25),
-    "67083": ("Harare, Zimbabwe", -17.83, 31.02),
-    "68816": ("Cape Town, South Africa", -33.97, 18.60),
-    "68588": ("Durban, South Africa", -29.97, 30.95),
-    "68262": ("Pretoria, South Africa", -25.73, 28.18),
-    "64650": ("Douala, Cameroon", 4.02, 9.70),
-    "61415": ("Ouagadougou, Burkina Faso", 12.35, -1.52),
-    "61401": ("Conakry, Guinea", 9.57, -13.62),
-    "63450": ("Entebbe, Uganda", 0.05, 32.45),
-    "61202": ("Nouakchott, Mauritania", 18.10, -15.95),
-    "64500": ("N'Djamena, Chad", 12.13, 15.03),
-    "63980": ("Maputo, Mozambique", -25.92, 32.57),
-    "67197": ("Lusaka, Zambia", -15.33, 28.45),
-    "63023": ("Addis Ababa, Ethiopia", 9.02, 38.75),
-    # ── Australia / Oceania ─────────────────────────────────────────
-    "94120": ("Darwin, Australia", -12.42, 130.89),
-    "94294": ("Townsville, Australia", -19.25, 146.77),
-    "94461": ("Rockhampton, Australia", -23.38, 150.48),
-    "94578": ("Brisbane, Australia", -27.39, 153.13),
-    "94672": ("Williamtown, Australia", -32.79, 151.84),
-    "94768": ("Sydney, Australia", -33.95, 151.17),
-    "94866": ("Melbourne, Australia", -37.67, 144.83),
-    "94808": ("Adelaide, Australia", -34.95, 138.52),
-    "94302": ("Learmonth, Australia", -22.24, 114.10),
-    "94326": ("Alice Springs, Australia", -23.80, 133.88),
-    "94203": ("Broome, Australia", -17.95, 122.23),
-    "94637": ("Charleville, Australia", -26.41, 146.26),
-    "94975": ("Hobart, Australia", -42.83, 147.50),
-    "94610": ("Longreach, Australia", -23.43, 144.28),
-    "94510": ("Mount Isa, Australia", -20.68, 139.49),
-    "94659": ("Moree, Australia", -29.49, 149.85),
-    "94312": ("Giles, Australia", -25.03, 128.30),
-    "93417": ("Auckland, NZ", -36.85, 174.77),
-    "93844": ("Christchurch, NZ", -43.49, 172.54),
-    "93986": ("Invercargill, NZ", -46.42, 168.33),
-    "91165": ("Guam", 13.48, 144.80),
-    "91285": ("Yap, Micronesia", 9.48, 138.08),
-    "91334": ("Koror, Palau", 7.33, 134.48),
-    "91348": ("Chuuk, Micronesia", 7.47, 151.85),
-    "91376": ("Pohnpei, Micronesia", 6.97, 158.22),
-    "91408": ("Majuro, Marshall Is.", 7.08, 171.38),
-    "91413": ("Kwajalein, Marshall Is.", 8.73, 167.73),
-    "91517": ("Funafuti, Tuvalu", -8.52, 179.22),
-    "91557": ("Tarawa, Kiribati", 1.35, 172.93),
-    "91680": ("Pago Pago, Am. Samoa", -14.33, -170.72),
-    "91765": ("Rarotonga, Cook Is.", -21.20, -159.77),
-    "91938": ("Tahiti, Fr. Polynesia", -17.55, -149.62),
-    "91592": ("Nadi, Fiji", -17.75, 177.45),
-    "93292": ("Raoul Island, NZ", -29.25, -177.92),
-    "91334": ("Koror, Palau", 7.33, 134.48),
-    "94995": ("Macquarie Island, AU", -54.50, 158.95),
-    "91557": ("Tarawa, Kiribati", 1.35, 172.93),
-    # ── Caribbean / Central America ─────────────────────────────────
-    "78583": ("George Town, Cayman Is.", 19.30, -81.36),
-    "78486": ("Havana, Cuba", 22.99, -82.41),
-    "78118": ("Bermuda", 32.37, -64.68),
-    "78866": ("Curacao", 12.20, -68.97),
-    "78016": ("Miquelon, Fr.", 47.10, -56.38),
-    # ── Antarctic ───────────────────────────────────────────────────
-    "89002": ("Amundsen-Scott (S. Pole)", -90.00, 0.00),
-    "89009": ("McMurdo, Antarctica", -77.85, 166.67),
-    "89512": ("Casey, Antarctica", -66.28, 110.53),
-    "89532": ("Davis, Antarctica", -68.58, 77.97),
-    "89564": ("Mawson, Antarctica", -67.60, 62.88),
-    "89050": ("Halley, Antarctica", -75.58, -26.53),
-    "89664": ("Mirny, Antarctica", -66.55, 93.02),
-    "89642": ("Dumont d'Urville, Ant.", -66.67, 140.00),
-}
-
-# Ordered list of region labels for the UI
-INTL_REGIONS = [
-    "Europe",
-    "Middle East",
-    "South & Southeast Asia",
-    "East Asia",
-    "Canada / N. America",
-    "South America",
-    "Africa",
-    "Australia / Oceania",
-    "Caribbean",
-    "Antarctic",
-]
-
-def _classify_intl_region(wmo_id: str) -> str:
-    """Classify a WMO station ID into a human-readable region."""
-    prefix = int(wmo_id[:2])
-    if prefix <= 20:            # 01-20: Europe (UK, Scandinavia, W-Europe, E-Europe)
-        return "Europe"
-    elif prefix <= 29:          # 26-29: Russia / former USSR in Europe
-        return "Europe"
-    elif prefix == 30:          # 30xxx: Russia Far East (Vladivostok etc)
-        return "East Asia"
-    elif 40 <= prefix <= 41:    # 40-41: Middle East, Pakistan
-        return "Middle East"
-    elif 42 <= prefix <= 43:    # 42-43: India/Sri Lanka
-        return "South & Southeast Asia"
-    elif prefix == 44:          # 44: Mongolia
-        return "East Asia"
-    elif prefix == 45:          # 45: Hong Kong
-        return "East Asia"
-    elif 47 <= prefix <= 49:    # 47-49: Japan, Korea, SE Asia
-        # Distinguish Japan/Korea (East Asia) from SE Asia
-        p3 = int(wmo_id[:3])
-        if p3 in (484, 485, 486, 488, 489):  # Thailand, Malaysia, Vietnam, Cambodia, etc.
-            return "South & Southeast Asia"
-        if p3 >= 960:  # Indonesia
-            return "South & Southeast Asia"
-        return "East Asia"
-    elif 50 <= prefix <= 59:    # 50-59: China
-        return "East Asia"
-    elif 60 <= prefix <= 69:    # 60-69: Africa
-        return "Africa"
-    elif 70 <= prefix <= 72:    # 70-72: Canada, N. America
-        return "Canada / N. America"
-    elif 76 <= prefix <= 79:    # 76-79: Mexico, Caribbean
-        return "Caribbean"
-    elif 80 <= prefix <= 88:    # 80-88: South America
-        return "South America"
-    elif prefix == 89:          # 89: Antarctic
-        return "Antarctic"
-    elif 90 <= prefix <= 99:    # 90-99: Oceania, Pacific, Australia
-        return "Australia / Oceania"
-    else:
-        return "Other"
-
-
-def _detect_uwyo_region(lat, lon):
-    """Detect UWyo region code from lat/lon coordinates."""
-    for region, bounds in _UWYO_REGIONS.items():
-        lat_min, lat_max = bounds["lat"]
-        lon_min, lon_max = bounds["lon"]
-        # Handle date-line wrapping for Pacific
-        if lon_min > lon_max:
-            if lat_min <= lat <= lat_max and (lon >= lon_min or lon <= lon_max):
-                return region
-        else:
-            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
-                return region
-    return "naconf"  # default fallback
-
-
-def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
-    """
-    Fetch a global upper-air sounding via UWyo for any WMO station ID.
-    Automatically detects the correct UWyo region from coordinates.
-    Falls back to naconf if coordinates not provided.
-    """
-    # Determine region from station coordinates or provided lat/lon
-    _lat = lat
-    _lon = lon
-    if _lat is None or _lon is None:
-        if wmo_id in INTL_STATIONS:
-            _, _lat, _lon = INTL_STATIONS[wmo_id]
-        else:
-            # Try to find in our US stations by WMO lookup
-            for sid, wmo in STATION_WMO.items():
-                if str(wmo) == str(wmo_id):
-                    _, _lat, _lon = STATIONS[sid]
-                    break
-
-    region = _detect_uwyo_region(_lat, _lon) if _lat is not None else "naconf"
-    print(f"  IGRAv2: WMO={wmo_id}, region={region}, lat={_lat}, lon={_lon}")
-
-    dt_str = f"{dt.year}-{dt.month:02d}-{dt.day:02d} {dt.hour:02d}:00:00"
-    url = "https://weather.uwyo.edu/wsgi/sounding"
-    params = {"type": "TEXT:LIST", "datetime": dt_str, "id": wmo_id}
-
-    print(f"  Fetching from UWyo (global): {url}  params={params}")
-    resp = requests.get(url, params=params, timeout=25)
-    if resp.status_code == 404:
-        raise ValueError(
-            f"No sounding data found for WMO {wmo_id} at {dt:%Y-%m-%d %HZ}. "
-            f"The station may not have reported, or data isn't available yet. "
-            f"For US stations, try the OBS source instead."
-        )
-    resp.raise_for_status()
-    html = resp.text
-
-    if "Can't get" in html or "No data" in html:
-        raise ValueError(
-            f"No sounding data for WMO {wmo_id} at {dt:%Y-%m-%d %HZ}. "
-            f"Try a different date/time or use OBS for US stations."
-        )
-
-    html_lower = html.lower()
-    pre_start = html_lower.find("<pre>")
-    pre_end = html_lower.find("</pre>")
-    if pre_start == -1 or pre_end == -1:
-        raise ValueError("Could not parse sounding data from UWyo response")
-
-    raw = html[pre_start+5:pre_end].strip()
-    lines = raw.split("\n")
-
-    header_idx = None
-    data_start = None
-    for i, line in enumerate(lines):
-        if "PRES" in line and "HGHT" in line and "TEMP" in line:
-            header_idx = i
-        if header_idx is not None and line.strip().startswith("---"):
-            data_start = i + 1
-            break
-
-    if data_start is None:
-        raise ValueError("Could not find data in sounding response")
-
-    pressure, height, temp, dewpoint, wind_dir, wind_spd = [], [], [], [], [], []
-
-    for line in lines[data_start:]:
-        line = line.strip()
-        if not line or line.lower().startswith("</pre>"):
-            break
-        parts = line.split()
-        if len(parts) < 8:
-            continue
-        try:
-            pv = float(parts[0]); hv = float(parts[1]); tv = float(parts[2])
-            tdv = float(parts[3]); wdv = float(parts[6]); wsv = float(parts[7])
-            pressure.append(pv); height.append(hv); temp.append(tv)
-            dewpoint.append(tdv); wind_dir.append(wdv); wind_spd.append(wsv)
-        except (ValueError, IndexError):
-            continue
-
-    if len(pressure) < 5:
-        raise ValueError(f"Insufficient data ({len(pressure)} levels) from IGRAv2/UWyo")
-
-    station_name = INTL_STATIONS.get(wmo_id, (f"WMO {wmo_id}", _lat or 0, _lon or 0))[0]
-    station_info = {"lat": _lat or 0, "lon": _lon or 0, "name": station_name}
-
-    # Parse station info from HTML
-    info_start = html.find("Station number:")
-    if info_start > -1:
-        info_block = html[info_start:info_start+500]
-        for info_line in info_block.split("\n"):
-            if "Station latitude:" in info_line:
-                try: station_info["lat"] = float(info_line.split(":")[-1].strip())
-                except: pass
-            if "Station longitude:" in info_line:
-                try: station_info["lon"] = float(info_line.split(":")[-1].strip())
-                except: pass
-
-    return {
-        "pressure":       np.array(pressure) * units.hPa,
-        "height":         np.array(height) * units.meter,
-        "temperature":    np.array(temp) * units.degC,
-        "dewpoint":       np.array(dewpoint) * units.degC,
-        "wind_direction": np.array(wind_dir) * units.degree,
-        "wind_speed":     np.array(wind_spd) * units('m/s'),
-        "station_info":   station_info,
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────
 # UNIFIED FETCH DISPATCHER
 # ─────────────────────────────────────────────────────────────────────
 # Recognised source keywords (for --source flag / interactive menu)
@@ -1426,9 +815,7 @@ DATA_SOURCES = {
     "obs":    "Observed radiosonde (IEM / UWyo)",
     "rap":    "RAP model analysis - any lat/lon, CONUS (NCEI THREDDS)",
     "bufkit": "BUFKIT forecast models - station-based (Iowa State)",
-    "era5":   "ERA5 global reanalysis - any lat/lon, 1940-present (CDS API)",
     "acars":  "ACARS/AMDAR aircraft obs - airport-based (IEM)",
-    "igrav2": "IGRAv2 Global Radiosonde Archive - any WMO station worldwide (via UWyo)",
 }
 
 
@@ -1444,9 +831,9 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
     dt : datetime
         Target date/time (UTC).
     source : str
-        One of: obs, rap, bufkit, era5, acars.
+        One of: obs, rap, bufkit, acars.
     lat, lon : float or None
-        Required for rap / era5 (point-based sources).
+        Required for rap (point-based source).
     model : str
         BUFKIT model name (rap, hrrr, nam, …).  Ignored for other sources.
     fhour : int
@@ -1489,16 +876,6 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
             raise ValueError("BUFKIT source requires --station.")
         return fetch_bufkit_sounding(station_id, dt, model=model, fhour=fhour)
 
-    # ── ERA5 ────────────────────────────────────────────────────────
-    if source == "era5":
-        if lat is None or lon is None:
-            if station_id and station_id.upper() in STATIONS:
-                _, lat, lon = STATIONS[station_id.upper()]
-            else:
-                raise ValueError(
-                    "ERA5 source requires --lat / --lon (or a known --station)."
-                )
-        return fetch_era5_sounding(lat, lon, dt)
 
     # ── ACARS ───────────────────────────────────────────────────────
     if source == "acars":
@@ -1507,12 +884,6 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
             raise ValueError("ACARS source requires --station (airport code).")
         return fetch_acars_sounding(airport, dt)
 
-    # ── IGRAv2 (Global) ─────────────────────────────────────────────
-    if source == "igrav2":
-        wmo_id = station_id or ""
-        if not wmo_id:
-            raise ValueError("IGRAv2 source requires a WMO station ID (e.g. 72451, 47646).")
-        return fetch_igrav2_sounding(wmo_id, dt, lat=lat, lon=lon)
 
     raise ValueError(
         f"Unknown source '{source}'. Options: {list(DATA_SOURCES.keys())}"
@@ -3027,8 +2398,6 @@ def plot_sounding(data, params, station_id, dt):
     stn_name_lower = info.get("name", "").lower()
     if "rap analysis" in stn_name_lower:
         source_label = "RAP Model Analysis (NCEI)"
-    elif "era5" in stn_name_lower:
-        source_label = "ERA5 Reanalysis (ECMWF/CDS)"
     elif "acars" in stn_name_lower:
         source_label = "ACARS/AMDAR Aircraft Obs (IEM)"
     elif any(m in stn_name_lower for m in ("rap f", "hrrr f", "nam f", "gfs f", "sref f")):
@@ -3167,14 +2536,12 @@ Data sources (--source):
   obs      Observed radiosonde (IEM / UWyo) — default
   rap      RAP model analysis — any lat/lon, CONUS (needs siphon)
   bufkit   BUFKIT forecast models — station-based (Iowa State)
-  era5     ERA5 global reanalysis — any lat/lon, 1940-present (needs CDS key)
   acars    ACARS/AMDAR aircraft obs — airport-based (IEM)
 
 Examples:
   python sounding.py --station OUN                                 # Observed
   python sounding.py --source rap --lat 35.2 --lon -97.4           # RAP at point
   python sounding.py --source bufkit --model hrrr --station OUN    # HRRR forecast
-  python sounding.py --source era5 --lat 35.2 --lon -97.4 --date 2020050100
   python sounding.py --source acars --station KDFW                 # Aircraft obs
 """,
     )
@@ -3185,9 +2552,9 @@ Examples:
                         help="Date/time as YYYYMMDDHH (e.g. 2024061200). "
                              "Defaults to most recent sounding time.")
     parser.add_argument("--lat", type=float, default=None,
-                        help="Latitude — required for rap/era5 if no --station")
+                        help="Latitude — required for rap if no --station")
     parser.add_argument("--lon", type=float, default=None,
-                        help="Longitude — required for rap/era5 if no --station")
+                        help="Longitude — required for rap if no --station")
     parser.add_argument("--source", type=str, default=None,
                         choices=list(DATA_SOURCES.keys()),
                         help="Data source (default: obs). See below for details.")
@@ -3237,7 +2604,6 @@ Examples:
         print("  |  [1] Observed radiosonde   (IEM / UWyo)           |")
         print("  |  [2] RAP model analysis    (any lat/lon, CONUS)   |")
         print("  |  [3] BUFKIT forecast model (station-based)        |")
-        print("  |  [4] ERA5 reanalysis       (any lat/lon, global)  |")
         print("  |  [5] ACARS aircraft obs    (airport-based)        |")
         print("  |                                                   |")
         print("  |  [0] Auto-select (tornado risk scan, observed)    |")
@@ -3250,7 +2616,7 @@ Examples:
 
         source_map = {
             "0": None, "1": "obs", "2": "rap", "3": "bufkit",
-            "4": "era5", "5": "acars",
+            "4": "acars",
         }
         source = source_map.get(choice)
         if choice not in source_map:
@@ -3258,7 +2624,7 @@ Examples:
             source = "obs"
 
         # Additional interactive prompts depending on source
-        if source in ("rap", "era5"):
+        if source == "rap":
             try:
                 lat_str = input("  Latitude  (e.g. 35.22): ").strip()
                 lon_str = input("  Longitude (e.g. -97.46): ").strip()
@@ -3353,7 +2719,7 @@ Examples:
         sys.exit(1)
 
     # ── Build descriptive label ─────────────────────────────────────
-    if source in ("rap", "era5") and lat is not None:
+    if source == "rap" and lat is not None:
         label = f"{source.upper()} ({lat:.2f}, {lon:.2f})"
     elif station:
         label = f"{station} ({STATIONS.get(station, (station,))[0]})"
@@ -3383,9 +2749,6 @@ Examples:
     except Exception as e:
         print(f"\n  ERROR: Could not fetch data: {e}")
         print(f"  Try a different station/location or time.")
-        if source == "era5":
-            print("  ERA5 tip: ensure CDS API key is configured "
-                  "(~/.cdsapirc). See --list-sources.")
         if source == "obs":
             print(f"  Tip: Use --date to specify a past sounding "
                   f"(e.g. --date "
