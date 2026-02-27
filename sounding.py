@@ -1085,7 +1085,7 @@ def _quick_tornado_score(station_id, dt):
 
         # SHIP = (muCAPE * mixRatio * LR_7-5 * (-T500) * BWD_6km) / 42M
         try:
-            _sfc_mr = float(mpcalc.mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
+            _sfc_mr = float(_mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
             _p700_i = int(np.argmin(np.abs(p.magnitude - 700.0)))
             _p500_i = int(np.argmin(np.abs(p.magnitude - 500.0)))
             _t700 = float(T.magnitude[_p700_i])
@@ -1101,7 +1101,7 @@ def _quick_tornado_score(station_id, dt):
 
         # DCP = (DCAPE/980) * (muCAPE/2000) * (BWD/20) * (meanWind_0-6/16)
         try:
-            dcape_v, _ = mpcalc.downdraft_cape(p, T, Td)
+            dcape_v, _dp, _dt = mpcalc.downdraft_cape(p, T, Td)
             _dcape_f = float(dcape_v.magnitude)
             # Mean wind 0-6 km
             _mask06 = h_agl.magnitude <= 6000.0
@@ -1210,6 +1210,18 @@ def find_highest_tornado_risk(dt, stations=None):
 # ─────────────────────────────────────────────────────────────────────
 # CALCULATIONS
 # ─────────────────────────────────────────────────────────────────────
+
+def _mixing_ratio_from_dewpoint(pressure, dewpoint):
+    """Compute mixing ratio from dewpoint (MetPy 1.7+ compatible).
+
+    Replaces deprecated mpcalc.mixing_ratio_from_dewpoint by using:
+        e = saturation_vapor_pressure(Td)
+        r = mixing_ratio(e, p)
+    """
+    e = mpcalc.saturation_vapor_pressure(dewpoint)
+    return mpcalc.mixing_ratio(e, pressure)
+
+
 def compute_parameters(data, storm_motion=None, surface_mod=None):
     """Compute a comprehensive set of thermodynamic & kinematic parameters.
 
@@ -1368,6 +1380,20 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
         params["ml_cape"] = 0 * units("J/kg")
         params["ml_cin"] = 0 * units("J/kg")
     
+    # DCAPE (Downdraft CAPE) and downdraft parcel profile
+    # Computed early so DCP and DCIN can reference it
+    # MetPy returns (dcape, down_pressure, down_parcel_trace)
+    try:
+        dcape_val, _down_p, dtemp = mpcalc.downdraft_cape(p, T, Td)
+        params["dcape"] = dcape_val
+        params["dcape_profile"] = dtemp.to("degC")
+        params["dcape_pressure"] = _down_p  # pressure levels for the downdraft parcel
+    except Exception as e:
+        print(f"  Warning: DCAPE calc failed: {e}")
+        params["dcape"] = None
+        params["dcape_profile"] = None
+        params["dcape_pressure"] = None
+
     # Significant tornado parameter (STP) — computed after Bunkers & SRH below
     
     # Height AGL for SRH and BWD calculations
@@ -1501,28 +1527,24 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
         params["bwd_6km"] = 0 * units.knot
     
     # STP (now that we have SRH and BWD)
+    # MetPy's significant_tornado expects LCL HEIGHT in meters, not pressure
     try:
-        params["stp"] = float(mpcalc.significant_tornado(
-            params["sb_cape"],
-            params["sb_lcl_p"] if params.get("sb_lcl_p") is not None else p[0],
-            params["srh_1km"],
-            params["bwd_6km"].to("m/s")
-        ).magnitude)
-    except:
+        _stp_lcl_h = params.get("sb_lcl_m")
+        if _stp_lcl_h is not None:
+            _stp_result = mpcalc.significant_tornado(
+                params["sb_cape"],
+                _stp_lcl_h * units.meter,
+                params["srh_1km"],
+                params["bwd_6km"].to("m/s")
+            )
+            params["stp"] = round(float(np.asarray(_stp_result.magnitude).flat[0]), 2)
+        else:
+            params["stp"] = 0
+    except Exception as e:
+        print(f"  Warning: STP calc failed: {e}")
         params["stp"] = 0
     
-    # ── Supercell Composite Parameter (SCP) ──
-    # SCP = (muCAPE / 1000) × (SRH_3km / 50) × (BWD_6km_ms / 20)
-    try:
-        _mu_cape_val = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
-        _srh3_val = float(params.get("srh_3km", 0 * units("m^2/s^2")).magnitude)
-        _bwd6_ms = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
-        _scp_cape = _mu_cape_val / 1000.0
-        _scp_srh = _srh3_val / 50.0
-        _scp_bwd = _bwd6_ms / 20.0 if _bwd6_ms >= 10.0 else 0.0
-        params["scp"] = round(_scp_cape * _scp_srh * _scp_bwd, 2)
-    except:
-        params["scp"] = 0
+    # (SCP moved after effective layer computations below)
     
     # ── Significant Hail Parameter (SHIP) ──
     # SHIP = (muCAPE × mixRatio × LR_7-5 × (-T500) × BWD_6km) / 42_000_000
@@ -1531,7 +1553,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
         _mu_cape_ship = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
         _mu_cin_ship = float(params.get("mu_cin", 0 * units("J/kg")).magnitude)
         # Surface mixing ratio (g/kg)
-        _sfc_mr = float(mpcalc.mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
+        _sfc_mr = float(_mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
         # 700-500 hPa lapse rate
         _p700_idx = int(np.argmin(np.abs(p.magnitude - 700.0)))
         _p500_idx = int(np.argmin(np.abs(p.magnitude - 500.0)))
@@ -1691,31 +1713,81 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
         print(f"  Warning: Effective BWD calc failed: {e}")
         params["ebwd"] = 0 * units.knot
 
+    # ── Supercell Composite Parameter (SCP) ── Thompson et al. 2004
+    # Uses MetPy built-in: SCP = (muCAPE/1000) × (ESRH/50) × (EBW/20 m/s)
+    # The BWD term is capped at 1.0 (effective shear > 20 m/s) and zeroed < 10 m/s
+    try:
+        _scp_esrh = params.get("esrh", 0 * units("m^2/s^2"))
+        _scp_ebwd = params.get("ebwd", 0 * units.knot).to("m/s")
+        _scp_result = mpcalc.supercell_composite(
+            params["mu_cape"], _scp_esrh, _scp_ebwd
+        )
+        params["scp"] = round(float(np.asarray(_scp_result.magnitude).flat[0]), 2)
+    except Exception as e:
+        print(f"  Warning: SCP calc failed: {e}")
+        params["scp"] = 0
+
     # ── 3CAPE and 6CAPE (0-3 km and 0-6 km CAPE) ────────────────────
-    # Computed for each parcel type using MU parcel profile
+    # Computed using MU parcel profile, truncated at 3 km and 6 km AGL.
+    # Uses virtual temperature correction for consistency with MetPy CAPE:
+    #   Tv = T_K × (1 + 0.61r)
+    # Parcel: below LCL uses surface mixing ratio; above LCL uses saturation MR
+    # Environment: uses actual mixing ratio from dewpoint
     try:
         _mu_cape_3 = 0
         _mu_cape_6 = 0
         if params.get("mu_profile") is not None and params.get("mu_start_idx") is not None:
             _mu_si = params["mu_start_idx"]
-            _T_env_mu = T[_mu_si:].to("degC").magnitude
-            _T_par_mu = params["mu_profile"].to("degC").magnitude
-            _p_mu = p[_mu_si:].magnitude
+            _T_env_K = (T[_mu_si:].to("degC").magnitude + 273.15)
+            _T_par_K = (params["mu_profile"].to("degC").magnitude + 273.15)
             _h_mu = h[_mu_si:].magnitude
+            _p_mu = p[_mu_si:]
             _sfc_h = h[0].magnitude
-            # Positive buoyancy up to 3 km and 6 km AGL
+
+            # Environment mixing ratio from dewpoint
+            try:
+                _mr_env = _mixing_ratio_from_dewpoint(
+                    _p_mu, Td[_mu_si:]
+                ).magnitude  # kg/kg
+            except:
+                _mr_env = np.zeros(len(_T_env_K))
+
+            # Parcel mixing ratio: surface value below LCL, saturation above
+            _lcl_p_val = None
+            if params.get("mu_lcl_p") is not None:
+                _lcl_p_val = params["mu_lcl_p"].magnitude
+            try:
+                _r_sfc = _mixing_ratio_from_dewpoint(
+                    p[_mu_si], Td[_mu_si]
+                ).magnitude  # kg/kg (surface value)
+            except:
+                _r_sfc = 0.0
+            try:
+                _r_sat = mpcalc.saturation_mixing_ratio(
+                    _p_mu, params["mu_profile"]
+                ).magnitude  # kg/kg
+            except:
+                _r_sat = np.full(len(_T_par_K), _r_sfc)
+            # Below LCL: use surface r; above LCL: use saturated r
+            _mr_par = np.where(
+                _p_mu.magnitude >= (_lcl_p_val if _lcl_p_val else 0),
+                _r_sfc,  # below LCL (higher pressure)
+                _r_sat   # above LCL (lower pressure)
+            )
+
+            # Virtual temperatures
+            _Tv_env = _T_env_K * (1 + 0.61 * _mr_env)
+            _Tv_par = _T_par_K * (1 + 0.61 * _mr_par)
+
+            _g = 9.81
             for _depth_name, _depth_m in [("3", 3000), ("6", 6000)]:
                 _h_top = _sfc_h + _depth_m
                 _mask_d = _h_mu <= _h_top
                 if np.sum(_mask_d) >= 2:
-                    _buoy_d = _T_par_mu[_mask_d] - _T_env_mu[_mask_d]
+                    _buoy_d = (_Tv_par[_mask_d] - _Tv_env[_mask_d]) / _Tv_env[_mask_d]
                     _buoy_d[_buoy_d < 0] = 0  # only positive buoyancy
-                    # Integrate using trapezoidal rule
                     _h_d = _h_mu[_mask_d]
-                    _Rd = 287.04
-                    _g = 9.81
-                    _cape_d = np.trapezoid(_buoy_d * _g / (273.15 + _T_env_mu[_mask_d]),
-                                            _h_d)
+                    _cape_d = np.trapezoid(_buoy_d * _g, _h_d)
                     if _depth_name == "3":
                         _mu_cape_3 = max(round(float(_cape_d), 1), 0)
                     else:
@@ -1729,26 +1801,29 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
 
     # ── DCIN (Downdraft CIN) ─────────────────────────────────────────
     # DCIN measures the inhibition of downdrafts reaching the surface.
-    # Computed as negative buoyancy between the surface and the level
-    # of the downdraft parcel (where it's cooler than environment).
-    # DCIN = ∫(Tv_parcel - Tv_env) * g / Tv_env dz   (for parcel < env below origin)
+    # Uses the downdraft parcel profile from MetPy's downdraft_cape.
+    # DCIN = ∫(Tv_parcel - Tv_env) * g / Tv_env dz  (only where parcel > env, indicating
+    # the downdraft is warmer than environment = inhibition for downdraft reaching surface)
     try:
         _dcin = 0
-        if params.get("dcape_profile") is not None:
+        if params.get("dcape_profile") is not None and params.get("dcape_pressure") is not None:
+            _dd_p = params["dcape_pressure"].magnitude  # hPa
             _dd_T = params["dcape_profile"].to("degC").magnitude
-            _env_T = T.to("degC").magnitude
-            _h_m = h.magnitude
+            # Interpolate environment temperature and heights to the downdraft pressure levels
+            _env_T_interp = np.interp(_dd_p, p.magnitude[::-1], T.to("degC").magnitude[::-1])
+            _h_interp_dd = np.interp(_dd_p, p.magnitude[::-1], h.magnitude[::-1])
             _sfc_h = h[0].magnitude
             # Focus on the sub-cloud layer (surface to ~3 km AGL)
-            _mask_sc = _h_m <= (_sfc_h + 3000)
+            _h_agl_dd = _h_interp_dd - _sfc_h
+            _mask_sc = _h_agl_dd <= 3000
             if np.sum(_mask_sc) >= 2:
                 _dd_sub = _dd_T[_mask_sc]
-                _env_sub = _env_T[_mask_sc]
-                _h_sub = _h_m[_mask_sc]
-                # Negative buoyancy: downdraft parcel warmer than env = inhibition for downdraft
+                _env_sub = _env_T_interp[_mask_sc]
+                _h_sub = _h_interp_dd[_mask_sc]
+                # Positive buoyancy for downdraft = inhibition (parcel warmer than env)
                 _buoy_dcin = _dd_sub - _env_sub
                 _pos_buoy = _buoy_dcin.copy()
-                _pos_buoy[_pos_buoy < 0] = 0  # only where dd parcel is warmer than env
+                _pos_buoy[_pos_buoy < 0] = 0
                 _dcin = -np.trapezoid(_pos_buoy * 9.81 / (273.15 + _env_sub), _h_sub)
                 _dcin = round(float(min(_dcin, 0)), 1)
         params["dcin"] = _dcin
@@ -1826,14 +1901,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
     except:
         params["pwat"] = None
     
-    # DCAPE (Downdraft CAPE) and downdraft parcel profile
-    try:
-        dcape_val, dtemp = mpcalc.downdraft_cape(p, T, Td)
-        params["dcape"] = dcape_val
-        params["dcape_profile"] = dtemp.to("degC")
-    except:
-        params["dcape"] = None
-        params["dcape_profile"] = None
+    # (DCAPE already computed earlier — before DCP/DCIN)
     
     # Lapse rates (Γ0-3, Γ3-6) in °C/km
     try:
@@ -2011,7 +2079,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     
     # Downdraft parcel trace (gray, dashed)
     if params.get("dcape_profile") is not None:
-        skew.plot(p, params["dcape_profile"], color="gray", linewidth=1.5,
+        _dcape_p = params.get("dcape_pressure", p)
+        skew.plot(_dcape_p, params["dcape_profile"], color="gray", linewidth=1.5,
                   linestyle="--", alpha=0.85, zorder=7, label="DWNDRFT PARCEL")
     
     # SB parcel trace (orange, dashed) + CAPE/CIN shading
