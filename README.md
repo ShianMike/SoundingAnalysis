@@ -47,6 +47,13 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - Click anywhere on map to set lat/lon for RAP/ERA5 sources
 - Fly-to animation on station selection
 
+### SPC Convective Outlook Overlay
+- Day 1, Day 2, and Day 3 outlook overlays on the station map
+- Fetches live GeoJSON from SPC
+- Color-coded risk categories (General Thunder, Marginal, Slight, Enhanced, Moderate, High)
+- Legend with risk percentages (tornado, severe, wind)
+- Non-blocking overlays — station markers remain clickable through outlook polygons
+
 ### Sounding History
 - Automatically saves last 20 soundings to localStorage
 - Quick-load previous soundings with one click
@@ -57,6 +64,13 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - Star icon to pin frequently used stations
 - Persisted in localStorage
 - Sort stations by favorites
+
+### Dashboard Sidebar Layout
+- Fixed left sidebar with branding, controls, and footer
+- Sidebar includes data source selection, station picker, date/time controls
+- Footer with Feedback and GitHub links
+- History panel slides in beside the sidebar without overlapping content
+- Responsive: collapses to stacked layout on mobile (≤1024px)
 
 ### Feedback & Suggestions
 - Built-in feedback modal (Suggestion / Bug Report / Feature Request)
@@ -113,8 +127,8 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
     │   ├── history.js           # localStorage sounding history
     │   ├── favorites.js         # localStorage station favorites
     │   └── components/
-    │       ├── ControlPanel.jsx   # Station/source/date controls + favorites
-    │       ├── Header.jsx         # App header with feedback & GitHub links
+    │       ├── ControlPanel.jsx   # Dashboard sidebar: branding, controls, footer
+    │       ├── Header.jsx         # Feedback modal (portal)
     │       ├── ResultsView.jsx    # Plot image + parameter display + map
     │       ├── StationMap.jsx     # Interactive Leaflet station map
     │       ├── HistoryPanel.jsx   # Sounding history sidebar
@@ -181,7 +195,7 @@ Set `VITE_API_URL` to point to your backend (defaults to localhost:5000).
 
 | Component | Platform | URL |
 |---|---|---|
-| **Backend API** | Google Cloud Run | `https://soundinganalysis-uvktu4ziyq-as.a.run.app` |
+| **Backend API** | Google Cloud Run | `https://soundinganalysis-752306366750.asia-southeast1.run.app` |
 | **Frontend** | GitHub Pages | `https://shianmike.github.io/SoundingAnalysis/` |
 
 To redeploy frontend:
@@ -241,7 +255,6 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 ## Upcoming Features
 
 - [ ] **Export Parameters to CSV** — One-click download of computed parameters and risk scan tables as CSV
-- [ ] **Severe Weather Outlook Overlay** — Display SPC Day 1/2/3 convective outlooks on the station map
 - [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
 - [ ] **Dark/Light Theme Toggle** — Switchable color theme
 
