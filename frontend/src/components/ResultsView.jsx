@@ -22,14 +22,15 @@ import TimeSeriesChart from "./TimeSeriesChart";
 import ComparisonView from "./ComparisonView";
 import "./ResultsView.css";
 
-function ParamCard({ label, value, unit, color }) {
+function ParamCard({ label, value, unit, color, desc }) {
   return (
-    <div className="param-card">
+    <div className="param-card" title="">
       <span className="param-label">{label}</span>
       <span className="param-value" style={color ? { color } : {}}>
         {value ?? "---"}
       </span>
       {unit && value != null && <span className="param-unit">{unit}</span>}
+      {desc && <span className="param-tooltip">{desc}</span>}
     </div>
   );
 }
@@ -363,47 +364,47 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
           title="Thermodynamic"
           icon={<Thermometer size={14} />}
         >
-          <ParamCard label="SB CAPE" value={params.sbCape} unit="J/kg" color="#f97316" />
-          <ParamCard label="SB CIN" value={params.sbCin} unit="J/kg" />
-          <ParamCard label="SB LCL" value={params.sbLclM} unit="m AGL" />
-          <ParamCard label="MU CAPE" value={params.muCape} unit="J/kg" />
-          <ParamCard label="MU CIN" value={params.muCin} unit="J/kg" />
-          <ParamCard label="MU LCL" value={params.muLclM} unit="m AGL" />
-          <ParamCard label="ML CAPE" value={params.mlCape} unit="J/kg" color="#d946ef" />
-          <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" />
-          <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" />
-          <ParamCard label="DCAPE" value={params.dcape} unit="J/kg" />
-          <ParamCard label="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" />
-          <ParamCard label="STP" value={params.stp} unit="" color="#60a5fa" />
-          <ParamCard label="SCP" value={params.scp} unit="" color="#f59e0b" />
-          <ParamCard label="SHIP" value={params.ship} unit="" color="#10b981" />
-          <ParamCard label="DCP" value={params.dcp} unit="" color="#a78bfa" />
+          <ParamCard label="SB CAPE" value={params.sbCape} unit="J/kg" color="#f97316" desc="Surface-Based CAPE — total buoyant energy for a parcel lifted from the surface. Higher values indicate stronger updraft potential. >1000 notable, >3000 extreme." />
+          <ParamCard label="SB CIN" value={params.sbCin} unit="J/kg" desc="Surface-Based CIN — energy needed to lift a surface parcel to its LFC. More negative = stronger cap. Values < -50 often inhibit convection initiation." />
+          <ParamCard label="SB LCL" value={params.sbLclM} unit="m AGL" desc="Surface-Based Lifted Condensation Level — height where a surface parcel reaches saturation. Lower LCL (<1000m) favors tornadoes." />
+          <ParamCard label="MU CAPE" value={params.muCape} unit="J/kg" desc="Most-Unstable CAPE — CAPE computed for the parcel with highest θe in the lowest 300 hPa. Represents the maximum buoyancy available." />
+          <ParamCard label="MU CIN" value={params.muCin} unit="J/kg" desc="Most-Unstable CIN — inhibition for the most-unstable parcel. Useful when elevated convection is possible." />
+          <ParamCard label="MU LCL" value={params.muLclM} unit="m AGL" desc="Most-Unstable LCL — condensation height for the MU parcel. May differ from SB LCL when the most unstable parcel is elevated." />
+          <ParamCard label="ML CAPE" value={params.mlCape} unit="J/kg" color="#d946ef" desc="Mixed-Layer CAPE — CAPE for a parcel representing the mean of the lowest 100 hPa. Best estimate for surface-based storms in a well-mixed boundary layer." />
+          <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" desc="Mixed-Layer CIN — inhibition for the ML parcel. More representative than SB CIN in the afternoon when the boundary layer is mixed." />
+          <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" desc="Mixed-Layer LCL — cloud base height for the ML parcel. Lower values increase tornado probability; <1000m is favorable." />
+          <ParamCard label="DCAPE" value={params.dcape} unit="J/kg" desc="Downdraft CAPE — energy available for downdrafts. Higher values (>800) indicate strong outflow winds and potential for damaging gusts." />
+          <ParamCard label="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" desc="Entraining CAPE — CAPE adjusted for entrainment of dry environmental air (Peters et al. 2023). More physically realistic than standard CAPE." />
+          <ParamCard label="STP" value={params.stp} unit="" color="#60a5fa" desc="Significant Tornado Parameter — composite index combining CAPE, SRH, shear, and LCL. Values ≥1 suggest significant (EF2+) tornado environment. Higher = more favorable." />
+          <ParamCard label="SCP" value={params.scp} unit="" color="#f59e0b" desc="Supercell Composite Parameter — combines CAPE, deep shear, and SRH. Values ≥1 support supercells; >4 strongly favors discrete supercells." />
+          <ParamCard label="SHIP" value={params.ship} unit="" color="#10b981" desc="Significant Hail Parameter — composite for significant hail (≥2 in.). Values ≥1 indicate potential; >1.5 strongly favors significant hail." />
+          <ParamCard label="DCP" value={params.dcp} unit="" color="#a78bfa" desc="Derecho Composite Parameter — combines DCAPE, MUCAPE, shear, and mean wind. Values ≥2 suggest potential for long-lived wind events (derechos)." />
         </ParamSection>
 
         <ParamSection
           title="Lapse Rates & Moisture"
           icon={<Droplets size={14} />}
         >
-          <ParamCard label="LR 0-3 km" value={params.lr03} unit="C/km" />
-          <ParamCard label="LR 3-6 km" value={params.lr36} unit="C/km" />
-          <ParamCard label="PWAT" value={params.pwat} unit="mm" />
-          <ParamCard label="FRZ Level" value={params.frzLevel} unit="m AGL" />
-          <ParamCard label="WB Zero" value={params.wbo} unit="m AGL" />
-          <ParamCard label="RH 0-1 km" value={params.rh01} unit="%" />
-          <ParamCard label="RH 1-3 km" value={params.rh13} unit="%" />
-          <ParamCard label="RH 3-6 km" value={params.rh36} unit="%" />
+          <ParamCard label="LR 0-3 km" value={params.lr03} unit="C/km" desc="0–3 km Lapse Rate — temperature decrease per km in the lowest 3 km. Values >7°C/km are steep; >8°C/km nearly absolute unstable. Key for tornado environments." />
+          <ParamCard label="LR 3-6 km" value={params.lr36} unit="C/km" desc="3–6 km Lapse Rate — mid-level lapse rate. Steeper values (>7°C/km) enhance CAPE and updraft strength. >8°C/km is extreme instability." />
+          <ParamCard label="PWAT" value={params.pwat} unit="mm" desc="Precipitable Water — total column water vapor. Higher values mean more moisture available for heavy rainfall. >50mm is extremely high for CONUS." />
+          <ParamCard label="FRZ Level" value={params.frzLevel} unit="m AGL" desc="Freezing Level — height of the 0°C isotherm AGL. Affects hail size (higher FRZ = more melting) and snow levels." />
+          <ParamCard label="WB Zero" value={params.wbo} unit="m AGL" desc="Wet-Bulb Zero Height — where the wet-bulb temperature crosses 0°C. Better predictor of hail reaching the surface than the freezing level. <2500m favors large hail." />
+          <ParamCard label="RH 0-1 km" value={params.rh01} unit="%" desc="Relative Humidity 0–1 km — low-level moisture. Higher values (>80%) favor tornado development by reducing evaporative cooling of rain." />
+          <ParamCard label="RH 1-3 km" value={params.rh13} unit="%" desc="Relative Humidity 1–3 km — mid-low moisture. Dry layers here (<50%) enhance DCAPE and outflow potential." />
+          <ParamCard label="RH 3-6 km" value={params.rh36} unit="%" desc="Relative Humidity 3–6 km — mid-level moisture. Dry air here entrains into storms, increasing evaporative cooling and downdraft strength." />
         </ParamSection>
 
         <ParamSection
           title="Kinematic"
           icon={<ArrowUpDown size={14} />}
         >
-          <ParamCard label="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" />
-          <ParamCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" />
-          <ParamCard label="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" />
-          <ParamCard label="SRH 500m" value={params.srh500m} unit="m²/s²" />
-          <ParamCard label="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" />
-          <ParamCard label="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" />
+          <ParamCard label="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" desc="0–1 km Bulk Wind Difference — magnitude of the wind shear vector over the lowest 1 km. >15 kt supports organized storms; >20 kt favors tornadoes." />
+          <ParamCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" desc="0–3 km Bulk Wind Difference — shear in the low-to-mid levels. Important for mesocyclone development. >30 kt favors supercells." />
+          <ParamCard label="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" desc="0–6 km Bulk Wind Difference — deep-layer shear. The primary discriminator between organized and disorganized convection. >40 kt strongly favors supercells." />
+          <ParamCard label="SRH 500m" value={params.srh500m} unit="m²/s²" desc="0–500m Storm-Relative Helicity — streamwise vorticity in the lowest 500m relative to storm motion. Key for tornado potential. >150 is significant." />
+          <ParamCard label="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" desc="0–1 km Storm-Relative Helicity — measures the rotational potential of a storm's updraft in the lowest 1 km. >100 favors mesocyclones; >300 strongly favors tornadoes." />
+          <ParamCard label="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" desc="0–3 km Storm-Relative Helicity — total low-level rotational potential. >200 favors strong mesocyclones; >400 is extreme. Used in STP and SCP composites." />
         </ParamSection>
       </div>
     </div>
