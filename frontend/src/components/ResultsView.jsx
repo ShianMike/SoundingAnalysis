@@ -300,6 +300,11 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
           <span className="rv-meta-text rv-meta-dim">
             {meta.sfcPressure}&ndash;{meta.topPressure} hPa
           </span>
+          {meta.vadRadar && (
+            <span className="rv-meta-tag rv-meta-vad" title={meta.vadTime ? `VAD valid: ${meta.vadTime}` : ""}>
+              VAD: {meta.vadRadar}
+            </span>
+          )}
         </div>
         <div className="rv-meta-actions">
           <button

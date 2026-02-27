@@ -108,6 +108,12 @@
   color: var(--text-muted);
 }
 
+.rv-meta-vad {
+  background: rgba(0, 255, 136, 0.12);
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.25);
+}
+
 .rv-meta-sep {
   width: 1px;
   height: 14px;
