@@ -885,7 +885,7 @@ export default function ControlPanel({
             </span>
           </button>
           {smoothEnabled && (
-            <div className="cp-accordion-body" style={{ padding: "6px 10px" }}>
+            <div style={{ padding: "6px 10px" }}>
               <label className="cp-field-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ minWidth: 50 }}>σ = {smoothSigma}</span>
                 <input
