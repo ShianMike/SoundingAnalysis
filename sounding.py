@@ -288,24 +288,22 @@ def fetch_wyoming_sounding(station_id, dt):
     Returns parsed arrays with units.
     """
     wmo = STATION_WMO.get(station_id, station_id)
-    
-    url = (
-        f"https://weather.uwyo.edu/cgi-bin/sounding.py?"
-        f"region=naconf&TYPE=TEXT%3ALIST&YEAR={dt.year}&MONTH={dt.month:02d}"
-        f"&FROM={dt.day:02d}{dt.hour:02d}&TO={dt.day:02d}{dt.hour:02d}"
-        f"&STNM={wmo}"
-    )
-    
-    print(f"  Fetching from UWyo: {url}")
-    resp = requests.get(url, timeout=20)
+
+    dt_str = f"{dt.year}-{dt.month:02d}-{dt.day:02d} {dt.hour:02d}:00:00"
+    url = "https://weather.uwyo.edu/wsgi/sounding"
+    params = {"type": "TEXT:LIST", "datetime": dt_str, "id": wmo}
+
+    print(f"  Fetching from UWyo: {url}  params={params}")
+    resp = requests.get(url, params=params, timeout=20)
     resp.raise_for_status()
     html = resp.text
-    
+
     if "Can't get" in html or "No data" in html:
         raise ValueError(f"No sounding data available for {station_id} at {dt}")
-    
-    pre_start = html.find("<pre>")
-    pre_end = html.find("</pre>")
+
+    html_lower = html.lower()
+    pre_start = html_lower.find("<pre>")
+    pre_end = html_lower.find("</pre>")
     if pre_start == -1 or pre_end == -1:
         raise ValueError("Could not parse sounding data from response")
     
@@ -328,18 +326,18 @@ def fetch_wyoming_sounding(station_id, dt):
     
     for line in lines[data_start:]:
         line = line.strip()
-        if not line or line.startswith("</pre>"):
+        if not line or line.lower().startswith("</pre>"):
             break
         parts = line.split()
-        if len(parts) < 7:
+        if len(parts) < 8:
             continue
         try:
             p = float(parts[0])
             h = float(parts[1])
             t = float(parts[2])
             td = float(parts[3])
-            wd = float(parts[5])
-            ws = float(parts[6])
+            wd = float(parts[6])
+            ws = float(parts[7])
             pressure.append(p)
             height.append(h)
             temp.append(t)
@@ -348,7 +346,7 @@ def fetch_wyoming_sounding(station_id, dt):
             wind_spd.append(ws)
         except (ValueError, IndexError):
             continue
-    
+
     if len(pressure) < 5:
         raise ValueError(f"Insufficient data ({len(pressure)} levels) from UWyo")
     
@@ -373,7 +371,7 @@ def fetch_wyoming_sounding(station_id, dt):
         "temperature": np.array(temp) * units.degC,
         "dewpoint": np.array(dewpoint) * units.degC,
         "wind_direction": np.array(wind_dir) * units.degree,
-        "wind_speed": np.array(wind_spd) * units.knot,
+        "wind_speed": np.array(wind_spd) * units('m/s'),
         "has_wind": np.ones(len(pressure), dtype=bool),
         "station_info": station_info,
     }
@@ -1332,15 +1330,12 @@ def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
     region = _detect_uwyo_region(_lat, _lon) if _lat is not None else "naconf"
     print(f"  IGRAv2: WMO={wmo_id}, region={region}, lat={_lat}, lon={_lon}")
 
-    url = (
-        f"https://weather.uwyo.edu/cgi-bin/sounding.py?"
-        f"region={region}&TYPE=TEXT%3ALIST&YEAR={dt.year}&MONTH={dt.month:02d}"
-        f"&FROM={dt.day:02d}{dt.hour:02d}&TO={dt.day:02d}{dt.hour:02d}"
-        f"&STNM={wmo_id}"
-    )
+    dt_str = f"{dt.year}-{dt.month:02d}-{dt.day:02d} {dt.hour:02d}:00:00"
+    url = "https://weather.uwyo.edu/wsgi/sounding"
+    params = {"type": "TEXT:LIST", "datetime": dt_str, "id": wmo_id}
 
-    print(f"  Fetching from UWyo (global): {url}")
-    resp = requests.get(url, timeout=25)
+    print(f"  Fetching from UWyo (global): {url}  params={params}")
+    resp = requests.get(url, params=params, timeout=25)
     if resp.status_code == 404:
         raise ValueError(
             f"No sounding data found for WMO {wmo_id} at {dt:%Y-%m-%d %HZ}. "
@@ -1356,8 +1351,9 @@ def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
             f"Try a different date/time or use OBS for US stations."
         )
 
-    pre_start = html.find("<pre>")
-    pre_end = html.find("</pre>")
+    html_lower = html.lower()
+    pre_start = html_lower.find("<pre>")
+    pre_end = html_lower.find("</pre>")
     if pre_start == -1 or pre_end == -1:
         raise ValueError("Could not parse sounding data from UWyo response")
 
@@ -1380,14 +1376,14 @@ def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
 
     for line in lines[data_start:]:
         line = line.strip()
-        if not line or line.startswith("</pre>"):
+        if not line or line.lower().startswith("</pre>"):
             break
         parts = line.split()
-        if len(parts) < 7:
+        if len(parts) < 8:
             continue
         try:
             pv = float(parts[0]); hv = float(parts[1]); tv = float(parts[2])
-            tdv = float(parts[3]); wdv = float(parts[5]); wsv = float(parts[6])
+            tdv = float(parts[3]); wdv = float(parts[6]); wsv = float(parts[7])
             pressure.append(pv); height.append(hv); temp.append(tv)
             dewpoint.append(tdv); wind_dir.append(wdv); wind_spd.append(wsv)
         except (ValueError, IndexError):
@@ -1417,7 +1413,7 @@ def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
         "temperature":    np.array(temp) * units.degC,
         "dewpoint":       np.array(dewpoint) * units.degC,
         "wind_direction": np.array(wind_dir) * units.degree,
-        "wind_speed":     np.array(wind_spd) * units.knot,
+        "wind_speed":     np.array(wind_spd) * units('m/s'),
         "station_info":   station_info,
     }
 
