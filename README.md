@@ -22,22 +22,34 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - **Temperature** & **Dewpoint** profiles
 - **Wet-bulb temperature** trace
 - **Virtual temperature** trace
+- **SB / MU / ML parcel traces** with color-coded dashed lines
 - **Downdraft (DCAPE) parcel** trace
+- **CAPE/CIN shading** — red fill (CAPE) and blue fill (CIN) between SB parcel and environment
 - Dry adiabats, moist adiabats, mixing ratio lines
+- **0°C and -20°C highlighted isotherms**
+- **Dendritic Growth Zone (DGZ)** shading (-12°C to -17°C)
+- **Hail Growth Zone (HGZ)** shading (-10°C to -30°C)
+- **PBL top** marker (mixed-layer depth)
 - Wind barbs
-- Key level annotations (LCL, LFC, EL, Freezing level)
+- Key level annotations (LCL, LFC, EL, Freezing level, WBZ)
+- **Surface T/Td in °F** labels
 - Height labels in km AGL
 
 ### Hodograph
-- Color-coded by height (0–1, 1–3, 3–6, 6–9 km layers)
+- Color-coded by height (0–1, 1–3, 3–6, 6–9, 9–12 km layers)
 - Bunkers right-mover, left-mover, and mean wind vectors
+- Deviant Tornado Motion (DTM) marker
+- Upshear / Downshear MCS motion markers
+- **Critical angle** between 0–500m shear and storm-relative inflow
+- VAD Wind Profiler overlay (green)
+- Effective inflow layer SRH fill
 - Dynamic bounds based on wind profile
 
 ### Computed Parameters
 | Category | Parameters |
 |---|---|
 | **Thermodynamic** | SB/ML/MU CAPE & CIN, DCAPE, LCL height, LFC, EL, Lapse rates (0–3 km, 3–6 km), Precipitable water, Freezing level, Wet-bulb zero height, RH by layer |
-| **Kinematic** | Bulk wind difference (500 m, 1 km, 3 km, 6 km), Storm-relative helicity (500 m, 1 km, 3 km), Bunkers storm motion |
+| **Kinematic** | Bulk wind difference (500 m, 1 km, 3 km, 6 km), Storm-relative helicity (500 m, 1 km, 3 km), Storm-relative wind by layer, Bunkers storm motion, Critical angle |
 | **Composite** | Significant Tornado Parameter (STP), Supercell Composite Parameter (SCP), Significant Hail Parameter (SHIP), Derecho Composite Parameter (DCP) |
 
 ### Additional Panels
@@ -378,6 +390,16 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [x] **Surface Modification** — Override surface T, Td, wind speed/direction and re-compute all parameters ✅
 - [x] **Custom Storm Motion** — Input custom storm motion (direction + speed) for SRH/SRW recalculation ✅
 - [x] **Piecewise CAPE / Stepwise CAPE-CIN** — Layer-by-layer CAPE/CIN data computed and returned via API ✅
+- [x] **CAPE/CIN Shading** — Red/blue fill between SB parcel trace and environment temperature on Skew-T ✅
+- [x] **DGZ / HGZ Shading** — Dendritic Growth Zone (-12°C to -17°C) and Hail Growth Zone (-10°C to -30°C) horizontal bands ✅
+- [x] **PBL Top Marker** — Mixed-layer depth annotated on the Skew-T diagram ✅
+- [x] **Critical Angle** — Angle between 0-500m shear vector and storm-relative inflow displayed in hodograph SM info box ✅
+- [ ] **Effective SRH / Effective BWD** — SRH and shear computed for the effective inflow layer (not just fixed depths)
+- [ ] **3CAPE / 6CAPE** — 0-3 km and 0-6 km CAPE per parcel type
+- [ ] **DCIN (Downdraft CIN)** — Measures capping strength below the downdraft
+- [ ] **MU NCAPE** — Normalized CAPE (CAPE / EL-LFC depth) for buoyancy intensity
+- [ ] **Piecewise CAPE Bars** — Visualize the computed piecewise CAPE as colored bars on the Skew-T
+- [ ] **Color-Coded CAPE Badge** — Large colored CAPE magnitude indicator scaled to severity
 
 ### Medium Priority — New Capabilities
 
