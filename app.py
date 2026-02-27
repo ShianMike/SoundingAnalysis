@@ -218,6 +218,9 @@ def get_sounding():
             },
         })
 
+    except ValueError as e:
+        # Data not found / invalid input — not a server error
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
