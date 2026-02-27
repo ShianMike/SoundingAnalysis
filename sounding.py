@@ -1772,7 +1772,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         f"OBSERVED UPPER-AIR SOUNDING | {station_id} | "
         f"VALID: {dt.strftime('%m/%d/%Y %HZ')}"
     )
-    fig.suptitle(title_str, fontsize=17, fontweight="bold",
+    fig.suptitle(title_str, fontsize=20, fontweight="bold",
                  color=FG, y=0.985, x=0.36, ha="center",
                  fontfamily="monospace")
     
@@ -1787,10 +1787,10 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     
     for spine in skew.ax.spines.values():
         spine.set_color(BORDER)
-    skew.ax.tick_params(colors=FG_DIM, labelsize=8, width=1.2)
-    skew.ax.set_xlabel("Temperature (°C)", color=FG_DIM, fontsize=9,
+    skew.ax.tick_params(colors=FG_DIM, labelsize=11, width=1.2)
+    skew.ax.set_xlabel("Temperature (°C)", color=FG_DIM, fontsize=12,
                        fontfamily="monospace", fontweight="bold")
-    skew.ax.set_ylabel("Pressure (hPa)", color=FG_DIM, fontsize=9,
+    skew.ax.set_ylabel("Pressure (hPa)", color=FG_DIM, fontsize=12,
                        fontfamily="monospace", fontweight="bold")
     
     # Reference lines (subtle)
@@ -1800,13 +1800,13 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     
     # Panel label
     skew.ax.text(0.02, 0.98, "SKEW-T LOG-P", transform=skew.ax.transAxes,
-                 fontsize=11, color=FG, fontfamily="monospace",
+                 fontsize=13, color=FG, fontfamily="monospace",
                  fontweight="bold", va="top", ha="left", alpha=0)  # hidden, merged into legend title
     
     # Temperature (red, solid thick)
-    skew.plot(p, T, color="red", linewidth=3.5, zorder=6, label="TEMPERATURE")
+    skew.plot(p, T, color="red", linewidth=4.0, zorder=6, label="TEMPERATURE")
     # Dewpoint (blue, solid thick)
-    skew.plot(p, Td, color="blue", linewidth=3.5, zorder=6, label="DEWPOINT")
+    skew.plot(p, Td, color="blue", linewidth=4.0, zorder=6, label="DEWPOINT")
     
     # Wet-bulb temperature (cyan, solid thin)
     if params.get("wetbulb") is not None:
@@ -1823,12 +1823,80 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         skew.plot(p, params["dcape_profile"], color="gray", linewidth=1.5,
                   linestyle="--", alpha=0.85, zorder=7, label="DWNDRFT PARCEL")
     
+    # SB parcel trace (orange, dashed)
+    if params.get("sb_profile") is not None:
+        skew.plot(p, params["sb_profile"], color="#ff8800", linewidth=2.0,
+                  linestyle="--", alpha=0.85, zorder=5, label="SB PARCEL")
+    
+    # MU parcel trace (white/light, dashed)
+    if params.get("mu_profile") is not None and params.get("mu_start_idx") is not None:
+        mu_si = params["mu_start_idx"]
+        skew.plot(p[mu_si:], params["mu_profile"], color=FG, linewidth=2.0,
+                  linestyle="--", alpha=0.75, zorder=5, label="MU PARCEL")
+    
+    # ML parcel trace (magenta, dashed)
+    if params.get("ml_profile") is not None:
+        skew.plot(p, params["ml_profile"], color="#dd44dd", linewidth=2.0,
+                  linestyle="--", alpha=0.75, zorder=5, label="ML PARCEL")
+    
+    # --- Highlighted isotherms: 0°C and -20°C ---
+    skew.ax.axvline(0, color="#44bbee", linestyle="--", alpha=0.5,
+                    linewidth=1.2, zorder=2)
+    skew.ax.axvline(-20, color="#8888ff", linestyle="--", alpha=0.4,
+                    linewidth=1.0, zorder=2)
+    
+    # --- Surface T and Td labels in °F ---
+    try:
+        sfc_T_F = T[0].to("degF").magnitude
+        sfc_Td_F = Td[0].to("degF").magnitude
+        skew.ax.annotate(
+            f"{sfc_T_F:.0f}°F", xy=(T[0].magnitude, p[0].magnitude),
+            xytext=(8, -15), textcoords="offset points",
+            fontsize=11, color="red", fontweight="bold",
+            fontfamily="monospace", zorder=10,
+            path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
+        )
+        skew.ax.annotate(
+            f"{sfc_Td_F:.0f}°F", xy=(Td[0].magnitude, p[0].magnitude),
+            xytext=(-30, -15), textcoords="offset points",
+            fontsize=11, color="blue", fontweight="bold",
+            fontfamily="monospace", zorder=10,
+            path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
+        )
+    except Exception:
+        pass
+    
+    # --- Wet-Bulb Zero (WBZ) level annotation ---
+    if params.get("wetbulb") is not None:
+        try:
+            wb = params["wetbulb"].magnitude
+            # Find where wetbulb crosses 0°C
+            for i in range(len(wb) - 1):
+                if wb[i] >= 0 and wb[i+1] < 0:
+                    # Linear interpolation for exact crossing pressure
+                    frac = wb[i] / (wb[i] - wb[i+1])
+                    wbz_p = p.magnitude[i] + frac * (p.magnitude[i+1] - p.magnitude[i])
+                    wbz_h_msl = h.magnitude[i] + frac * (h.magnitude[i+1] - h.magnitude[i])
+                    wbz_h_agl = wbz_h_msl - h[0].magnitude
+                    skew.ax.axhline(y=wbz_p, color="cyan", linestyle=":",
+                                    alpha=0.4, linewidth=0.8)
+                    skew.ax.text(
+                        skew.ax.get_xlim()[0] + 5, wbz_p,
+                        f"WBZ ({wbz_h_agl:.0f}m)",
+                        color="cyan", fontsize=10, va="center",
+                        fontfamily="monospace", fontweight="bold",
+                        path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
+                    )
+                    break
+        except Exception:
+            pass
+    
     # Wind barbs
     barb_interval = max(1, len(p) // 40)
     try:
         skew.plot_barbs(
             p[::barb_interval], u[::barb_interval], v[::barb_interval],
-            color=FG, length=6, linewidth=0.9,
+            color=FG, length=7, linewidth=1.0,
             xloc=1.05, zorder=10
         )
     except:
@@ -1843,7 +1911,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_lcl_p"].magnitude,
             f"←SBLCL ({fv(params['sb_lcl_p'],'hPa')})",
-            color="#44cc44", fontsize=8, va="center",
+            color="#44cc44", fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
@@ -1852,7 +1920,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                         linestyle="--", alpha=0.5, linewidth=1.0)
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_lfc_p"].magnitude,
-            f"←LFC", color="#ddaa22", fontsize=8, va="center",
+            f"←LFC", color="#ddaa22", fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
@@ -1861,7 +1929,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                         linestyle="--", alpha=0.5, linewidth=1.0)
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_el_p"].magnitude,
-            f"←EL", color="#4499ee", fontsize=8, va="center",
+            f"←EL", color="#4499ee", fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
@@ -1876,7 +1944,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, frz_p,
             f"←FRZ ({frz_h_agl:.0f}m)", color="#44bbee",
-            fontsize=8, va="center", fontfamily="monospace",
+            fontsize=12, va="center", fontfamily="monospace",
             fontweight="bold", path_effects=[pe]
         )
     
@@ -1894,7 +1962,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                 f"{target_km} km",
                 xy=(0.01, p.magnitude[idx]),
                 xycoords=("axes fraction", "data"),
-                fontsize=7.5, color=ACCENT, fontfamily="monospace",
+                fontsize=10, color=ACCENT, fontfamily="monospace",
                 fontweight="bold", va="center", ha="left",
                 bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
                          edgecolor="none", alpha=0.85)
@@ -1906,7 +1974,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         f"SFC {sfc_elev:.0f}m",
         xy=(0.01, p.magnitude[0]),
         xycoords=("axes fraction", "data"),
-        fontsize=7.5, color=FG_DIM, fontfamily="monospace",
+        fontsize=10, color=FG_DIM, fontfamily="monospace",
         fontweight="bold", va="top", ha="left",
         bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
                  edgecolor="none", alpha=0.85)
@@ -1914,10 +1982,10 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     
     # Legend
     legend = skew.ax.legend(
-        loc="upper left", fontsize=8, facecolor=BG,
+        loc="upper left", fontsize=10, facecolor=BG,
         edgecolor=BORDER, labelcolor=FG,
         framealpha=0.9, borderpad=0.5,
-        title="SKEW-T LOG-P", title_fontproperties={"size": 10, "weight": "bold",
+        title="SKEW-T LOG-P", title_fontproperties={"size": 12, "weight": "bold",
         "family": "monospace"}
     )
     legend.get_title().set_color(FG)
@@ -2006,7 +2074,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                      color='white', markeredgecolor='black',
                      alpha=1, markersize=30, zorder=5, clip_on=True)
         hodo.ax.annotate('.5', (hodo_u[idx_05], hodo_v[idx_05]),
-                         weight='bold', fontsize=11, color='black',
+                         weight='bold', fontsize=13, color='black',
                          xytext=(0.02, -5), textcoords='offset pixels',
                          horizontalalignment='center', clip_on=True, zorder=6)
 
@@ -2021,7 +2089,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                          color='white', markeredgecolor='black',
                          alpha=1, markersize=30, zorder=5, clip_on=True)
             hodo.ax.annotate(km_label, (hodo_u[lvl], hodo_v[lvl]),
-                             weight='bold', fontsize=11, color='black',
+                             weight='bold', fontsize=13, color='black',
                              xytext=(0.02, -5), textcoords='offset pixels',
                              horizontalalignment='center', clip_on=True, zorder=5.1)
 
@@ -2054,20 +2122,20 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
 
         # RM / LM / MW text labels
         hodo.ax.text(rm_u_kt + 0.5, rm_v_kt - 0.5, 'RM',
-                     weight='bold', ha='left', fontsize=14, zorder=7,
+                     weight='bold', ha='left', fontsize=15, zorder=7,
                      alpha=0.9, color=FG)
         hodo.ax.text(lm_u_kt + 0.5, lm_v_kt - 0.5, 'LM',
-                     weight='bold', ha='left', fontsize=14, zorder=7,
+                     weight='bold', ha='left', fontsize=15, zorder=7,
                      alpha=0.9, color=FG)
         hodo.ax.text(mw_u_kt + 0.5, mw_v_kt - 0.5, 'MW',
-                     weight='bold', ha='left', fontsize=14, zorder=7,
+                     weight='bold', ha='left', fontsize=15, zorder=7,
                      alpha=0.9, color=FG)
 
         # DTM (Deviant Tornado Motion)
         dtm_u_kt = mw_u_kt + (rm_v_kt - mw_v_kt)
         dtm_v_kt = mw_v_kt - (rm_u_kt - mw_u_kt)
         hodo.ax.text(dtm_u_kt, dtm_v_kt + 2, 'DTM',
-                     weight='bold', fontsize=10, color='brown',
+                     weight='bold', fontsize=12, color='brown',
                      ha='center', zorder=7)
         hodo.ax.plot(dtm_u_kt, dtm_v_kt, marker='v', color='brown',
                      markersize=8, zorder=7, alpha=0.8, ls='')
@@ -2162,7 +2230,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     if sm_text:
         ax_hodo.text(
             0.02, 0.98, sm_text,
-            transform=ax_hodo.transAxes, fontsize=9,
+            transform=ax_hodo.transAxes, fontsize=11,
             color=FG, fontfamily="monospace", fontweight="bold",
             va="top", ha="left",
             bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
@@ -2233,17 +2301,17 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         ax_srw.fill_betweenx(h_km, 0, sr_spd, alpha=0.2, color="#ff8800")
         ax_srw.set_xlim(0, max(sr_spd.max() * 1.1, 20))
         ax_srw.set_ylim(0, min(h_km.max(), 12))
-        ax_srw.set_xlabel("SRW (kt)", color=FG_DIM, fontsize=8,
+        ax_srw.set_xlabel("SRW (kt)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_srw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=8,
+        ax_srw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_srw.set_title("STORM-REL\nWIND", color=FG, fontsize=8,
+        ax_srw.set_title("STORM-REL\nWIND", color=FG, fontsize=10,
                         fontfamily="monospace", fontweight="bold", pad=3)
     else:
         ax_srw.text(0.5, 0.5, "N/A", transform=ax_srw.transAxes,
                    color=FG_FAINT, ha="center", fontsize=12)
     
-    ax_srw.tick_params(colors=FG_DIM, labelsize=7, width=1.2)
+    ax_srw.tick_params(colors=FG_DIM, labelsize=9, width=1.2)
     for spine in ax_srw.spines.values():
         spine.set_color(BORDER)
     ax_srw.grid(True, alpha=0.25, color=GRID_CLR)
@@ -2287,29 +2355,29 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
                            markeredgecolor="white", markeredgewidth=0.5, zorder=6)
                 ax_sw.annotate(f"{val:.0f}%", (val, depth_km),
                               xytext=(5, 3), textcoords="offset points",
-                              fontsize=7, color=color, fontweight="bold",
+                              fontsize=9, color=color, fontweight="bold",
                               fontfamily="monospace")
         
         # Axis limits
         ax_sw.set_xlim(0, 105)
         ax_sw.set_ylim(0, min(sw_h.max(), 6))
-        ax_sw.set_xlabel("Streamwiseness (%)", color=FG_DIM, fontsize=8,
+        ax_sw.set_xlabel("Streamwiseness (%)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_sw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=8,
+        ax_sw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=8,
+        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=10,
                         fontfamily="monospace", fontweight="bold", pad=3)
         
         # Legend
-        leg = ax_sw.legend(loc="lower right", fontsize=6, facecolor=BG,
+        leg = ax_sw.legend(loc="lower right", fontsize=7, facecolor=BG,
                            edgecolor=BORDER, labelcolor=FG, framealpha=0.9)
     else:
         ax_sw.text(0.5, 0.5, "N/A", transform=ax_sw.transAxes,
                    color=FG_FAINT, ha="center", fontsize=12)
-        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=8,
+        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=10,
                         fontfamily="monospace", fontweight="bold", pad=3)
     
-    ax_sw.tick_params(colors=FG_DIM, labelsize=7, width=1.2)
+    ax_sw.tick_params(colors=FG_DIM, labelsize=9, width=1.2)
     for spine in ax_sw.spines.values():
         spine.set_color(BORDER)
     ax_sw.grid(True, alpha=0.25, color=GRID_CLR)
@@ -2464,7 +2532,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     for text, color, y_pos in thermo_rows:
         ax_params.text(0.01, y_pos, text,
                       transform=ax_params.transAxes,
-                      fontsize=10, color=color, fontfamily="monospace",
+                      fontsize=12, color=color, fontfamily="monospace",
                       fontweight="bold", va="top")
     
     # ── KINEMATIC TABLE ──
@@ -2472,20 +2540,46 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     ax_kin.set_facecolor(BG)
     ax_kin.axis("off")
     
-    kin_header = f"{'':3s}{'':8s} {'BWD':>8s}   {'SRH':>12s}"
+    kin_header = f"{'':3s}{'':8s} {'BWD':>8s}   {'SRH':>12s}   {'SRW':>8s}"
     
+    bwd05 = fv(params.get("bwd_500m"), "kt")
     bwd1 = fv(params.get("bwd_1km"), "kt")
     bwd3 = fv(params.get("bwd_3km"), "kt")
     bwd6 = fv(params.get("bwd_6km"), "kt")
+    srh05 = fv(params.get("srh_500m"), "m²/s²")
     srh1 = fv(params.get("srh_1km"), "m²/s²")
     srh3 = fv(params.get("srh_3km"), "m²/s²")
     
+    # Storm-relative wind by layer
+    def _srw_layer(depth_m):
+        """Mean SR wind speed (kt) in 0-depth_m layer."""
+        try:
+            if params.get("rm_u") is None:
+                return "---"
+            rm_u_ms = params["rm_u"].to("m/s").magnitude
+            rm_v_ms = params["rm_v"].to("m/s").magnitude
+            mask = h_agl <= depth_m
+            if np.sum(mask) < 2:
+                return "---"
+            sru = u.to("m/s").magnitude[mask] - rm_u_ms
+            srv = v.to("m/s").magnitude[mask] - rm_v_ms
+            sr_mean = np.mean(np.sqrt(sru**2 + srv**2)) * 1.94384
+            return f"{sr_mean:.0f} kt"
+        except Exception:
+            return "---"
+    
+    srw05 = _srw_layer(500)
+    srw1 = _srw_layer(1000)
+    srw3 = _srw_layer(3000)
+    srw6 = _srw_layer(6000)
+    
     kin_rows = [
         ("KINEMATIC", ACCENT, 0.97),
-        (kin_header, FG_FAINT, 0.85),
-        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}", "#ff3333", 0.73),
-        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}", "#ff8800", 0.61),
-        (f"   {'0-6km:':8s} {bwd6:>8s}", "#ffcc00", 0.49),
+        (kin_header, FG_FAINT, 0.87),
+        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.77),
+        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.67),
+        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.57),
+        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.47),
     ]
     
     # Bunkers
@@ -2501,13 +2595,13 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         kin_rows.append((
             f"    RM: {rm_toward:.0f}° @ {rm_spd.magnitude:.0f} kt  |  "
             f"LM: {lm_toward:.0f}° @ {lm_spd.magnitude:.0f} kt",
-            FG_DIM, 0.23
+            FG_DIM, 0.21
         ))
     
     for text, color, y_pos in kin_rows:
         ax_kin.text(0.01, y_pos, text,
                    transform=ax_kin.transAxes,
-                   fontsize=10, color=color, fontfamily="monospace",
+                   fontsize=12, color=color, fontfamily="monospace",
                    fontweight="bold", va="top")
     
     # ════════════════════════════════════════════════════════════════
@@ -2542,11 +2636,11 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
              "VERTICAL PROFILE ANALYSIS TOOL | "
              f"Data: {source_label} | "
              f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')}",
-             fontsize=8.5, color=FG_FAINT, fontfamily="monospace",
+             fontsize=10, color=FG_FAINT, fontfamily="monospace",
              fontweight="bold")
     fig.text(0.96, 0.012,
              f"Station: {station_name}  |  {lat:.4f}, {lon:.4f}",
-             fontsize=8.5, color=ACCENT, ha="right", va="bottom",
+             fontsize=10, color=ACCENT, ha="right", va="bottom",
              fontfamily="monospace", fontweight="bold")
     
     return fig
