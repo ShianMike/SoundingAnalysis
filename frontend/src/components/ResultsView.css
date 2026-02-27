@@ -374,7 +374,7 @@
 .param-card:hover .param-tooltip {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateX(-50%);
 }
 
 .param-tooltip {
@@ -409,6 +409,35 @@
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-top-color: #1a1a2e;
+}
+
+/* ── Tooltip column alignment (prevent clipping) ── */
+/* Left column: left-align tooltip */
+.param-card:nth-child(3n+1) .param-tooltip {
+  left: 0;
+  transform: translateY(4px);
+}
+.param-card:nth-child(3n+1):hover .param-tooltip {
+  transform: translateY(0);
+}
+.param-card:nth-child(3n+1) .param-tooltip::after {
+  left: 16px;
+  transform: none;
+}
+
+/* Right column: right-align tooltip */
+.param-card:nth-child(3n) .param-tooltip {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+}
+.param-card:nth-child(3n):hover .param-tooltip {
+  transform: translateY(0);
+}
+.param-card:nth-child(3n) .param-tooltip::after {
+  left: auto;
+  right: 16px;
+  transform: none;
 }
 
 .param-label {
@@ -456,5 +485,51 @@
 
   .rv-params {
     grid-template-columns: 1fr;
+  }
+
+  /* Reset 3-col tooltip alignment, apply 2-col alignment */
+  .param-card:nth-child(3n+1) .param-tooltip,
+  .param-card:nth-child(3n) .param-tooltip {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(4px);
+  }
+  .param-card:nth-child(3n+1):hover .param-tooltip,
+  .param-card:nth-child(3n):hover .param-tooltip {
+    transform: translateX(-50%);
+  }
+  .param-card:nth-child(3n+1) .param-tooltip::after,
+  .param-card:nth-child(3n) .param-tooltip::after {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  /* 2-col: left-align odd cards */
+  .param-card:nth-child(odd) .param-tooltip {
+    left: 0;
+    transform: translateY(4px);
+  }
+  .param-card:nth-child(odd):hover .param-tooltip {
+    transform: translateY(0);
+  }
+  .param-card:nth-child(odd) .param-tooltip::after {
+    left: 16px;
+    transform: none;
+  }
+
+  /* 2-col: right-align even cards */
+  .param-card:nth-child(even) .param-tooltip {
+    left: auto;
+    right: 0;
+    transform: translateY(4px);
+  }
+  .param-card:nth-child(even):hover .param-tooltip {
+    transform: translateY(0);
+  }
+  .param-card:nth-child(even) .param-tooltip::after {
+    left: auto;
+    right: 16px;
+    transform: none;
   }
 }
