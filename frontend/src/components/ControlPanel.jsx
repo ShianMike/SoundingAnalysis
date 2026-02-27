@@ -465,7 +465,11 @@ export default function ControlPanel({
                     </span>
                     <span className="cp-station-item-id">{s.id}</span>
                     <span className="cp-station-item-name">{s.name}</span>
-                    {s.risk ? (
+                    {needsWmoId && s.wmo ? (
+                      <span className="cp-station-item-wmo" title="WMO ID (auto-filled)">
+                        {s.wmo}
+                      </span>
+                    ) : s.risk ? (
                       <span className={`cp-risk-score ${s.risk.stp >= 1 ? "high" : s.risk.stp >= 0.3 ? "med" : "low"}`}>
                         {s.risk.stp.toFixed(1)}
                       </span>
@@ -656,7 +660,9 @@ export default function ControlPanel({
               required
             />
             <p className="cp-hint">
-              Enter any WMO station number for global radiosonde data
+              {wmoId
+                ? `WMO ${wmoId} selected — click Analyze to fetch`
+                : "Select a station above or type a WMO number"}
             </p>
           </div>
         )}

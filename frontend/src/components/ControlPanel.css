@@ -428,6 +428,18 @@
   white-space: nowrap;
 }
 
+.cp-station-item-wmo {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-accent);
+  background: var(--accent-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .cp-station-empty {
   padding: 16px;
   text-align: center;
