@@ -44,8 +44,15 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - Dark-themed Leaflet map centered on CONUS
 - Station markers color-coded by risk scan data (STP thresholds)
 - Click station markers to select them
-- Click anywhere on map to set lat/lon for RAP/ERA5 sources
+- Click anywhere on map to set lat/lon for RAP source
 - Fly-to animation on station selection
+
+### NEXRAD Radar & Velocity Overlays
+- **Radar** toggle: NEXRAD base reflectivity mosaic (n0q) from IEM
+- **Velocity** toggle: NEXRAD storm-relative velocity (N0U) from the nearest WSR-88D site
+- Mutually exclusive — only one overlay active at a time
+- Auto-selects nearest NEXRAD radar as you pan the map; shows active radar ID badge
+- ~130 CONUS NEXRAD sites in the lookup table
 
 ### SPC Convective Outlook Overlay
 - Day 1, Day 2, and Day 3 outlook overlays on the station map
@@ -103,7 +110,6 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 | **Observed (IEM/UWyo)** | `--source obs` | Real radiosonde observations from CONUS upper-air sites |
 | **RAP Analysis** | `--source rap` | Rapid Refresh model analysis at any lat/lon (requires `siphon`) |
 | **BUFKIT Forecasts** | `--source bufkit` | HRRR, RAP, NAM, NAM-Nest, GFS, SREF forecasts from Iowa State |
-| **ERA5 Reanalysis** | `--source era5` | Global reanalysis at any lat/lon (requires `cdsapi` + CDS key) |
 | **ACARS/AMDAR** | `--source acars` | Aircraft observations at airports (IEM) |
 
 ---
@@ -154,8 +160,6 @@ pip install -r requirements.txt
 # Optional for RAP source:
 pip install siphon
 
-# Optional for ERA5 source:
-pip install cdsapi netCDF4
 ```
 
 **CLI usage (standalone):**
@@ -166,7 +170,6 @@ python sounding.py --station OUN                              # Latest observed
 python sounding.py --station OUN --date 2024061200            # Specific date/time
 python sounding.py --source rap --lat 36.4 --lon -99.4        # RAP at any point
 python sounding.py --source bufkit --model hrrr --station OUN # HRRR forecast
-python sounding.py --source era5 --lat 36.4 --lon -99.4 --date 2020050100
 python sounding.py --source acars --station KDFW              # Aircraft obs
 python sounding.py --list-sources                             # Show all sources
 ```
@@ -248,7 +251,7 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 
 - **Python:** Flask, MetPy, Matplotlib, NumPy, Requests
 - **Frontend:** React 18, Vite, Lucide React, Leaflet, React-Leaflet, Recharts
-- **Optional:** siphon (RAP), cdsapi + netCDF4 (ERA5)
+- **Optional:** siphon (RAP)
 
 ---
 
@@ -263,7 +266,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Observed radiosondes (UWyo / IEM) | ✅ | ✅ |
 | RAP model analysis (THREDDS) | ✅ | ✅ |
 | BUFKIT forecast models (ISU + PSU) | ✅ (ISU) | ✅ (ISU + PSU) |
-| ERA5 global reanalysis (CDS) | ✅ | ✅ |
+| ERA5 global reanalysis (CDS) | ❌ | ✅ |
 | ACARS aircraft observations | ✅ (IEM) | ✅ (OU archive) |
 | RUC reanalysis (2005–2020) | ❌ | ✅ |
 | NCEP-FNL reanalysis | ❌ | ✅ |
@@ -288,7 +291,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Wind barbs on Skew-T | ✅ | ✅ |
 | Key level annotations (LCL, LFC, EL) | ✅ | ✅ |
 | Height labels (km AGL) | ✅ | ✅ |
-| Radar reflectivity overlay (mosaic / single-site) | ❌ | ✅ |
+| Radar reflectivity overlay (mosaic / single-site) | ✅ (IEM mosaic) | ✅ |
+| Radar velocity overlay (storm-relative) | ✅ (RIDGE N0U) | ❌ |
 | Map inset with station location | ✅ (CONUS outline) | ✅ (with radar) |
 | Map inset zoom control | ❌ | ✅ |
 | Storm-relative wind profile panel | ✅ | ✅ |
@@ -313,8 +317,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | SRH (500 m, 1 km, 3 km) | ✅ | ✅ |
 | Bulk wind difference (shear layers) | ✅ | ✅ |
 | Bunkers storm motion (RM, LM, MW) | ✅ | ✅ |
-| Custom storm motion input | ❌ | ✅ |
-| Surface modification (override sfc T/Td/wind) | ❌ | ✅ |
+| Custom storm motion input | ✅ | ✅ |
+| Surface modification (override sfc T/Td/wind) | ✅ | ✅ |
 | Lapse rates (0–3, 3–6 km) | ✅ | ✅ |
 | Precipitable water, freezing level, WBZ | ✅ | ✅ |
 | RH by layer | ✅ | ✅ |
@@ -323,7 +327,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 
 | Capability | Ours | SounderPy |
 |---|:---:|:---:|
-| Export to CSV | ❌ | ✅ |
+| Export to CSV | ✅ | ✅ |
 | Export to CM1 format | ❌ | ✅ |
 | Export to SHARPpy format | ❌ | ✅ |
 | Profile merging (weighted average) | ❌ | ✅ |
@@ -342,6 +346,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 | **Full-stack web app** | React frontend + Flask API, deployed on GitHub Pages + Cloud Run |
 | **Interactive station map** | Dark Leaflet map with click-to-select stations & lat/lon picking |
 | **SPC outlook overlays** | Day 1/2/3 convective outlook GeoJSON on the map |
+| **NEXRAD radar + velocity** | Reflectivity mosaic & per-site storm-relative velocity toggles |
 | **Risk scanner** | Parallel CONUS-wide scan ranking stations by STP/SCP/SHIP/DCP |
 | **Multi-sounding comparison** | Up to 4 side-by-side Skew-T plots with parameter diff table |
 | **Parameter time-series charts** | Plot CAPE, SRH, STP, shear over a date range (up to 14 days) |
@@ -358,8 +363,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 ### High Priority — Parity with SounderPy
 
 - [x] **ECAPE (Entraining CAPE)** — Entraining CAPE calculations using the Peters et al. (2023) formulation; displayed on Skew-T and in parameter tables ✅
-- [x] **IGRAv2 Global Obs Archive** — IGRAv2 global radiosonde data via UWyo with auto-region detection; 15+ international stations included ✅
-- [x] **Radar Reflectivity Overlay** — NEXRAD mosaic reflectivity (IEM) toggle on the station map ✅
+- [x] **Radar Reflectivity & Velocity Overlays** — NEXRAD mosaic reflectivity + per-site storm-relative velocity (N0U) toggles on the station map ✅
 - [x] **Composite Sounding Overlay** — Overlay multiple T/Td profiles + hodographs on a single Skew-T via the Comparison panel ✅
 - [x] **Surface Modification** — Override surface T, Td, wind speed/direction and re-compute all parameters ✅
 - [x] **Custom Storm Motion** — Input custom storm motion (direction + speed) for SRH/SRW recalculation ✅
@@ -371,7 +375,8 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [ ] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1
 - [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
 - [ ] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS)
-- [ ] **RUC & NCEP-FNL Reanalysis** — Add RUC (2005–2020) and NCEP-FNL (2005–2020) as additional reanalysis sources
+- [ ] **ERA5 / RUC / NCEP-FNL Reanalysis** — Add ERA5 (CDS API), RUC (2005–2020), and NCEP-FNL as additional reanalysis sources
+- [ ] **IGRAv2 Global Obs Archive** — IGRAv2 global radiosonde data via UWyo for worldwide sounding coverage
 - [ ] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph
 - [ ] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames
 - [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
