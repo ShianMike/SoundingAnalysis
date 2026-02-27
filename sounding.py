@@ -1330,6 +1330,15 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
             params["mu_lcl_m"] = mu_lcl_h_msl - h[0].magnitude
         except:
             params["mu_lcl_m"] = None
+        # MU LFC and EL (needed for effective inflow layer & NCAPE)
+        try:
+            params["mu_lfc_p"], params["mu_lfc_t"] = mpcalc.lfc(p[mu_idx:], T[mu_idx:], Td[mu_idx:], mu_prof)
+        except:
+            params["mu_lfc_p"] = None
+        try:
+            params["mu_el_p"], params["mu_el_t"] = mpcalc.el(p[mu_idx:], T[mu_idx:], Td[mu_idx:], mu_prof)
+        except:
+            params["mu_el_p"] = None
     except Exception as e:
         print(f"  Warning: MU parcel calc failed: {e}")
         params["mu_cape"] = 0 * units("J/kg")
@@ -1583,6 +1592,188 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
     except Exception as e:
         print(f"  Warning: ECAPE calc failed: {e}")
         params["ecape"] = 0
+
+    # ── Effective Inflow Layer (Thompson et al. 2007) ────────────────
+    # Bottom: lowest level where CAPE ≥ 100 J/kg AND CIN > -250 J/kg
+    # Top:    highest level below EL meeting same criteria
+    try:
+        _eil_bot_p = None
+        _eil_top_p = None
+        _eil_bot_h = None
+        _eil_top_h = None
+        _sfc_h_m = h[0].magnitude
+        _n_levels = len(p)
+        _cape_thresh = 100.0   # J/kg
+        _cin_thresh = -250.0   # J/kg
+        for _i in range(_n_levels):
+            if p.magnitude[_i] < 500:  # don't search above 500 hPa
+                break
+            try:
+                _lp = mpcalc.parcel_profile(p[_i:], T[_i], Td[_i]).to("degC")
+                _lcape, _lcin = mpcalc.cape_cin(p[_i:], T[_i:], Td[_i:], _lp)
+                _lcape_v = float(_lcape.magnitude)
+                _lcin_v = float(_lcin.magnitude)
+                if _lcape_v >= _cape_thresh and _lcin_v >= _cin_thresh:
+                    if _eil_bot_p is None:
+                        _eil_bot_p = p.magnitude[_i]
+                        _eil_bot_h = h.magnitude[_i] - _sfc_h_m
+                    _eil_top_p = p.magnitude[_i]
+                    _eil_top_h = h.magnitude[_i] - _sfc_h_m
+                elif _eil_bot_p is not None:
+                    # Exited the effective layer
+                    break
+            except Exception:
+                continue
+        params["eil_bot_p"] = _eil_bot_p
+        params["eil_top_p"] = _eil_top_p
+        params["eil_bot_h"] = _eil_bot_h
+        params["eil_top_h"] = _eil_top_h
+    except Exception as e:
+        print(f"  Warning: Effective inflow layer calc failed: {e}")
+        params["eil_bot_p"] = None
+        params["eil_top_p"] = None
+        params["eil_bot_h"] = None
+        params["eil_top_h"] = None
+
+    # ── Effective SRH (within effective inflow layer) ────────────────
+    try:
+        if params["eil_bot_h"] is not None and params["eil_top_h"] is not None:
+            _eil_depth = params["eil_top_h"] - params["eil_bot_h"]
+            if _eil_depth > 0:
+                _eil_bot_agl = params["eil_bot_h"]
+                _eil_top_agl = params["eil_top_h"]
+                # Subset the interp grid to the effective inflow layer
+                _eil_mask = (h_interp.magnitude >= _eil_bot_agl) & (h_interp.magnitude <= _eil_top_agl)
+                if np.sum(_eil_mask) >= 2:
+                    _h_eil = h_interp[_eil_mask]
+                    _u_eil = u_interp[_eil_mask]
+                    _v_eil = v_interp[_eil_mask]
+                    _, _, _esrh = mpcalc.storm_relative_helicity(
+                        _h_eil, _u_eil, _v_eil,
+                        depth=(_eil_top_agl - _eil_bot_agl) * units.meter,
+                        storm_u=params["rm_u"], storm_v=params["rm_v"]
+                    )
+                    params["esrh"] = _esrh
+                else:
+                    params["esrh"] = 0 * units("m^2/s^2")
+            else:
+                params["esrh"] = 0 * units("m^2/s^2")
+        else:
+            params["esrh"] = 0 * units("m^2/s^2")
+    except Exception as e:
+        print(f"  Warning: Effective SRH calc failed: {e}")
+        params["esrh"] = 0 * units("m^2/s^2")
+
+    # ── Effective BWD (shear across effective inflow layer) ──────────
+    try:
+        if params["eil_bot_h"] is not None and params["eil_top_h"] is not None:
+            _eil_bot_agl = params["eil_bot_h"]
+            # Effective BWD uses half the depth of the effective layer as the
+            # "effective shear" top, but at least 1500m and no more than
+            # half the EL height. SPC convention: from eil_bot to 50% of EL height (capped at ~half EL)
+            _el_h = None
+            if params.get("mu_el_p") is not None:
+                _el_idx = np.argmin(np.abs(p.magnitude - params["mu_el_p"].magnitude))
+                _el_h = h.magnitude[_el_idx] - h[0].magnitude
+            if _el_h is not None and _el_h > 0:
+                _ebwd_top = max(min(_el_h * 0.5, 10000.0), 1500.0)
+            else:
+                _ebwd_top = 6000.0  # fallback to 0-6 km
+            # Get winds at EIL bottom and EBWD top
+            _eb_bot_idx = np.argmin(np.abs(h_interp.magnitude - _eil_bot_agl))
+            _eb_top_idx = np.argmin(np.abs(h_interp.magnitude - _ebwd_top))
+            _ebwd_u = u_interp[_eb_top_idx].to("knot").magnitude - u_interp[_eb_bot_idx].to("knot").magnitude
+            _ebwd_v = v_interp[_eb_top_idx].to("knot").magnitude - v_interp[_eb_bot_idx].to("knot").magnitude
+            params["ebwd"] = np.sqrt(_ebwd_u**2 + _ebwd_v**2) * units.knot
+        else:
+            params["ebwd"] = 0 * units.knot
+    except Exception as e:
+        print(f"  Warning: Effective BWD calc failed: {e}")
+        params["ebwd"] = 0 * units.knot
+
+    # ── 3CAPE and 6CAPE (0-3 km and 0-6 km CAPE) ────────────────────
+    # Computed for each parcel type using MU parcel profile
+    try:
+        _mu_cape_3 = 0
+        _mu_cape_6 = 0
+        if params.get("mu_profile") is not None and params.get("mu_start_idx") is not None:
+            _mu_si = params["mu_start_idx"]
+            _T_env_mu = T[_mu_si:].to("degC").magnitude
+            _T_par_mu = params["mu_profile"].to("degC").magnitude
+            _p_mu = p[_mu_si:].magnitude
+            _h_mu = h[_mu_si:].magnitude
+            _sfc_h = h[0].magnitude
+            # Positive buoyancy up to 3 km and 6 km AGL
+            for _depth_name, _depth_m in [("3", 3000), ("6", 6000)]:
+                _h_top = _sfc_h + _depth_m
+                _mask_d = _h_mu <= _h_top
+                if np.sum(_mask_d) >= 2:
+                    _buoy_d = _T_par_mu[_mask_d] - _T_env_mu[_mask_d]
+                    _buoy_d[_buoy_d < 0] = 0  # only positive buoyancy
+                    # Integrate using trapezoidal rule
+                    _h_d = _h_mu[_mask_d]
+                    _Rd = 287.04
+                    _g = 9.81
+                    _cape_d = np.trapezoid(_buoy_d * _g / (273.15 + _T_env_mu[_mask_d]),
+                                            _h_d)
+                    if _depth_name == "3":
+                        _mu_cape_3 = max(round(float(_cape_d), 1), 0)
+                    else:
+                        _mu_cape_6 = max(round(float(_cape_d), 1), 0)
+        params["cape_3km"] = _mu_cape_3
+        params["cape_6km"] = _mu_cape_6
+    except Exception as e:
+        print(f"  Warning: 3CAPE/6CAPE calc failed: {e}")
+        params["cape_3km"] = 0
+        params["cape_6km"] = 0
+
+    # ── DCIN (Downdraft CIN) ─────────────────────────────────────────
+    # DCIN measures the inhibition of downdrafts reaching the surface.
+    # Computed as negative buoyancy between the surface and the level
+    # of the downdraft parcel (where it's cooler than environment).
+    # DCIN = ∫(Tv_parcel - Tv_env) * g / Tv_env dz   (for parcel < env below origin)
+    try:
+        _dcin = 0
+        if params.get("dcape_profile") is not None:
+            _dd_T = params["dcape_profile"].to("degC").magnitude
+            _env_T = T.to("degC").magnitude
+            _h_m = h.magnitude
+            _sfc_h = h[0].magnitude
+            # Focus on the sub-cloud layer (surface to ~3 km AGL)
+            _mask_sc = _h_m <= (_sfc_h + 3000)
+            if np.sum(_mask_sc) >= 2:
+                _dd_sub = _dd_T[_mask_sc]
+                _env_sub = _env_T[_mask_sc]
+                _h_sub = _h_m[_mask_sc]
+                # Negative buoyancy: downdraft parcel warmer than env = inhibition for downdraft
+                _buoy_dcin = _dd_sub - _env_sub
+                _pos_buoy = _buoy_dcin.copy()
+                _pos_buoy[_pos_buoy < 0] = 0  # only where dd parcel is warmer than env
+                _dcin = -np.trapezoid(_pos_buoy * 9.81 / (273.15 + _env_sub), _h_sub)
+                _dcin = round(float(min(_dcin, 0)), 1)
+        params["dcin"] = _dcin
+    except Exception as e:
+        print(f"  Warning: DCIN calc failed: {e}")
+        params["dcin"] = 0
+
+    # ── MU NCAPE (Normalized CAPE) ───────────────────────────────────
+    # NCAPE = MUCAPE / (EL_height - LFC_height)  [J/kg/m]
+    # Measures buoyancy intensity per unit depth
+    try:
+        _mu_cape_ncape = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _ncape = 0
+        if _mu_cape_ncape > 0 and params.get("mu_lfc_p") is not None and params.get("mu_el_p") is not None:
+            _lfc_idx = np.argmin(np.abs(p.magnitude - params["mu_lfc_p"].magnitude))
+            _el_idx = np.argmin(np.abs(p.magnitude - params["mu_el_p"].magnitude))
+            _lfc_h = h.magnitude[_lfc_idx]
+            _el_h = h.magnitude[_el_idx]
+            _depth_m = _el_h - _lfc_h
+            if _depth_m > 100:
+                _ncape = round(_mu_cape_ncape / _depth_m, 3)
+        params["ncape"] = _ncape
+    except Exception as e:
+        print(f"  Warning: NCAPE calc failed: {e}")
+        params["ncape"] = 0
 
     # ── Piecewise CAPE (500 hPa layers from LFC to EL) ──────────────
     try:
@@ -1969,6 +2160,71 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         )
     
     # --- Dendritic Growth Zone (DGZ) shading: -12°C to -17°C ---
+    # --- Piecewise CAPE colored bars on left side of Skew-T ---
+    try:
+        _pw_data = params.get("piecewise_cape", [])
+        if _pw_data and len(_pw_data) > 0:
+            _max_pw_cape = max((lyr["cape"] for lyr in _pw_data), default=1)
+            if _max_pw_cape > 0:
+                _xlim = skew.ax.get_xlim()
+                _bar_x_start = _xlim[0] + 1.0
+                _bar_max_width = 10.0  # max width in °C units
+                for _lyr in _pw_data:
+                    if _lyr["cape"] > 0:
+                        _bar_width = (_lyr["cape"] / _max_pw_cape) * _bar_max_width
+                        # Map CAPE magnitude to color: green → yellow → red
+                        _frac = min(_lyr["cape"] / max(_max_pw_cape, 500), 1.0)
+                        if _frac < 0.5:
+                            _r = int(255 * _frac * 2)
+                            _g = 255
+                        else:
+                            _r = 255
+                            _g = int(255 * (1 - (_frac - 0.5) * 2))
+                        _bar_color = f"#{_r:02x}{_g:02x}00"
+                        skew.ax.barh(
+                            (_lyr["p_bot"] + _lyr["p_top"]) / 2.0,
+                            _bar_width,
+                            height=(_lyr["p_bot"] - _lyr["p_top"]),
+                            left=_bar_x_start,
+                            color=_bar_color, alpha=0.35, zorder=2,
+                            edgecolor=_bar_color, linewidth=0.5
+                        )
+    except Exception:
+        pass
+
+    # --- Color-coded CAPE badge (upper-right of Skew-T) ---
+    try:
+        _sb_cape_val = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
+        if _sb_cape_val > 0:
+            if _sb_cape_val >= 4000:
+                _badge_color = "#ff0000"
+                _badge_label = "EXTREME"
+            elif _sb_cape_val >= 3000:
+                _badge_color = "#ff4400"
+                _badge_label = "HIGH"
+            elif _sb_cape_val >= 2000:
+                _badge_color = "#ff8800"
+                _badge_label = "MODERATE"
+            elif _sb_cape_val >= 1000:
+                _badge_color = "#ffcc00"
+                _badge_label = "MARGINAL"
+            else:
+                _badge_color = "#88cc44"
+                _badge_label = "LOW"
+            skew.ax.text(
+                0.98, 0.98,
+                f"SBCAPE\n{_sb_cape_val:.0f}\n{_badge_label}",
+                transform=skew.ax.transAxes,
+                fontsize=12, fontweight="bold", fontfamily="monospace",
+                color=_badge_color, ha="right", va="top",
+                bbox=dict(boxstyle="round,pad=0.4", facecolor=BG,
+                         edgecolor=_badge_color, alpha=0.9, linewidth=2),
+                zorder=20,
+                path_effects=[path_effects.withStroke(linewidth=1, foreground=BG)]
+            )
+    except Exception:
+        pass
+
     # Find pressure levels where T crosses -12°C and -17°C for the band
     try:
         T_mag = T.to("degC").magnitude
@@ -2614,6 +2870,10 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     ml_lcl = f"{params['ml_lcl_m']:.0f} m" if params.get('ml_lcl_m') is not None else fv(params.get("ml_lcl_p"), "hPa")
     
     dcape_v = fv(params.get("dcape"), "J/kg") if params.get("dcape") else "---"
+    dcin_v = f"{params.get('dcin', 0)} J/kg" if params.get("dcin") else "0 J/kg"
+    ncape_v = f"{params.get('ncape', 0):.3f}" if params.get("ncape") else "0"
+    cape3_v = f"{params.get('cape_3km', 0)} J/kg"
+    cape6_v = f"{params.get('cape_6km', 0)} J/kg"
     lr03 = f"{params['lr_03']:.1f}" if params.get('lr_03') is not None else "---"
     lr36 = f"{params['lr_36']:.1f}" if params.get('lr_36') is not None else "---"
     
@@ -2629,16 +2889,18 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     # Rows: (text, color, y_position) — tightly spaced
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.88),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", "#ff8800", 0.79),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", FG, 0.70),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", "#dd44dd", 0.61),
-        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.52),
-        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.43),
-        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.34),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.25),
-        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.14),
-        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.04),
+        (header, FG_FAINT, 0.89),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", "#ff8800", 0.81),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", FG, 0.73),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", "#dd44dd", 0.65),
+        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.57),
+        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.49),
+        (f"   DCIN: {dcin_v}", FG_DIM, 0.41),
+        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.33),
+        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.25),
+        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.17),
+        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.08),
+        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.0),
     ]
     
     for text, color, y_pos in thermo_rows:
@@ -2661,6 +2923,10 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     srh05 = fv(params.get("srh_500m"), "m²/s²")
     srh1 = fv(params.get("srh_1km"), "m²/s²")
     srh3 = fv(params.get("srh_3km"), "m²/s²")
+    esrh_v = fv(params.get("esrh"), "m²/s²")
+    ebwd_v = fv(params.get("ebwd"), "kt")
+    eil_bot_v = f"{params['eil_bot_h']:.0f}" if params.get("eil_bot_h") is not None else "---"
+    eil_top_v = f"{params['eil_top_h']:.0f}" if params.get("eil_top_h") is not None else "---"
     
     # Storm-relative wind by layer
     def _srw_layer(depth_m):
@@ -2687,11 +2953,13 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     
     kin_rows = [
         ("KINEMATIC", ACCENT, 0.97),
-        (kin_header, FG_FAINT, 0.87),
-        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.77),
-        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.67),
-        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.57),
-        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.47),
+        (kin_header, FG_FAINT, 0.88),
+        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.79),
+        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.70),
+        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.61),
+        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.52),
+        (f"   EFFECTIVE: BWD {ebwd_v}  ESRH {esrh_v}", "#44ddaa", 0.43),
+        (f"   EIL: {eil_bot_v}–{eil_top_v} m AGL", "#44ddaa", 0.34),
     ]
     
     # Bunkers
@@ -2703,11 +2971,11 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         lm_toward = np.degrees(np.arctan2(params["lm_u"].magnitude,
                      params["lm_v"].magnitude)) % 360
         
-        kin_rows.append(("   BUNKERS STORM MOTION:", ACCENT, 0.33))
+        kin_rows.append(("   BUNKERS STORM MOTION:", ACCENT, 0.25))
         kin_rows.append((
             f"    RM: {rm_toward:.0f}° @ {rm_spd.magnitude:.0f} kt  |  "
             f"LM: {lm_toward:.0f}° @ {lm_spd.magnitude:.0f} kt",
-            FG_DIM, 0.21
+            FG_DIM, 0.14
         ))
     
     for text, color, y_pos in kin_rows:

@@ -394,12 +394,12 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [x] **DGZ / HGZ Shading** — Dendritic Growth Zone (-12°C to -17°C) and Hail Growth Zone (-10°C to -30°C) horizontal bands ✅
 - [x] **PBL Top Marker** — Mixed-layer depth annotated on the Skew-T diagram ✅
 - [x] **Critical Angle** — Angle between 0-500m shear vector and storm-relative inflow displayed in hodograph SM info box ✅
-- [ ] **Effective SRH / Effective BWD** — SRH and shear computed for the effective inflow layer (not just fixed depths)
-- [ ] **3CAPE / 6CAPE** — 0-3 km and 0-6 km CAPE per parcel type
-- [ ] **DCIN (Downdraft CIN)** — Measures capping strength below the downdraft
-- [ ] **MU NCAPE** — Normalized CAPE (CAPE / EL-LFC depth) for buoyancy intensity
-- [ ] **Piecewise CAPE Bars** — Visualize the computed piecewise CAPE as colored bars on the Skew-T
-- [ ] **Color-Coded CAPE Badge** — Large colored CAPE magnitude indicator scaled to severity
+- [x] **Effective SRH / Effective BWD** — SRH and shear computed for the effective inflow layer (Thompson et al. 2007) ✅
+- [x] **3CAPE / 6CAPE** — 0-3 km and 0-6 km CAPE per parcel type ✅
+- [x] **DCIN (Downdraft CIN)** — Measures capping strength below the downdraft ✅
+- [x] **MU NCAPE** — Normalized CAPE (CAPE / EL-LFC depth) for buoyancy intensity ✅
+- [x] **Piecewise CAPE Bars** — Visualize the computed piecewise CAPE as colored bars on the Skew-T ✅
+- [x] **Color-Coded CAPE Badge** — Large colored CAPE magnitude indicator scaled to severity ✅
 
 ### Medium Priority — New Capabilities
 
