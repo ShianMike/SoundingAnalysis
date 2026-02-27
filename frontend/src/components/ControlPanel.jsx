@@ -8,6 +8,7 @@ import {
   Clock,
   Loader2,
   ChevronDown,
+  ChevronRight,
   Zap,
   ArrowUpDown,
   History,
@@ -19,6 +20,7 @@ import {
   Github,
   Thermometer,
   Wind,
+  RotateCcw,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -702,59 +704,113 @@ export default function ControlPanel({
         )}
 
         {/* Surface Modification */}
-        <div className="cp-section">
+        <div className={`cp-accordion ${sfcModEnabled ? "cp-accordion--active" : ""}`}>
           <button
             type="button"
-            className={`cp-toggle-inline ${sfcModEnabled ? "active" : ""}`}
+            className="cp-accordion-header"
             onClick={() => setSfcModEnabled((v) => !v)}
           >
-            <Thermometer size={12} />
-            Surface Modification {sfcModEnabled ? "ON" : "OFF"}
-          </button>
-          {sfcModEnabled && (
-            <div className="cp-mod-grid">
-              <div className="cp-field">
-                <span className="cp-field-label">T (°C)</span>
-                <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="Sfc T" value={sfcModT} onChange={(e) => setSfcModT(e.target.value)} />
-              </div>
-              <div className="cp-field">
-                <span className="cp-field-label">Td (°C)</span>
-                <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="Sfc Td" value={sfcModTd} onChange={(e) => setSfcModTd(e.target.value)} />
-              </div>
-              <div className="cp-field">
-                <span className="cp-field-label">Wind (kt)</span>
-                <input type="number" step="1" className="cp-input cp-input-sm" placeholder="Speed" value={sfcModWspd} onChange={(e) => setSfcModWspd(e.target.value)} />
-              </div>
-              <div className="cp-field">
-                <span className="cp-field-label">Dir (°)</span>
-                <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="Dir" value={sfcModWdir} onChange={(e) => setSfcModWdir(e.target.value)} />
-              </div>
+            <div className="cp-accordion-left">
+              <Thermometer size={14} className="cp-accordion-icon" />
+              <span className="cp-accordion-title">Surface Modification</span>
             </div>
-          )}
+            <div className="cp-accordion-right">
+              <span className={`cp-toggle-chip ${sfcModEnabled ? "on" : ""}`}>
+                {sfcModEnabled ? "ON" : "OFF"}
+              </span>
+              <ChevronRight size={14} className={`cp-accordion-chevron ${sfcModEnabled ? "open" : ""}`} />
+            </div>
+          </button>
+          <div className={`cp-accordion-body ${sfcModEnabled ? "expanded" : ""}`}>
+            <div className="cp-accordion-content">
+              <div className="cp-input-row">
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Temperature</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="—" value={sfcModT} onChange={(e) => setSfcModT(e.target.value)} />
+                    <span className="cp-unit-badge">°C</span>
+                  </div>
+                </div>
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Dewpoint</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="—" value={sfcModTd} onChange={(e) => setSfcModTd(e.target.value)} />
+                    <span className="cp-unit-badge">°C</span>
+                  </div>
+                </div>
+              </div>
+              <div className="cp-input-row">
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Wind Speed</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="1" className="cp-input cp-input-sm" placeholder="—" value={sfcModWspd} onChange={(e) => setSfcModWspd(e.target.value)} />
+                    <span className="cp-unit-badge">kt</span>
+                  </div>
+                </div>
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Wind Dir</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="—" value={sfcModWdir} onChange={(e) => setSfcModWdir(e.target.value)} />
+                    <span className="cp-unit-badge">°</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="cp-reset-btn"
+                onClick={() => { setSfcModT(""); setSfcModTd(""); setSfcModWspd(""); setSfcModWdir(""); }}
+              >
+                <RotateCcw size={11} /> Reset values
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Custom Storm Motion */}
-        <div className="cp-section">
+        <div className={`cp-accordion ${smEnabled ? "cp-accordion--active" : ""}`}>
           <button
             type="button"
-            className={`cp-toggle-inline ${smEnabled ? "active" : ""}`}
+            className="cp-accordion-header"
             onClick={() => setSmEnabled((v) => !v)}
           >
-            <Wind size={12} />
-            Custom Storm Motion {smEnabled ? "ON" : "OFF"}
-          </button>
-          {smEnabled && (
-            <div className="cp-mod-grid">
-              <div className="cp-field">
-                <span className="cp-field-label">Dir (°)</span>
-                <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="Direction" value={smDirection} onChange={(e) => setSmDirection(e.target.value)} />
-              </div>
-              <div className="cp-field">
-                <span className="cp-field-label">Speed (kt)</span>
-                <input type="number" step="1" className="cp-input cp-input-sm" placeholder="Speed" value={smSpeed} onChange={(e) => setSmSpeed(e.target.value)} />
-              </div>
+            <div className="cp-accordion-left">
+              <Wind size={14} className="cp-accordion-icon" />
+              <span className="cp-accordion-title">Custom Storm Motion</span>
             </div>
-          )}
+            <div className="cp-accordion-right">
+              <span className={`cp-toggle-chip ${smEnabled ? "on" : ""}`}>
+                {smEnabled ? "ON" : "OFF"}
+              </span>
+              <ChevronRight size={14} className={`cp-accordion-chevron ${smEnabled ? "open" : ""}`} />
+            </div>
+          </button>
+          <div className={`cp-accordion-body ${smEnabled ? "expanded" : ""}`}>
+            <div className="cp-accordion-content">
+              <div className="cp-input-row">
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Direction</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="—" value={smDirection} onChange={(e) => setSmDirection(e.target.value)} />
+                    <span className="cp-unit-badge">°</span>
+                  </div>
+                </div>
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Speed</label>
+                  <div className="cp-input-with-unit">
+                    <input type="number" step="1" className="cp-input cp-input-sm" placeholder="—" value={smSpeed} onChange={(e) => setSmSpeed(e.target.value)} />
+                    <span className="cp-unit-badge">kt</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="cp-reset-btn"
+                onClick={() => { setSmDirection(""); setSmSpeed(""); }}
+              >
+                <RotateCcw size={11} /> Reset values
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Submit */}
