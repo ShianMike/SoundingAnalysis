@@ -88,12 +88,28 @@ def list_stations():
 
 @app.route("/api/stations/intl", methods=["GET"])
 def list_intl_stations():
-    """Return IGRAv2 international stations for the global source."""
-    from sounding import INTL_STATIONS
+    """Return IGRAv2 international stations, optionally filtered by region."""
+    from sounding import INTL_STATIONS, _classify_intl_region
+    region_filter = request.args.get("region", "").strip()
     stations = []
     for wmo_id, (name, lat, lon) in sorted(INTL_STATIONS.items()):
-        stations.append({"id": wmo_id, "name": name, "lat": lat, "lon": lon})
+        region = _classify_intl_region(wmo_id)
+        if region_filter and region != region_filter:
+            continue
+        stations.append({"id": wmo_id, "name": name, "lat": lat, "lon": lon, "region": region})
     return jsonify(stations)
+
+
+@app.route("/api/stations/intl/regions", methods=["GET"])
+def list_intl_regions():
+    """Return available international station regions with station counts."""
+    from sounding import INTL_STATIONS, INTL_REGIONS, _classify_intl_region
+    counts = {}
+    for wmo_id in INTL_STATIONS:
+        r = _classify_intl_region(wmo_id)
+        counts[r] = counts.get(r, 0) + 1
+    regions = [{"id": r, "name": r, "count": counts.get(r, 0)} for r in INTL_REGIONS if counts.get(r, 0) > 0]
+    return jsonify(regions)
 
 
 @app.route("/api/sources", methods=["GET"])

@@ -1238,6 +1238,62 @@ INTL_STATIONS = {
     "89642": ("Dumont d'Urville, Ant.", -66.67, 140.00),
 }
 
+# Ordered list of region labels for the UI
+INTL_REGIONS = [
+    "Europe",
+    "Middle East",
+    "South & Southeast Asia",
+    "East Asia",
+    "Canada / N. America",
+    "South America",
+    "Africa",
+    "Australia / Oceania",
+    "Caribbean",
+    "Antarctic",
+]
+
+def _classify_intl_region(wmo_id: str) -> str:
+    """Classify a WMO station ID into a human-readable region."""
+    prefix = int(wmo_id[:2])
+    if prefix <= 20:            # 01-20: Europe (UK, Scandinavia, W-Europe, E-Europe)
+        return "Europe"
+    elif prefix <= 29:          # 26-29: Russia / former USSR in Europe
+        return "Europe"
+    elif prefix == 30:          # 30xxx: Russia Far East (Vladivostok etc)
+        return "East Asia"
+    elif 40 <= prefix <= 41:    # 40-41: Middle East, Pakistan
+        return "Middle East"
+    elif 42 <= prefix <= 43:    # 42-43: India/Sri Lanka
+        return "South & Southeast Asia"
+    elif prefix == 44:          # 44: Mongolia
+        return "East Asia"
+    elif prefix == 45:          # 45: Hong Kong
+        return "East Asia"
+    elif 47 <= prefix <= 49:    # 47-49: Japan, Korea, SE Asia
+        # Distinguish Japan/Korea (East Asia) from SE Asia
+        p3 = int(wmo_id[:3])
+        if p3 in (484, 485, 486, 488, 489):  # Thailand, Malaysia, Vietnam, Cambodia, etc.
+            return "South & Southeast Asia"
+        if p3 >= 960:  # Indonesia
+            return "South & Southeast Asia"
+        return "East Asia"
+    elif 50 <= prefix <= 59:    # 50-59: China
+        return "East Asia"
+    elif 60 <= prefix <= 69:    # 60-69: Africa
+        return "Africa"
+    elif 70 <= prefix <= 72:    # 70-72: Canada, N. America
+        return "Canada / N. America"
+    elif 76 <= prefix <= 79:    # 76-79: Mexico, Caribbean
+        return "Caribbean"
+    elif 80 <= prefix <= 88:    # 80-88: South America
+        return "South America"
+    elif prefix == 89:          # 89: Antarctic
+        return "Antarctic"
+    elif 90 <= prefix <= 99:    # 90-99: Oceania, Pacific, Australia
+        return "Australia / Oceania"
+    else:
+        return "Other"
+
 
 def _detect_uwyo_region(lat, lon):
     """Detect UWyo region code from lat/lon coordinates."""

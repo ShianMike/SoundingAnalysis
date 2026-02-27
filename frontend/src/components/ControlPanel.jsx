@@ -73,6 +73,10 @@ export default function ControlPanel({
   selectedStation,
   onStationChange,
   onSourceChange,
+  intlRegions,
+  intlRegion,
+  onRegionChange,
+  intlLoading,
   mapLatLon,
   onFeedbackClick,
   showFeedback: feedbackActive,
@@ -397,6 +401,30 @@ export default function ControlPanel({
               Station
             </label>
             <div className="cp-station-picker">
+              {/* Region selector for IGRAv2 */}
+              {needsWmoId && (
+                <div className="cp-region-picker">
+                  <label className="cp-region-label">Region</label>
+                  <select
+                    className="cp-input cp-region-select"
+                    value={intlRegion || ""}
+                    onChange={(e) => onRegionChange(e.target.value)}
+                  >
+                    <option value="">— Select a region —</option>
+                    {(intlRegions || []).map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.count})
+                      </option>
+                    ))}
+                  </select>
+                  {intlLoading && (
+                    <span className="cp-region-loading">
+                      <Loader2 size={12} className="spin" /> Loading stations…
+                    </span>
+                  )}
+                </div>
+              )}
+              {!needsWmoId && (
               <button
                 type="button"
                 className="cp-risk-btn"
@@ -415,6 +443,7 @@ export default function ControlPanel({
                   </>
                 )}
               </button>
+              )}
               {riskData && (
                 <p className="cp-risk-hint">
                   Scanned {riskData.stations.length} stations at {riskData.date}
