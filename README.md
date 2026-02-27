@@ -1,5 +1,15 @@
 # Sounding Analysis Tool
 
+[![GitHub last commit](https://img.shields.io/github/last-commit/ShianMike/SoundingAnalysis?style=flat-square&color=blue)](https://github.com/ShianMike/SoundingAnalysis/commits/main)
+[![GitHub stars](https://img.shields.io/github/stars/ShianMike/SoundingAnalysis?style=flat-square)](https://github.com/ShianMike/SoundingAnalysis/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/ShianMike/SoundingAnalysis?style=flat-square)](https://github.com/ShianMike/SoundingAnalysis/forks)
+[![Made with Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Made with React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Deployed on Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?style=flat-square&logo=googlecloud&logoColor=white)](https://soundinganalysis-752306366750.asia-southeast1.run.app)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-222?style=flat-square&logo=github&logoColor=white)](https://shianmike.github.io/SoundingAnalysis/)
+[![License](https://img.shields.io/badge/license-Educational%20%2F%20Research-green?style=flat-square)](#license)
+[![MetPy](https://img.shields.io/badge/MetPy-powered-orange?style=flat-square&logo=python&logoColor=white)](https://unidata.github.io/MetPy/)
+
 A full-stack atmospheric sounding analysis application that fetches real upper-air data from multiple sources and produces comprehensive Skew-T / Hodograph analysis plots — similar to [SounderPy](https://github.com/kylejgillett/sounderpy).
 
 **Live site:** <https://shianmike.github.io/SoundingAnalysis/>
