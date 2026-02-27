@@ -633,6 +633,38 @@
   color: #60a5fa;
 }
 
+/* Simple toggle button (VAD, etc.) */
+.cp-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cp-toggle-btn:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+
+.cp-toggle-btn--active {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--text-primary);
+}
+
+.cp-toggle-btn .cp-toggle-chip {
+  margin-left: auto;
+}
+
 .cp-accordion-chevron {
   color: var(--text-muted);
   transition: transform 0.25s ease, color 0.2s ease;

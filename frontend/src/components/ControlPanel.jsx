@@ -814,43 +814,26 @@ export default function ControlPanel({
         </div>
 
         {/* VAD Wind Profile Overlay */}
-        <div className={`cp-accordion ${vadEnabled ? "cp-accordion--active" : ""}`}>
-          <button
-            type="button"
-            className="cp-accordion-header"
-            onClick={() => setVadEnabled((v) => !v)}
-          >
-            <div className="cp-accordion-left">
-              <Layers size={14} className="cp-accordion-icon" />
-              <span className="cp-accordion-title">VAD Wind Profile</span>
-            </div>
-            <div className="cp-accordion-right">
-              <span className={`cp-toggle-chip ${vadEnabled ? "on" : ""}`}>
-                {vadEnabled ? "ON" : "OFF"}
-              </span>
-              <ChevronRight size={14} className={`cp-accordion-chevron ${vadEnabled ? "open" : ""}`} />
-            </div>
-          </button>
-          <div className={`cp-accordion-body ${vadEnabled ? "expanded" : ""}`}>
-            <div className="cp-accordion-content">
-              <p className="cp-accordion-hint">
-                Overlays NEXRAD VAD winds (green) on the hodograph from the nearest WSR-88D radar.
-                {(() => {
-                  let vLat = parseFloat(lat), vLon = parseFloat(lon);
-                  if ((!vLat || !vLon) && station) {
-                    const stn = stations.find((s) => s.id === station);
-                    if (stn) { vLat = stn.lat; vLon = stn.lon; }
-                  }
-                  if (vLat && vLon) {
-                    const rid = nearestNexradForVad(vLat, vLon);
-                    return ` Nearest radar: ${rid}`;
-                  }
-                  return "";
-                })()}
-              </p>
-            </div>
-          </div>
-        </div>
+        <button
+          type="button"
+          className={`cp-toggle-btn ${vadEnabled ? "cp-toggle-btn--active" : ""}`}
+          onClick={() => setVadEnabled((v) => !v)}
+          title={`Overlay NEXRAD VAD winds on the hodograph from the nearest WSR-88D radar${(() => {
+            let vLat = parseFloat(lat), vLon = parseFloat(lon);
+            if ((!vLat || !vLon) && station) {
+              const stn = stations.find((s) => s.id === station);
+              if (stn) { vLat = stn.lat; vLon = stn.lon; }
+            }
+            if (vLat && vLon) return ` (${nearestNexradForVad(vLat, vLon)})`;
+            return "";
+          })()}`}
+        >
+          <Layers size={14} />
+          <span>VAD Wind Profile</span>
+          <span className={`cp-toggle-chip ${vadEnabled ? "on" : ""}`}>
+            {vadEnabled ? "ON" : "OFF"}
+          </span>
+        </button>
 
         {/* Submit */}
         <button
