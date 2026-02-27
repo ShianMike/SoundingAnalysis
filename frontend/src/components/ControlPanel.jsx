@@ -148,7 +148,7 @@ export default function ControlPanel({
   }, [stations]);
 
   const needsLatLon = source === "rap" || source === "era5";
-  const needsStation = source === "obs" || source === "bufkit" || source === "acars";
+  const needsStation = source === "obs" || source === "bufkit" || source === "acars" || source === "igrav2";
   const needsModel = source === "bufkit";
   const needsWmoId = source === "igrav2";
 
@@ -225,7 +225,7 @@ export default function ControlPanel({
     const params = { source };
 
     if (needsStation) params.station = station;
-    if (needsWmoId) params.station = wmoId;
+    if (needsWmoId && wmoId) params.station = wmoId;  // WMO override
     if (needsLatLon) {
       params.lat = parseFloat(lat);
       params.lon = parseFloat(lon);
@@ -264,6 +264,8 @@ export default function ControlPanel({
     if (stn) {
       setLat(String(stn.lat));
       setLon(String(stn.lon));
+      // Auto-fill WMO ID for IGRAv2
+      if (stn.wmo) setWmoId(stn.wmo);
     }
     if (autoFetch && !loading) {
       const params = { source, station: id };
@@ -371,15 +373,15 @@ export default function ControlPanel({
                 >
                   <span className="cp-source-id">{s.id.toUpperCase()}</span>
                 </button>
-                {hoveredSource === s.id && (
-                  <div className="cp-source-card">
-                    <span className="cp-source-card-title">{SOURCE_META[s.id]?.label}</span>
-                    <span className="cp-source-card-desc">{SOURCE_META[s.id]?.desc}</span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
+          {SOURCE_META[hoveredSource || source] && (
+            <div className="cp-source-info">
+              <span className="cp-source-info-title">{SOURCE_META[hoveredSource || source].label}</span>
+              <span className="cp-source-info-desc">{SOURCE_META[hoveredSource || source].desc}</span>
+            </div>
+          )}
         </div>
 
         {/* Station */}

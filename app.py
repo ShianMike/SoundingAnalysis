@@ -79,6 +79,7 @@ def list_stations():
             "name": name,
             "lat": lat,
             "lon": lon,
+            "wmo": STATION_WMO.get(code, ""),
         })
     return jsonify(stations)
 
@@ -160,9 +161,12 @@ def get_sounding():
     if source == "obs" and (not station or station not in STATION_WMO):
         return jsonify({"error": f"Unknown station '{station}'. Provide a valid 3-letter ID."}), 400
 
-    # IGRAv2 accepts any WMO station ID
-    if source == "igrav2" and not station:
-        return jsonify({"error": "IGRAv2 requires a WMO station ID (e.g. 72451, 47646)."}), 400
+    # IGRAv2 accepts any WMO station ID; auto-convert 3-letter code if known
+    if source == "igrav2":
+        if station and station in STATION_WMO:
+            station = STATION_WMO[station]
+        if not station:
+            return jsonify({"error": "IGRAv2 requires a WMO station ID (e.g. 72451, 47646)."}), 400
 
     if source in ("rap", "era5") and lat is None and lon is None:
         if station and station in STATIONS:
