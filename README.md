@@ -252,11 +252,143 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 
 ---
 
+## Feature Comparison: Ours vs SounderPy (Gillett)
+
+A side-by-side look at what our Sounding Analysis Tool offers compared to [SounderPy](https://github.com/kylejgillett/sounderpy) (v3.1.0) by Kyle J. Gillett.
+
+### Data Sources
+
+| Capability | Ours | SounderPy |
+|---|:---:|:---:|
+| Observed radiosondes (UWyo / IEM) | ✅ | ✅ |
+| RAP model analysis (THREDDS) | ✅ | ✅ |
+| BUFKIT forecast models (ISU + PSU) | ✅ (ISU) | ✅ (ISU + PSU) |
+| ERA5 global reanalysis (CDS) | ✅ | ✅ |
+| ACARS aircraft observations | ✅ (IEM) | ✅ (OU archive) |
+| RUC reanalysis (2005–2020) | ❌ | ✅ |
+| NCEP-FNL reanalysis | ❌ | ✅ |
+| IGRAv2 global obs archive (1905–present) | ❌ | ✅ |
+| WRF output ingestion | ❌ | ✅ |
+| CM1 input_sounding ingestion | ❌ | ✅ |
+| Custom user-defined data dict | ❌ | ✅ |
+| Omega / vertical velocity (model data) | ❌ | ✅ |
+
+### Plotting & Visualization
+
+| Capability | Ours | SounderPy |
+|---|:---:|:---:|
+| Skew-T Log-P diagram | ✅ | ✅ |
+| Hodograph (color-coded by height) | ✅ | ✅ |
+| Dark mode | ✅ (default) | ✅ (optional) |
+| Light mode | ❌ | ✅ (default) |
+| Color-blind mode | ❌ | ✅ |
+| Wet-bulb temperature trace | ✅ | ✅ |
+| Virtual temperature trace | ✅ | ✅ |
+| Downdraft (DCAPE) parcel trace | ✅ | ❌ |
+| Wind barbs on Skew-T | ✅ | ✅ |
+| Key level annotations (LCL, LFC, EL) | ✅ | ✅ |
+| Height labels (km AGL) | ✅ | ✅ |
+| Radar reflectivity overlay (mosaic / single-site) | ❌ | ✅ |
+| Map inset with station location | ✅ (CONUS outline) | ✅ (with radar) |
+| Map inset zoom control | ❌ | ✅ |
+| Storm-relative wind profile panel | ✅ | ✅ |
+| Streamwise vorticity / streamwiseness panel | ✅ | ✅ |
+| Piecewise CAPE / stepwise CAPE-CIN plot | ❌ | ✅ |
+| Theta / Theta-e profile toggle | ❌ | ✅ |
+| Hodograph boundary lines | ❌ | ✅ |
+| Composite sounding (overlay multiple profiles) | ❌ | ✅ |
+| VAD (radar wind profiler) hodograph | ❌ | ✅ |
+| Storm-relative hodograph mode | ❌ | ✅ |
+
+### Parcel & Parameter Calculations
+
+| Capability | Ours | SounderPy |
+|---|:---:|:---:|
+| SB / MU / ML CAPE & CIN | ✅ | ✅ |
+| DCAPE | ✅ | ✅ |
+| ECAPE (entraining CAPE) | ❌ | ✅ |
+| Irreversible adiabatic ascent parcels | ❌ | ✅ |
+| Pseudoadiabatic ascent parcels | ✅ (implicit) | ✅ (explicit) |
+| STP, SCP, SHIP, DCP composites | ✅ | ✅ (via SHARPpy) |
+| SRH (500 m, 1 km, 3 km) | ✅ | ✅ |
+| Bulk wind difference (shear layers) | ✅ | ✅ |
+| Bunkers storm motion (RM, LM, MW) | ✅ | ✅ |
+| Custom storm motion input | ❌ | ✅ |
+| Surface modification (override sfc T/Td/wind) | ❌ | ✅ |
+| Lapse rates (0–3, 3–6 km) | ✅ | ✅ |
+| Precipitable water, freezing level, WBZ | ✅ | ✅ |
+| RH by layer | ✅ | ✅ |
+
+### Helper & Utility Tools
+
+| Capability | Ours | SounderPy |
+|---|:---:|:---:|
+| Export to CSV | ❌ | ✅ |
+| Export to CM1 format | ❌ | ✅ |
+| Export to SHARPpy format | ❌ | ✅ |
+| Profile merging (weighted average) | ❌ | ✅ |
+| Profile smoothing (Gaussian) | ❌ | ✅ |
+| Vertical interpolation utility | ✅ (internal, 100 m) | ✅ (exposed API) |
+| Print variables to console | ✅ (CLI) | ✅ |
+| Find nearest station | ✅ | ✅ |
+| Lat/lon lookup by station type | ❌ | ✅ |
+
+### Web Application Features (Ours Only)
+
+These are features that exist in our web app but have **no equivalent in SounderPy** (which is a Python library, not a web app):
+
+| Feature | Description |
+|---|---|
+| **Full-stack web app** | React frontend + Flask API, deployed on GitHub Pages + Cloud Run |
+| **Interactive station map** | Dark Leaflet map with click-to-select stations & lat/lon picking |
+| **SPC outlook overlays** | Day 1/2/3 convective outlook GeoJSON on the map |
+| **Risk scanner** | Parallel CONUS-wide scan ranking stations by STP/SCP/SHIP/DCP |
+| **Multi-sounding comparison** | Up to 4 side-by-side Skew-T plots with parameter diff table |
+| **Parameter time-series charts** | Plot CAPE, SRH, STP, shear over a date range (up to 14 days) |
+| **Sounding history** | Auto-saved last 20 soundings in localStorage, one-click reload |
+| **Favorite stations** | Pinned stations persisted in localStorage |
+| **Comparison history** | Auto-saved comparisons with reload from History panel |
+| **Feedback system** | In-app bug report / feature request modal |
+| **Download comparison PNG** | Tiles all compared sounding plots into a single image |
+
+---
+
 ## Upcoming Features
 
-- [ ] **Export Parameters to CSV** — One-click download of computed parameters and risk scan tables as CSV
+### High Priority — Parity with SounderPy
+
+- [x] **ECAPE (Entraining CAPE)** — Entraining CAPE calculations using the Peters et al. (2023) formulation; displayed on Skew-T and in parameter tables ✅
+- [x] **IGRAv2 Global Obs Archive** — IGRAv2 global radiosonde data via UWyo with auto-region detection; 15+ international stations included ✅
+- [x] **Radar Reflectivity Overlay** — NEXRAD mosaic reflectivity (IEM) toggle on the station map ✅
+- [x] **Composite Sounding Overlay** — Overlay multiple T/Td profiles + hodographs on a single Skew-T via the Comparison panel ✅
+- [x] **Surface Modification** — Override surface T, Td, wind speed/direction and re-compute all parameters ✅
+- [x] **Custom Storm Motion** — Input custom storm motion (direction + speed) for SRH/SRW recalculation ✅
+- [x] **Piecewise CAPE / Stepwise CAPE-CIN** — Layer-by-layer CAPE/CIN data computed and returned via API ✅
+
+### Medium Priority — New Capabilities
+
+- [x] **Export Parameters to CSV** — One-click CSV download of all computed thermodynamic, kinematic, and moisture parameters ✅
+- [ ] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1
+- [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
+- [ ] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS)
+- [ ] **RUC & NCEP-FNL Reanalysis** — Add RUC (2005–2020) and NCEP-FNL (2005–2020) as additional reanalysis sources
+- [ ] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph
+- [ ] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames
+- [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
+- [ ] **Color-Blind Mode** — Swap dewpoint trace from green/blue and adjust color palettes for accessibility
+- [ ] **Light Theme Toggle** — Add a light-mode theme option alongside the current dark theme
+- [ ] **Theta / Theta-e Profile Panel** — Add an optional panel showing potential temperature and equivalent potential temperature profiles
+
+### Lower Priority — Quality of Life
+
 - [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
-- [ ] **Dark/Light Theme Toggle** — Switchable color theme
+- [ ] **WRF / CM1 Data Ingestion** — Allow uploading WRF output or CM1 input_sounding files for analysis
+- [ ] **Custom Data Upload** — Let users paste or upload raw sounding data (CSV/text) for plotting
+- [ ] **PSU BUFKIT Feed** — Add Penn State's real-time BUFKIT feed as a secondary forecast model source
+- [ ] **Map Inset Zoom Control** — Adjustable zoom level for the CONUS mini-map on sounding plots
+- [ ] **Animated Time-Series Playback** — Step through time-series soundings as an animation
+- [ ] **Mobile-Optimized Sounding View** — Pinch-zoom and swipe-friendly sounding plot rendering on mobile
+- [ ] **Shareable Sounding Links** — Encode station/source/date in URL for direct sharing
 
 ---
 

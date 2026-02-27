@@ -90,6 +90,29 @@ export async function fetchCompare(soundings) {
 }
 
 /**
+ * Fetch a composite overlay plot (multiple profiles on one Skew-T).
+ */
+export async function fetchComposite(soundings) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/composite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ soundings }),
+  }, 300000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Composite request failed");
+  return data;
+}
+
+/**
+ * Fetch international (IGRAv2) station list.
+ */
+export async function fetchIntlStations() {
+  const res = await fetchWithTimeout(`${API_BASE}/api/stations/intl`);
+  if (!res.ok) throw new Error("Failed to fetch international stations");
+  return res.json();
+}
+
+/**
  * Fetch SPC convective outlook GeoJSON for a given day (1, 2, or 3).
  */
 export async function fetchSpcOutlook(day = 1) {

@@ -15,6 +15,7 @@ import {
   Droplets,
   Gauge,
   Zap,
+  FileSpreadsheet,
 } from "lucide-react";
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -237,6 +238,54 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
     );
   };
 
+  const handleCsvExport = () => {
+    const rows = [["Parameter", "Value", "Unit"]];
+    const entries = [
+      ["SB CAPE", params.sbCape, "J/kg"],
+      ["SB CIN", params.sbCin, "J/kg"],
+      ["SB LCL", params.sbLclM, "m AGL"],
+      ["MU CAPE", params.muCape, "J/kg"],
+      ["MU CIN", params.muCin, "J/kg"],
+      ["MU LCL", params.muLclM, "m AGL"],
+      ["ML CAPE", params.mlCape, "J/kg"],
+      ["ML CIN", params.mlCin, "J/kg"],
+      ["ML LCL", params.mlLclM, "m AGL"],
+      ["DCAPE", params.dcape, "J/kg"],
+      ["ECAPE", params.ecape, "J/kg"],
+      ["STP", params.stp, ""],
+      ["SCP", params.scp, ""],
+      ["SHIP", params.ship, ""],
+      ["DCP", params.dcp, ""],
+      ["LR 0-3 km", params.lr03, "C/km"],
+      ["LR 3-6 km", params.lr36, "C/km"],
+      ["PWAT", params.pwat, "mm"],
+      ["FRZ Level", params.frzLevel, "m AGL"],
+      ["WB Zero", params.wbo, "m AGL"],
+      ["RH 0-1 km", params.rh01, "%"],
+      ["RH 1-3 km", params.rh13, "%"],
+      ["RH 3-6 km", params.rh36, "%"],
+      ["BWD 0-500m", params.bwd500m, "kt"],
+      ["BWD 0-1 km", params.bwd1km, "kt"],
+      ["BWD 0-3 km", params.bwd3km, "kt"],
+      ["BWD 0-6 km", params.bwd6km, "kt"],
+      ["SRH 500m", params.srh500m, "m2/s2"],
+      ["SRH 0-1 km", params.srh1km, "m2/s2"],
+      ["SRH 0-3 km", params.srh3km, "m2/s2"],
+    ];
+    entries.forEach(([name, val, unit]) => {
+      rows.push([name, val != null ? String(val) : "", unit]);
+    });
+
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `sounding_${meta.station || "analysis"}_${meta.date.replace(/\s/g, "_")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="results-view">
       {/* Meta bar */}
@@ -262,6 +311,9 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
           </button>
           <button className="rv-btn" onClick={handleDownload} title="Download PNG">
             <Download size={14} />
+          </button>
+          <button className="rv-btn" onClick={handleCsvExport} title="Export CSV">
+            <FileSpreadsheet size={14} />
           </button>
           <button className="rv-btn" onClick={handleFullscreen} title="Fullscreen">
             <Maximize2 size={14} />
@@ -316,6 +368,7 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
           <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" />
           <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" />
           <ParamCard label="DCAPE" value={params.dcape} unit="J/kg" />
+          <ParamCard label="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" />
           <ParamCard label="STP" value={params.stp} unit="" color="#60a5fa" />
           <ParamCard label="SCP" value={params.scp} unit="" color="#f59e0b" />
           <ParamCard label="SHIP" value={params.ship} unit="" color="#10b981" />

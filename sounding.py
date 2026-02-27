@@ -965,6 +965,169 @@ def fetch_acars_sounding(airport, dt):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# IGRAv2 / GLOBAL UPPER-AIR (via UWyo with region auto-detection)
+# ─────────────────────────────────────────────────────────────────────
+# UWyo region codes by geographic area
+_UWYO_REGIONS = {
+    "naconf": {"lat": (15, 75), "lon": (-170, -50)},   # North America
+    "samer":  {"lat": (-60, 15), "lon": (-90, -30)},    # South America
+    "europe": {"lat": (35, 75), "lon": (-15, 45)},      # Europe
+    "africa": {"lat": (-40, 40), "lon": (-20, 55)},     # Africa
+    "mideast":{"lat": (10, 45), "lon": (25, 65)},       # Middle East
+    "seasia": {"lat": (-15, 55), "lon": (60, 150)},     # South-East Asia
+    "pac":    {"lat": (-50, 50), "lon": (140, -120)},   # Pacific
+    "nz":     {"lat": (-55, -25), "lon": (155, 180)},   # New Zealand / Oceania
+    "ant":    {"lat": (-90, -60), "lon": (-180, 180)},  # Antarctic
+    "np":     {"lat": (60, 90), "lon": (-180, 180)},    # Arctic
+}
+
+# A set of commonly used international radiosonde stations (WMO ID, Name, Lat, Lon)
+INTL_STATIONS = {
+    # Europe
+    "03953": ("Camborne, UK", 50.22, -5.32),
+    "10868": ("Munich, Germany", 48.25, 11.55),
+    "16245": ("Pratica di Mare, Italy", 41.66, 12.43),
+    "07145": ("Trappes, France", 48.77, 2.01),
+    "08221": ("Madrid, Spain", 40.45, -3.55),
+    # Asia
+    "47918": ("Manila, Philippines", 14.52, 121.00),
+    "48455": ("Singapore", 1.37, 103.98),
+    "47646": ("Tokyo, Japan", 35.69, 139.77),
+    "58362": ("Shanghai, China", 31.40, 121.46),
+    "43003": ("New Delhi, India", 28.58, 77.21),
+    # South America
+    "83779": ("Sao Paulo, Brazil", -23.50, -46.62),
+    "87576": ("Buenos Aires, Argentina", -34.82, -58.53),
+    # Australia / Oceania
+    "94866": ("Melbourne, Australia", -37.67, 144.83),
+    "94120": ("Darwin, Australia", -12.42, 130.89),
+    "93417": ("Auckland, NZ", -36.79, 174.63),
+    # Africa
+    "60390": ("Casablanca, Morocco", 33.57, -7.67),
+    "63741": ("Nairobi, Kenya", -1.30, 36.75),
+    "68816": ("Cape Town, South Africa", -33.97, 18.60),
+}
+
+
+def _detect_uwyo_region(lat, lon):
+    """Detect UWyo region code from lat/lon coordinates."""
+    for region, bounds in _UWYO_REGIONS.items():
+        lat_min, lat_max = bounds["lat"]
+        lon_min, lon_max = bounds["lon"]
+        # Handle date-line wrapping for Pacific
+        if lon_min > lon_max:
+            if lat_min <= lat <= lat_max and (lon >= lon_min or lon <= lon_max):
+                return region
+        else:
+            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
+                return region
+    return "naconf"  # default fallback
+
+
+def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
+    """
+    Fetch a global upper-air sounding via UWyo for any WMO station ID.
+    Automatically detects the correct UWyo region from coordinates.
+    Falls back to naconf if coordinates not provided.
+    """
+    # Determine region from station coordinates or provided lat/lon
+    _lat = lat
+    _lon = lon
+    if _lat is None or _lon is None:
+        if wmo_id in INTL_STATIONS:
+            _, _lat, _lon = INTL_STATIONS[wmo_id]
+        else:
+            # Try to find in our US stations by WMO lookup
+            for sid, wmo in STATION_WMO.items():
+                if str(wmo) == str(wmo_id):
+                    _, _lat, _lon = STATIONS[sid]
+                    break
+
+    region = _detect_uwyo_region(_lat, _lon) if _lat is not None else "naconf"
+    print(f"  IGRAv2: WMO={wmo_id}, region={region}, lat={_lat}, lon={_lon}")
+
+    url = (
+        f"https://weather.uwyo.edu/cgi-bin/sounding.py?"
+        f"region={region}&TYPE=TEXT%3ALIST&YEAR={dt.year}&MONTH={dt.month:02d}"
+        f"&FROM={dt.day:02d}{dt.hour:02d}&TO={dt.day:02d}{dt.hour:02d}"
+        f"&STNM={wmo_id}"
+    )
+
+    print(f"  Fetching from UWyo (global): {url}")
+    resp = requests.get(url, timeout=25)
+    resp.raise_for_status()
+    html = resp.text
+
+    if "Can't get" in html or "No data" in html:
+        raise ValueError(f"No IGRAv2/UWyo data for WMO {wmo_id} at {dt}")
+
+    pre_start = html.find("<pre>")
+    pre_end = html.find("</pre>")
+    if pre_start == -1 or pre_end == -1:
+        raise ValueError("Could not parse sounding data from UWyo response")
+
+    raw = html[pre_start+5:pre_end].strip()
+    lines = raw.split("\n")
+
+    header_idx = None
+    data_start = None
+    for i, line in enumerate(lines):
+        if "PRES" in line and "HGHT" in line and "TEMP" in line:
+            header_idx = i
+        if header_idx is not None and line.strip().startswith("---"):
+            data_start = i + 1
+            break
+
+    if data_start is None:
+        raise ValueError("Could not find data in sounding response")
+
+    pressure, height, temp, dewpoint, wind_dir, wind_spd = [], [], [], [], [], []
+
+    for line in lines[data_start:]:
+        line = line.strip()
+        if not line or line.startswith("</pre>"):
+            break
+        parts = line.split()
+        if len(parts) < 7:
+            continue
+        try:
+            pv = float(parts[0]); hv = float(parts[1]); tv = float(parts[2])
+            tdv = float(parts[3]); wdv = float(parts[5]); wsv = float(parts[6])
+            pressure.append(pv); height.append(hv); temp.append(tv)
+            dewpoint.append(tdv); wind_dir.append(wdv); wind_spd.append(wsv)
+        except (ValueError, IndexError):
+            continue
+
+    if len(pressure) < 5:
+        raise ValueError(f"Insufficient data ({len(pressure)} levels) from IGRAv2/UWyo")
+
+    station_name = INTL_STATIONS.get(wmo_id, (f"WMO {wmo_id}", _lat or 0, _lon or 0))[0]
+    station_info = {"lat": _lat or 0, "lon": _lon or 0, "name": station_name}
+
+    # Parse station info from HTML
+    info_start = html.find("Station number:")
+    if info_start > -1:
+        info_block = html[info_start:info_start+500]
+        for info_line in info_block.split("\n"):
+            if "Station latitude:" in info_line:
+                try: station_info["lat"] = float(info_line.split(":")[-1].strip())
+                except: pass
+            if "Station longitude:" in info_line:
+                try: station_info["lon"] = float(info_line.split(":")[-1].strip())
+                except: pass
+
+    return {
+        "pressure":       np.array(pressure) * units.hPa,
+        "height":         np.array(height) * units.meter,
+        "temperature":    np.array(temp) * units.degC,
+        "dewpoint":       np.array(dewpoint) * units.degC,
+        "wind_direction": np.array(wind_dir) * units.degree,
+        "wind_speed":     np.array(wind_spd) * units.knot,
+        "station_info":   station_info,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 # UNIFIED FETCH DISPATCHER
 # ─────────────────────────────────────────────────────────────────────
 # Recognised source keywords (for --source flag / interactive menu)
@@ -974,6 +1137,7 @@ DATA_SOURCES = {
     "bufkit": "BUFKIT forecast models - station-based (Iowa State)",
     "era5":   "ERA5 global reanalysis - any lat/lon, 1940-present (CDS API)",
     "acars":  "ACARS/AMDAR aircraft obs - airport-based (IEM)",
+    "igrav2": "IGRAv2 Global Radiosonde Archive - any WMO station worldwide (via UWyo)",
 }
 
 
@@ -1051,6 +1215,13 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
         if not airport:
             raise ValueError("ACARS source requires --station (airport code).")
         return fetch_acars_sounding(airport, dt)
+
+    # ── IGRAv2 (Global) ─────────────────────────────────────────────
+    if source == "igrav2":
+        wmo_id = station_id or ""
+        if not wmo_id:
+            raise ValueError("IGRAv2 source requires a WMO station ID (e.g. 72451, 47646).")
+        return fetch_igrav2_sounding(wmo_id, dt, lat=lat, lon=lon)
 
     raise ValueError(
         f"Unknown source '{source}'. Options: {list(DATA_SOURCES.keys())}"
@@ -1288,16 +1459,44 @@ def find_highest_tornado_risk(dt, stations=None):
 # ─────────────────────────────────────────────────────────────────────
 # CALCULATIONS
 # ─────────────────────────────────────────────────────────────────────
-def compute_parameters(data):
-    """Compute a comprehensive set of thermodynamic & kinematic parameters."""
+def compute_parameters(data, storm_motion=None, surface_mod=None):
+    """Compute a comprehensive set of thermodynamic & kinematic parameters.
+
+    Parameters
+    ----------
+    data : dict
+        Sounding data with pressure, temperature, dewpoint, height, wind_direction, wind_speed.
+    storm_motion : dict or None
+        Custom storm motion override: {"direction": degrees, "speed": knots}.
+        When provided, overrides the Bunkers right-mover storm motion.
+    surface_mod : dict or None
+        Surface modification: {"temperature": °C, "dewpoint": °C,
+        "wind_speed": knots, "wind_direction": degrees}.
+        When provided, replaces surface-level values before computation.
+    """
     p = data["pressure"]
-    T = data["temperature"]
-    Td = data["dewpoint"]
+    T = data["temperature"].copy()
+    Td = data["dewpoint"].copy()
     h = data["height"]
-    wdir = data["wind_direction"]
-    wspd = data["wind_speed"]
-    
+    wdir = data["wind_direction"].copy()
+    wspd = data["wind_speed"].copy()
+
+    # ── Surface modification ─────────────────────────────────────────
+    if surface_mod:
+        if surface_mod.get("temperature") is not None:
+            T[0] = units.Quantity(float(surface_mod["temperature"]), "degC")
+        if surface_mod.get("dewpoint") is not None:
+            Td[0] = units.Quantity(float(surface_mod["dewpoint"]), "degC")
+        if surface_mod.get("wind_speed") is not None:
+            wspd[0] = units.Quantity(float(surface_mod["wind_speed"]), "knot")
+        if surface_mod.get("wind_direction") is not None:
+            wdir[0] = units.Quantity(float(surface_mod["wind_direction"]), "degree")
+        params_mod_applied = True
+    else:
+        params_mod_applied = False
+
     params = {}
+    params["surface_modified"] = params_mod_applied
     
     # Wind components
     u, v = mpcalc.wind_components(wspd, wdir)
@@ -1440,6 +1639,22 @@ def compute_parameters(data):
         params["rm_u"] = params["rm_v"] = 0 * units("m/s")
         params["lm_u"] = params["lm_v"] = 0 * units("m/s")
         params["mw_u"] = params["mw_v"] = 0 * units("m/s")
+
+    # ── Custom storm motion override ─────────────────────────────────
+    if storm_motion and storm_motion.get("direction") is not None and storm_motion.get("speed") is not None:
+        try:
+            sm_dir = float(storm_motion["direction"]) * units.degree
+            sm_spd = float(storm_motion["speed"]) * units.knot
+            sm_u, sm_v = mpcalc.wind_components(sm_spd, sm_dir)
+            params["rm_u"] = sm_u.to("m/s")
+            params["rm_v"] = sm_v.to("m/s")
+            params["custom_storm_motion"] = True
+            print(f"  Using custom storm motion: {sm_dir.magnitude}° @ {sm_spd.magnitude} kt")
+        except Exception as e:
+            print(f"  Warning: Custom storm motion failed: {e}")
+            params["custom_storm_motion"] = False
+    else:
+        params["custom_storm_motion"] = False
     
     # Storm-relative helicity (0-500m, 0-1km, 0-3km) on interpolated grid
     try:
@@ -1593,7 +1808,63 @@ def compute_parameters(data):
         )
     except:
         params["dcp"] = 0
-    
+
+    # ── ECAPE (Entraining CAPE) — Peters et al. 2023 ─────────────────
+    # Simplified analytic approximation:
+    #   ECAPE ≈ MUCAPE² / (MUCAPE + 2σ² V̄²_sr)
+    # where σ ≈ 1.6, V̄_sr = mean 0-6 km storm-relative wind speed
+    try:
+        _mu_cape_ecape = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        if _mu_cape_ecape > 0 and params.get("rm_u") is not None:
+            _rm_u_ms = params["rm_u"].to("m/s").magnitude
+            _rm_v_ms = params["rm_v"].to("m/s").magnitude
+            _u_interp_ms = u_interp.to("m/s").magnitude
+            _v_interp_ms = v_interp.to("m/s").magnitude
+            _mask_06_ecape = h_interp.magnitude <= 6000.0
+            _sr_u = _u_interp_ms[_mask_06_ecape] - _rm_u_ms
+            _sr_v = _v_interp_ms[_mask_06_ecape] - _rm_v_ms
+            _vsr_mean_sq = np.mean(_sr_u**2 + _sr_v**2)
+            _sigma = 1.6
+            _ecape = _mu_cape_ecape**2 / (_mu_cape_ecape + 2.0 * _sigma**2 * _vsr_mean_sq)
+            params["ecape"] = round(max(_ecape, 0), 1)
+        else:
+            params["ecape"] = 0
+    except Exception as e:
+        print(f"  Warning: ECAPE calc failed: {e}")
+        params["ecape"] = 0
+
+    # ── Piecewise CAPE (500 hPa layers from LFC to EL) ──────────────
+    try:
+        _pw_layers = []
+        _mu_cape_pw = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        if _mu_cape_pw > 0 and params.get("mu_profile") is not None:
+            _T_env = T.magnitude
+            _T_parcel = params["mu_profile"].magnitude
+            _p_arr = p.magnitude
+            _h_arr = h.magnitude
+            # Define layers by pressure: each ~50 hPa thick from 900 to 200 hPa
+            _layer_edges = list(range(900, 150, -50))
+            for i in range(len(_layer_edges) - 1):
+                _p_top = _layer_edges[i + 1]
+                _p_bot = _layer_edges[i]
+                _mask_pw = (_p_arr <= _p_bot) & (_p_arr >= _p_top)
+                if np.sum(_mask_pw) < 2:
+                    continue
+                _buoy = _T_parcel[_mask_pw] - _T_env[_mask_pw]
+                _pos = np.sum(_buoy[_buoy > 0]) * 9.81 / 273.15  # crude integration
+                _neg = np.sum(_buoy[_buoy < 0]) * 9.81 / 273.15
+                if abs(_pos) > 0.1 or abs(_neg) > 0.1:
+                    _pw_layers.append({
+                        "p_bot": _p_bot,
+                        "p_top": _p_top,
+                        "cape": round(float(_pos * 50.0), 1),  # scale by layer thickness
+                        "cin": round(float(_neg * 50.0), 1),
+                    })
+        params["piecewise_cape"] = _pw_layers
+    except Exception as e:
+        print(f"  Warning: Piecewise CAPE calc failed: {e}")
+        params["piecewise_cape"] = []
+
     # Freezing level (AGL)
     try:
         zero_crossings = np.where(np.diff(np.sign(T.magnitude)))[0]
@@ -2378,19 +2649,21 @@ def plot_sounding(data, params, station_id, dt):
     rh_13 = f"{params.get('rh_1_3km', 0):.0f}%" if params.get('rh_1_3km') else "---"
     rh_36 = f"{params.get('rh_3_6km', 0):.0f}%" if params.get('rh_3_6km') else "---"
     stp_v = fv(params.get("stp"), "", 1)
+    ecape_v = f"{params.get('ecape', 0)} J/kg" if params.get('ecape') else "0 J/kg"
     
     # Rows: (text, color, y_position) — tightly spaced
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.87),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", "#ff8800", 0.77),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", FG, 0.67),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", "#dd44dd", 0.57),
-        (f"   DCAPE: {dcape_v}", FG_DIM, 0.47),
-        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.37),
-        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.27),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.17),
-        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.07),
+        (header, FG_FAINT, 0.88),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", "#ff8800", 0.79),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", FG, 0.70),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", "#dd44dd", 0.61),
+        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.52),
+        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.43),
+        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.34),
+        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.25),
+        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.14),
+        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.04),
     ]
     
     for text, color, y_pos in thermo_rows:
@@ -2483,6 +2756,111 @@ def plot_sounding(data, params, station_id, dt):
              fontsize=8.5, color=ACCENT, ha="right", va="bottom",
              fontfamily="monospace", fontweight="bold")
     
+    return fig
+
+
+def plot_composite_sounding(profiles, title="Composite Sounding Overlay"):
+    """
+    Plot multiple sounding profiles overlaid on a single Skew-T.
+
+    Parameters
+    ----------
+    profiles : list of dict
+        Each dict has: {"data": sounding_data, "params": computed_params,
+                        "label": str, "color": str (optional)}
+    title : str
+        Plot title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    BG        = "#0d0d0d"
+    FG        = "#e8e8e8"
+    FG_DIM    = "#b0b0b0"
+    GRID_CLR  = "#333333"
+    BORDER    = "#444444"
+    PALETTE   = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7",
+                 "#ec4899", "#06b6d4", "#84cc16"]
+
+    fig = plt.figure(figsize=(14, 12), facecolor=BG)
+    fig.patch.set_facecolor(BG)
+
+    gs = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[2.2, 1],
+                           hspace=0.1, wspace=0.12,
+                           left=0.06, right=0.96, top=0.93, bottom=0.06)
+
+    fig.suptitle(title, fontsize=15, fontweight="bold",
+                 color=FG, y=0.98, fontfamily="monospace")
+
+    # ── Skew-T ──
+    skew = SkewT(fig, rotation=40, subplot=gs[0])
+    skew.ax.set_facecolor(BG)
+    skew.ax.set_aspect('auto')
+    for spine in skew.ax.spines.values():
+        spine.set_color(BORDER)
+    skew.ax.tick_params(colors=FG_DIM, labelsize=8)
+    skew.ax.set_xlabel("Temperature (°C)", color=FG_DIM, fontsize=9, fontfamily="monospace")
+    skew.ax.set_ylabel("Pressure (hPa)", color=FG_DIM, fontsize=9, fontfamily="monospace")
+    skew.ax.set_xlim(-40, 50)
+    skew.ax.set_ylim(1050, 100)
+
+    # Reference lines
+    for t in range(-30, 40, 10):
+        skew.ax.axvline(t, color=GRID_CLR, linestyle=":", linewidth=0.5, alpha=0.5)
+    try:
+        skew.plot_dry_adiabats(colors=GRID_CLR, linewidths=0.4, alpha=0.3)
+        skew.plot_moist_adiabats(colors=GRID_CLR, linewidths=0.4, alpha=0.3)
+        skew.plot_mixing_lines(colors=GRID_CLR, linewidths=0.4, alpha=0.3)
+    except:
+        pass
+
+    legend_entries = []
+    for i, prof in enumerate(profiles):
+        color = prof.get("color", PALETTE[i % len(PALETTE)])
+        label = prof.get("label", f"Profile {i+1}")
+        data = prof["data"]
+        p = data["pressure"]
+        T = data["temperature"]
+        Td = data["dewpoint"]
+
+        skew.plot(p, T, color=color, linewidth=1.8, alpha=0.9)
+        skew.plot(p, Td, color=color, linewidth=1.2, alpha=0.6, linestyle="--")
+        legend_entries.append((color, label))
+
+    # ── Hodograph ──
+    ax_hodo = fig.add_subplot(gs[1], projection="polar")
+    ax_hodo.set_facecolor(BG)
+    # Convert to non-polar for hodograph
+    fig.delaxes(ax_hodo)
+    ax_hodo = fig.add_subplot(gs[1])
+    ax_hodo.set_facecolor(BG)
+    ax_hodo.set_aspect("equal")
+    for spine in ax_hodo.spines.values():
+        spine.set_color(BORDER)
+    ax_hodo.tick_params(colors=FG_DIM, labelsize=7)
+    ax_hodo.set_title("Hodograph Overlay", color=FG, fontsize=10,
+                       fontfamily="monospace", fontweight="bold")
+
+    for i, prof in enumerate(profiles):
+        color = prof.get("color", PALETTE[i % len(PALETTE)])
+        data = prof["data"]
+        params = prof.get("params", {})
+        if params.get("u") is not None and params.get("v") is not None:
+            u_kt = params["u"].to("knot").magnitude
+            v_kt = params["v"].to("knot").magnitude
+            ax_hodo.plot(u_kt, v_kt, color=color, linewidth=1.5, alpha=0.8)
+
+    ax_hodo.axhline(0, color=GRID_CLR, linewidth=0.5)
+    ax_hodo.axvline(0, color=GRID_CLR, linewidth=0.5)
+    ax_hodo.set_xlabel("U (kt)", color=FG_DIM, fontsize=8, fontfamily="monospace")
+    ax_hodo.set_ylabel("V (kt)", color=FG_DIM, fontsize=8, fontfamily="monospace")
+
+    # ── Legend ──
+    for i, (color, label) in enumerate(legend_entries):
+        fig.text(0.06, 0.03 - i * 0.018, f"━━ {label}",
+                 fontsize=9, color=color, fontfamily="monospace", fontweight="bold")
+
     return fig
 
 
