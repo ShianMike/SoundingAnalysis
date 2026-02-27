@@ -17,6 +17,8 @@ import {
   GitCompareArrows,
   MessageSquarePlus,
   Github,
+  Thermometer,
+  Wind,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -42,6 +44,10 @@ const SOURCE_META = {
   acars: {
     label: "ACARS Aircraft Obs",
     desc: "ACARS/AMDAR aircraft observation profiles at major airports from the IEM archive.",
+  },
+  igrav2: {
+    label: "IGRAv2 Global",
+    desc: "IGRA v2 global radiosonde archive via UWyo. Enter a WMO station ID for any station worldwide.",
   },
 };
 
@@ -86,6 +92,21 @@ export default function ControlPanel({
   const [soundingHour, setSoundingHour] = useState("12");
   const listRef = useRef(null);
 
+  // Surface modification state
+  const [sfcModEnabled, setSfcModEnabled] = useState(false);
+  const [sfcModT, setSfcModT] = useState("");
+  const [sfcModTd, setSfcModTd] = useState("");
+  const [sfcModWspd, setSfcModWspd] = useState("");
+  const [sfcModWdir, setSfcModWdir] = useState("");
+
+  // Custom storm motion state
+  const [smEnabled, setSmEnabled] = useState(false);
+  const [smDirection, setSmDirection] = useState("");
+  const [smSpeed, setSmSpeed] = useState("");
+
+  // IGRAv2 WMO ID input
+  const [wmoId, setWmoId] = useState("");
+
   // Sync source to parent
   const setSource = (src) => {
     setSourceLocal(src);
@@ -129,6 +150,7 @@ export default function ControlPanel({
   const needsLatLon = source === "rap" || source === "era5";
   const needsStation = source === "obs" || source === "bufkit" || source === "acars";
   const needsModel = source === "bufkit";
+  const needsWmoId = source === "igrav2";
 
   // Build risk lookup from scan results
   const riskMap = {};
@@ -203,6 +225,7 @@ export default function ControlPanel({
     const params = { source };
 
     if (needsStation) params.station = station;
+    if (needsWmoId) params.station = wmoId;
     if (needsLatLon) {
       params.lat = parseFloat(lat);
       params.lon = parseFloat(lon);
@@ -211,6 +234,24 @@ export default function ControlPanel({
     if (needsModel) {
       params.model = model;
       params.fhour = parseInt(fhour) || 0;
+    }
+
+    // Surface modification
+    if (sfcModEnabled) {
+      const mod = {};
+      if (sfcModT !== "") mod.temperature = parseFloat(sfcModT);
+      if (sfcModTd !== "") mod.dewpoint = parseFloat(sfcModTd);
+      if (sfcModWspd !== "") mod.wind_speed = parseFloat(sfcModWspd);
+      if (sfcModWdir !== "") mod.wind_direction = parseFloat(sfcModWdir);
+      if (Object.keys(mod).length > 0) params.surfaceMod = mod;
+    }
+
+    // Custom storm motion
+    if (smEnabled && smDirection !== "" && smSpeed !== "") {
+      params.stormMotion = {
+        direction: parseFloat(smDirection),
+        speed: parseFloat(smSpeed),
+      };
     }
 
     onSubmit(params);
@@ -594,6 +635,83 @@ export default function ControlPanel({
                 Leave blank to use the most recent time
               </p>
             </>
+          )}
+        </div>
+
+        {/* IGRAv2 WMO Station ID */}
+        {needsWmoId && (
+          <div className="cp-section">
+            <label className="cp-label">
+              <Database size={14} />
+              WMO Station ID
+            </label>
+            <input
+              type="text"
+              className="cp-input"
+              placeholder="e.g. 72451, 47646"
+              value={wmoId}
+              onChange={(e) => setWmoId(e.target.value)}
+              required
+            />
+            <p className="cp-hint">
+              Enter any WMO station number for global radiosonde data
+            </p>
+          </div>
+        )}
+
+        {/* Surface Modification */}
+        <div className="cp-section">
+          <button
+            type="button"
+            className={`cp-toggle-inline ${sfcModEnabled ? "active" : ""}`}
+            onClick={() => setSfcModEnabled((v) => !v)}
+          >
+            <Thermometer size={12} />
+            Surface Modification {sfcModEnabled ? "ON" : "OFF"}
+          </button>
+          {sfcModEnabled && (
+            <div className="cp-mod-grid">
+              <div className="cp-field">
+                <span className="cp-field-label">T (°C)</span>
+                <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="Sfc T" value={sfcModT} onChange={(e) => setSfcModT(e.target.value)} />
+              </div>
+              <div className="cp-field">
+                <span className="cp-field-label">Td (°C)</span>
+                <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="Sfc Td" value={sfcModTd} onChange={(e) => setSfcModTd(e.target.value)} />
+              </div>
+              <div className="cp-field">
+                <span className="cp-field-label">Wind (kt)</span>
+                <input type="number" step="1" className="cp-input cp-input-sm" placeholder="Speed" value={sfcModWspd} onChange={(e) => setSfcModWspd(e.target.value)} />
+              </div>
+              <div className="cp-field">
+                <span className="cp-field-label">Dir (°)</span>
+                <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="Dir" value={sfcModWdir} onChange={(e) => setSfcModWdir(e.target.value)} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Custom Storm Motion */}
+        <div className="cp-section">
+          <button
+            type="button"
+            className={`cp-toggle-inline ${smEnabled ? "active" : ""}`}
+            onClick={() => setSmEnabled((v) => !v)}
+          >
+            <Wind size={12} />
+            Custom Storm Motion {smEnabled ? "ON" : "OFF"}
+          </button>
+          {smEnabled && (
+            <div className="cp-mod-grid">
+              <div className="cp-field">
+                <span className="cp-field-label">Dir (°)</span>
+                <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="Direction" value={smDirection} onChange={(e) => setSmDirection(e.target.value)} />
+              </div>
+              <div className="cp-field">
+                <span className="cp-field-label">Speed (kt)</span>
+                <input type="number" step="1" className="cp-input cp-input-sm" placeholder="Speed" value={smSpeed} onChange={(e) => setSmSpeed(e.target.value)} />
+              </div>
+            </div>
           )}
         </div>
 

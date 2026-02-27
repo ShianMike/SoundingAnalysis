@@ -12,7 +12,7 @@ import {
   Search,
   Download,
 } from "lucide-react";
-import { fetchCompare } from "../api";
+import { fetchCompare, fetchComposite } from "../api";
 import { saveCompareToHistory } from "../history";
 import "./ComparisonView.css";
 
@@ -25,6 +25,7 @@ const PARAM_GROUPS = [
       { key: "scp", label: "SCP" },
       { key: "ship", label: "SHIP" },
       { key: "dcp", label: "DCP" },
+      { key: "ecape", label: "ECAPE", unit: "J/kg" },
     ],
   },
   {
@@ -200,7 +201,7 @@ function getHighlightClass(key, value, allValues) {
 
   // Higher is "more significant" for these params
   const higherIsBolder = [
-    "stp", "scp", "ship", "dcp", "sbCape", "muCape", "mlCape", "dcape",
+    "stp", "scp", "ship", "dcp", "ecape", "sbCape", "muCape", "mlCape", "dcape",
     "bwd1km", "bwd3km", "bwd6km", "srh500m", "srh1km", "srh3km",
     "lr03", "lr36", "pwat",
   ];
@@ -227,6 +228,8 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [compositeImage, setCompositeImage] = useState(null);
+  const [compositeLoading, setCompositeLoading] = useState(false);
 
   // Load from history if provided
   useEffect(() => {
@@ -277,6 +280,34 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleComposite = async () => {
+    const valid = slots.filter((s) => s.station);
+    if (valid.length < 2) {
+      setError("Select at least 2 stations for the overlay.");
+      return;
+    }
+
+    setCompositeLoading(true);
+    setError(null);
+    setCompositeImage(null);
+
+    try {
+      const soundings = valid.map((s) => {
+        const params = { source: s.source, station: s.station };
+        if (s.date) {
+          params.date = s.date.replace(/[-T:]/g, "").slice(0, 10);
+        }
+        return params;
+      });
+      const data = await fetchComposite(soundings);
+      setCompositeImage(data.image);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCompositeLoading(false);
     }
   };
 
@@ -355,24 +386,44 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
         )}
       </div>
 
-      {/* Compare button */}
-      <button
-        className="cv-compare-btn"
-        onClick={handleCompare}
-        disabled={loading || slots.filter((s) => s.station).length < 2}
-      >
-        {loading ? (
-          <>
-            <Loader2 size={16} className="spin" />
-            Fetching soundings...
-          </>
-        ) : (
-          <>
-            <GitCompareArrows size={16} />
-            Compare ({slots.filter((s) => s.station).length})
-          </>
-        )}
-      </button>
+      {/* Compare and Composite buttons */}
+      <div className="cv-action-row" style={{ display: "flex", gap: "8px" }}>
+        <button
+          className="cv-compare-btn"
+          onClick={handleCompare}
+          disabled={loading || compositeLoading || slots.filter((s) => s.station).length < 2}
+        >
+          {loading ? (
+            <>
+              <Loader2 size={16} className="spin" />
+              Fetching soundings...
+            </>
+          ) : (
+            <>
+              <GitCompareArrows size={16} />
+              Compare ({slots.filter((s) => s.station).length})
+            </>
+          )}
+        </button>
+        <button
+          className="cv-compare-btn cv-composite-btn"
+          onClick={handleComposite}
+          disabled={loading || compositeLoading || slots.filter((s) => s.station).length < 2}
+          title="Overlay all profiles on a single Skew-T"
+        >
+          {compositeLoading ? (
+            <>
+              <Loader2 size={16} className="spin" />
+              Generating overlay...
+            </>
+          ) : (
+            <>
+              <GitCompareArrows size={16} />
+              Overlay
+            </>
+          )}
+        </button>
+      </div>
 
       {error && (
         <div className="cv-error">
@@ -478,6 +529,37 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Composite overlay image */}
+      {compositeImage && (
+        <div className="cv-results">
+          <div className="cv-results-actions">
+            <span style={{ color: "#60a5fa", fontWeight: 600, fontSize: 13 }}>
+              Composite Overlay
+            </span>
+            <button
+              className="cv-download-btn"
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = `data:image/png;base64,${compositeImage}`;
+                link.download = "composite_sounding_overlay.png";
+                link.click();
+              }}
+              title="Download composite overlay"
+            >
+              <Download size={14} />
+              Download Overlay
+            </button>
+          </div>
+          <div className="cv-composite-plot">
+            <img
+              src={`data:image/png;base64,${compositeImage}`}
+              alt="Composite sounding overlay"
+              style={{ width: "100%", borderRadius: 8 }}
+            />
           </div>
         </div>
       )}

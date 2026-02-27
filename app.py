@@ -83,6 +83,16 @@ def list_stations():
     return jsonify(stations)
 
 
+@app.route("/api/stations/intl", methods=["GET"])
+def list_intl_stations():
+    """Return IGRAv2 international stations for the global source."""
+    from sounding import INTL_STATIONS
+    stations = []
+    for wmo_id, (name, lat, lon) in sorted(INTL_STATIONS.items()):
+        stations.append({"id": wmo_id, "name": name, "lat": lat, "lon": lon})
+    return jsonify(stations)
+
+
 @app.route("/api/sources", methods=["GET"])
 def list_sources():
     """Return available data sources and BUFKIT models."""
@@ -125,6 +135,8 @@ def get_sounding():
     lon = body.get("lon")
     model = body.get("model", "rap")
     fhour = body.get("fhour", 0)
+    storm_motion = body.get("stormMotion")     # {direction, speed} or null
+    surface_mod = body.get("surfaceMod")       # {temperature, dewpoint, wind_speed, wind_direction} or null
 
     # Parse date
     if date_str:
@@ -148,6 +160,10 @@ def get_sounding():
     if source == "obs" and (not station or station not in STATION_WMO):
         return jsonify({"error": f"Unknown station '{station}'. Provide a valid 3-letter ID."}), 400
 
+    # IGRAv2 accepts any WMO station ID
+    if source == "igrav2" and not station:
+        return jsonify({"error": "IGRAv2 requires a WMO station ID (e.g. 72451, 47646)."}), 400
+
     if source in ("rap", "era5") and lat is None and lon is None:
         if station and station in STATIONS:
             _, lat, lon = STATIONS[station]
@@ -167,7 +183,7 @@ def get_sounding():
         )
 
         # 2) Compute
-        params = compute_parameters(data)
+        params = compute_parameters(data, storm_motion=storm_motion, surface_mod=surface_mod)
 
         # 3) Plot → base64 PNG
         plot_id = station or source.upper()
@@ -225,6 +241,10 @@ def _serialize_params(params, data, station, dt, source):
         "scp": round(params.get("scp", 0), 1),
         "ship": round(params.get("ship", 0), 1),
         "dcp": round(params.get("dcp", 0), 1),
+        "ecape": round(params.get("ecape", 0), 1),
+        "piecewiseCape": params.get("piecewise_cape", []),
+        "surfaceModified": params.get("surface_modified", False),
+        "customStormMotion": params.get("custom_storm_motion", False),
         "rh01": round(params["rh_0_1km"]) if params.get("rh_0_1km") is not None else None,
         "rh13": round(params["rh_1_3km"]) if params.get("rh_1_3km") is not None else None,
         "rh36": round(params["rh_3_6km"]) if params.get("rh_3_6km") is not None else None,
@@ -552,6 +572,93 @@ def compare_soundings():
         # Sort by original order
         results.sort(key=lambda x: x[0])
         return jsonify({"soundings": [r[1] for r in results]})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/composite", methods=["POST", "OPTIONS"])
+def composite_sounding():
+    """
+    Generate a composite overlay plot with multiple soundings on one Skew-T.
+
+    Expected JSON body:
+      {
+        "soundings": [
+          { "source": "obs", "station": "OUN", "date": "2024061200" },
+          { "source": "obs", "station": "FWD", "date": "2024061200" },
+          ...
+        ]
+      }
+    Max 6 soundings.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True)
+    items = body.get("soundings", [])
+
+    if not items or not isinstance(items, list):
+        return jsonify({"error": "Provide a 'soundings' array."}), 400
+    if len(items) > 6:
+        return jsonify({"error": "Maximum 6 soundings per composite."}), 400
+
+    from sounding import plot_composite_sounding
+
+    profiles = []
+    errors = []
+    for item in items:
+        try:
+            src = item.get("source", "obs").lower()
+            stn = item.get("station")
+            date_str = item.get("date")
+            lat_v = item.get("lat")
+            lon_v = item.get("lon")
+            mdl = item.get("model", "rap")
+            fhr = item.get("fhour", 0)
+
+            if date_str:
+                dt = datetime.strptime(str(date_str), "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            else:
+                dt = get_latest_sounding_time()
+
+            if src == "obs" and stn is None and lat_v is not None and lon_v is not None:
+                stn = find_nearest_station(lat_v, lon_v)
+            if stn:
+                stn = stn.upper()
+
+            if src in ("rap", "era5") and lat_v is None and lon_v is None:
+                if stn and stn in STATIONS:
+                    _, lat_v, lon_v = STATIONS[stn]
+
+            data = fetch_sounding(
+                station_id=stn, dt=dt, source=src,
+                lat=lat_v, lon=lon_v, model=mdl, fhour=fhr,
+            )
+            params = compute_parameters(data)
+
+            label = f"{stn or src.upper()} {dt.strftime('%d/%HZ')}"
+            profiles.append({"data": data, "params": params, "label": label})
+        except Exception as ex:
+            errors.append({"item": item, "error": str(ex)})
+
+    if not profiles:
+        return jsonify({"error": "All soundings failed to fetch.", "details": errors}), 500
+
+    try:
+        fig = plot_composite_sounding(profiles, title="Composite Sounding Overlay")
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor="#0d0d0d")
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+        return jsonify({
+            "image": image_b64,
+            "count": len(profiles),
+            "errors": errors if errors else None,
+        })
 
     except Exception as e:
         traceback.print_exc()

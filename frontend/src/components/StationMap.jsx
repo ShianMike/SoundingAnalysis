@@ -99,6 +99,7 @@ export default function StationMap({
   const [outlookData, setOutlookData] = useState(null);
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
+  const [showRadar, setShowRadar] = useState(false);
 
   // Fetch SPC outlook on mount and when day changes
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function StationMap({
         </button>
       </header>
 
-      {/* SPC Outlook controls */}
+      {/* SPC Outlook & Radar controls */}
       <div className="smap-outlook-bar">
         <button
           className={`smap-outlook-toggle ${showOutlook ? "active" : ""}`}
@@ -167,6 +168,14 @@ export default function StationMap({
         >
           <CloudLightning size={12} />
           SPC Outlook
+        </button>
+        <button
+          className={`smap-outlook-toggle ${showRadar ? "active" : ""}`}
+          onClick={() => setShowRadar((v) => !v)}
+          title="Toggle NEXRAD radar reflectivity overlay"
+        >
+          <Crosshair size={12} />
+          Radar
         </button>
         {showOutlook && (
           <div className="smap-day-btns">
@@ -234,6 +243,16 @@ export default function StationMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             maxZoom={18}
           />
+
+          {/* NEXRAD Radar reflectivity overlay (IEM) */}
+          {showRadar && (
+            <TileLayer
+              url="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png"
+              opacity={0.55}
+              maxZoom={12}
+              attribution="NEXRAD via IEM"
+            />
+          )}
 
           {/* SPC outlook polygons (render first so stations sit on top) */}
           {showOutlook && outlookData && <OutlookLayer data={outlookData} />}
