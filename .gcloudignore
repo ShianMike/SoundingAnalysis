@@ -1,5 +1,11 @@
-# Ignore frontend source (not needed on backend)
-frontend/
+# Ignore frontend source (built dist is kept)
+frontend/node_modules/
+frontend/src/
+frontend/public/
+frontend/*.js
+frontend/*.json
+frontend/*.html
+frontend/*.md
 node_modules/
 
 # Git

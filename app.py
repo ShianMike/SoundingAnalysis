@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import time
 import requests as _requests
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 import matplotlib
@@ -35,7 +35,9 @@ from sounding import (
     _quick_tornado_score,
 )
 
-app = Flask(__name__)
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
 
@@ -756,6 +758,17 @@ def submit_feedback():
 def get_feedback():
     """Retrieve all feedback (for admin/developer review)."""
     return jsonify(_load_feedback())
+
+
+# ─── SPA catch-all ──────────────────────────────────────────────────
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_spa(path):
+    """Serve the React SPA. API routes are matched first by Flask."""
+    file_path = os.path.join(FRONTEND_DIR, path)
+    if path and os.path.isfile(file_path):
+        return send_from_directory(FRONTEND_DIR, path)
+    return send_from_directory(FRONTEND_DIR, "index.html")
 
 
 if __name__ == "__main__":
