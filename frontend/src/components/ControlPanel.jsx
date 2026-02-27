@@ -21,6 +21,8 @@ import {
   Thermometer,
   Wind,
   RotateCcw,
+  Crosshair,
+  Waves,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -160,6 +162,13 @@ export default function ControlPanel({
 
   // VAD Wind Profile overlay state
   const [vadEnabled, setVadEnabled] = useState(false);
+
+  // Storm-relative hodograph state
+  const [srHodoEnabled, setSrHodoEnabled] = useState(false);
+
+  // Profile smoothing state
+  const [smoothEnabled, setSmoothEnabled] = useState(false);
+  const [smoothSigma, setSmoothSigma] = useState("3");
 
   // Sync source to parent
   const setSource = (src) => {
@@ -317,6 +326,17 @@ export default function ControlPanel({
       if (vadLat && vadLon) {
         params.vad = nearestNexradForVad(vadLat, vadLon);
       }
+    }
+
+    // Storm-relative hodograph
+    if (srHodoEnabled) {
+      params.srHodograph = true;
+    }
+
+    // Profile smoothing
+    if (smoothEnabled) {
+      const sigma = parseFloat(smoothSigma);
+      if (sigma > 0) params.smoothing = sigma;
     }
 
     onSubmit(params);
@@ -834,6 +854,54 @@ export default function ControlPanel({
             {vadEnabled ? "ON" : "OFF"}
           </span>
         </button>
+
+        {/* Storm-Relative Hodograph */}
+        <button
+          type="button"
+          className={`cp-toggle-btn ${srHodoEnabled ? "cp-toggle-btn--active" : ""}`}
+          onClick={() => setSrHodoEnabled((v) => !v)}
+          title="Plot hodograph in storm-relative frame — subtracts Bunkers RM (or custom SM) from all winds so storm motion is at the origin"
+        >
+          <Crosshair size={14} />
+          <span>SR Hodograph</span>
+          <span className={`cp-toggle-chip ${srHodoEnabled ? "on" : ""}`}>
+            {srHodoEnabled ? "ON" : "OFF"}
+          </span>
+        </button>
+
+        {/* Profile Smoothing */}
+        <div className="cp-accordion-section">
+          <button
+            type="button"
+            className={`cp-toggle-btn ${smoothEnabled ? "cp-toggle-btn--active" : ""}`}
+            onClick={() => setSmoothEnabled((v) => !v)}
+            title="Apply Gaussian smoothing to T, Td, and wind profiles — reduces noise in ACARS and model data"
+          >
+            <Waves size={14} />
+            <span>Profile Smoothing</span>
+            <span className={`cp-toggle-chip ${smoothEnabled ? "on" : ""}`}>
+              {smoothEnabled ? "ON" : "OFF"}
+            </span>
+          </button>
+          {smoothEnabled && (
+            <div className="cp-accordion-body" style={{ padding: "6px 10px" }}>
+              <label className="cp-field-label" style={{ marginBottom: 0 }}>
+                Sigma
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="0.5"
+                  value={smoothSigma}
+                  onChange={(e) => setSmoothSigma(e.target.value)}
+                  className="cp-input"
+                  style={{ width: 60, marginLeft: 8 }}
+                  title="Gaussian sigma in data levels (higher = smoother). Typical: 2-5"
+                />
+              </label>
+            </div>
+          )}
+        </div>
 
         {/* Submit */}
         <button

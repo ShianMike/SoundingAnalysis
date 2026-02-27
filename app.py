@@ -132,6 +132,8 @@ def get_sounding():
     storm_motion = body.get("stormMotion")     # {direction, speed} or null
     surface_mod = body.get("surfaceMod")       # {temperature, dewpoint, wind_speed, wind_direction} or null
     vad_radar = body.get("vad")                # NEXRAD radar ID (e.g. "KTLX") or null
+    smoothing = body.get("smoothing")          # Gaussian sigma (float) or null
+    sr_hodograph = body.get("srHodograph", False)  # Storm-relative hodograph mode
 
     # Parse date
     if date_str:
@@ -174,7 +176,7 @@ def get_sounding():
         )
 
         # 2) Compute
-        params = compute_parameters(data, storm_motion=storm_motion, surface_mod=surface_mod)
+        params = compute_parameters(data, storm_motion=storm_motion, surface_mod=surface_mod, smoothing=smoothing)
 
         # 2b) Fetch VAD data if requested
         vad_result = None
@@ -186,7 +188,7 @@ def get_sounding():
 
         # 3) Plot → base64 PNG
         plot_id = station or source.upper()
-        fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result)
+        fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result, sr_hodograph=sr_hodograph)
 
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=180, facecolor="#0d0d0d")
@@ -253,6 +255,7 @@ def _serialize_params(params, data, station, dt, source):
         "ncape": params.get("ncape", 0),
         "surfaceModified": params.get("surface_modified", False),
         "customStormMotion": params.get("custom_storm_motion", False),
+        "smoothingApplied": params.get("smoothing_applied", False),
         "rh01": round(params["rh_0_1km"]) if params.get("rh_0_1km") is not None else None,
         "rh13": round(params["rh_1_3km"]) if params.get("rh_1_3km") is not None else None,
         "rh36": round(params["rh_3_6km"]) if params.get("rh_3_6km") is not None else None,
