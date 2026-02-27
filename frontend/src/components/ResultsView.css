@@ -1,10 +1,12 @@
 .results-view {
   flex: 1;
   min-width: 0;
-  padding-left: 24px;
+  max-width: 100%;
+  padding: 24px 24px 48px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-x: hidden;
 }
 
 /* State screens */
@@ -395,8 +397,7 @@
 
 @media (max-width: 1024px) {
   .results-view {
-    padding-left: 0;
-    padding-top: 16px;
+    padding: 16px 16px 32px;
   }
 }
 

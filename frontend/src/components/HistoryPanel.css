@@ -2,18 +2,22 @@
 .history-panel {
   width: 300px;
   flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
   border-right: 1px solid var(--border);
   padding: 0 16px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 100px);
+  overflow-y: auto;
 }
 
 .hp-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0 12px;
+  padding: 20px 0 12px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
@@ -270,10 +274,13 @@
 
 @media (max-width: 1024px) {
   .history-panel {
+    position: relative;
+    top: auto;
     width: 100%;
+    height: auto;
+    max-height: 300px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     padding: 0 0 16px;
-    max-height: 300px;
   }
 }

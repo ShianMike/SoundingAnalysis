@@ -24,6 +24,7 @@ export default function App() {
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const loadInitialData = useCallback(() => {
     setInitialLoading(true);
@@ -91,7 +92,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header />
+      <Header showFeedback={showFeedback} onCloseFeedback={() => setShowFeedback(false)} />
       <main className="app-main">
         <ControlPanel
           stations={stations}
@@ -116,6 +117,8 @@ export default function App() {
           onStationChange={handleStationChange}
           onSourceChange={handleSourceChange}
           mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
+          onFeedbackClick={() => setShowFeedback((v) => !v)}
+          showFeedback={showFeedback}
         />
         {showHistory && (
           <HistoryPanel
