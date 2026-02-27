@@ -28,6 +28,7 @@ from sounding import (
     BUFKIT_MODELS,
     TORNADO_SCAN_STATIONS,
     fetch_sounding,
+    fetch_vad_data,
     compute_parameters,
     plot_sounding,
     get_latest_sounding_time,
@@ -130,6 +131,7 @@ def get_sounding():
     fhour = body.get("fhour", 0)
     storm_motion = body.get("stormMotion")     # {direction, speed} or null
     surface_mod = body.get("surfaceMod")       # {temperature, dewpoint, wind_speed, wind_direction} or null
+    vad_radar = body.get("vad")                # NEXRAD radar ID (e.g. "KTLX") or null
 
     # Parse date
     if date_str:
@@ -174,9 +176,17 @@ def get_sounding():
         # 2) Compute
         params = compute_parameters(data, storm_motion=storm_motion, surface_mod=surface_mod)
 
+        # 2b) Fetch VAD data if requested
+        vad_result = None
+        if vad_radar:
+            try:
+                vad_result = fetch_vad_data(vad_radar)
+            except Exception as ve:
+                print(f"[VAD] Non-fatal error fetching VAD: {ve}")
+
         # 3) Plot → base64 PNG
         plot_id = station or source.upper()
-        fig = plot_sounding(data, params, plot_id, dt)
+        fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result)
 
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=180, facecolor="#0d0d0d")
@@ -198,6 +208,8 @@ def get_sounding():
                 "levels": len(data["pressure"]),
                 "sfcPressure": round(float(data["pressure"][0].magnitude)),
                 "topPressure": round(float(data["pressure"][-1].magnitude)),
+                "vadRadar": vad_result.get("radar") if vad_result and isinstance(vad_result, dict) else None,
+                "vadTime": vad_result.get("meta", {}).get("time") if vad_result and isinstance(vad_result, dict) else None,
             },
         })
 
@@ -249,6 +261,25 @@ def _serialize_params(params, data, station, dt, source):
         "srh1km": _fmt(params.get("srh_1km")),
         "srh3km": _fmt(params.get("srh_3km")),
     }
+
+
+@app.route("/api/vad", methods=["GET"])
+def get_vad():
+    """
+    Fetch latest NEXRAD VAD Wind Profile for a given radar.
+    Query params: ?radar=KTLX
+    Returns JSON with wind data at various altitudes.
+    """
+    radar = request.args.get("radar", "").upper()
+    if not radar or len(radar) < 3:
+        return jsonify({"error": "Provide a valid NEXRAD radar ID (e.g. ?radar=KTLX)"}), 400
+    try:
+        result = fetch_vad_data(radar)
+        if not result or not result.get("winds"):
+            return jsonify({"error": f"No VAD data available for {radar}"}), 404
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/risk-scan", methods=["POST", "OPTIONS"])

@@ -808,6 +808,95 @@ def fetch_acars_sounding(airport, dt):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# VAD WIND PROFILE (NEXRAD Level-III product 48)
+# ─────────────────────────────────────────────────────────────────────
+def fetch_vad_data(radar_id):
+    """
+    Fetch the latest NEXRAD VAD Wind Profile (VWP) for a given radar.
+
+    Uses the NWS TGFTP server to get the latest Level-III product 48 file,
+    then parses it with MetPy's Level3File.
+
+    Returns a list of dicts:
+      [{"alt_ft": 2000, "alt_m": 610, "dir": 230, "spd_kt": 35, "u_kt": ..., "v_kt": ...}, ...]
+    or an empty list on failure.
+    """
+    from metpy.io import Level3File
+    import io as _io
+
+    radar = radar_id.upper()
+    # Remove leading 'K' for the TGFTP path if it's a 4-letter ICAO
+    radar_lower = radar.lower()
+    url = (
+        f"https://tgftp.nws.noaa.gov/SL.us008001/DF.of/DC.radar/"
+        f"DS.48vwp/SI.{radar_lower}/sn.last"
+    )
+    try:
+        resp = requests.get(url, timeout=12, headers={"User-Agent": "SoundingAnalysis/1.0"})
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"[VAD] Failed to fetch VWP for {radar}: {e}")
+        return []
+
+    try:
+        f = Level3File(_io.BytesIO(resp.content))
+    except Exception as e:
+        print(f"[VAD] Failed to parse Level3 VWP for {radar}: {e}")
+        return []
+
+    # Extract tabular data from tab_pages[0] — the VAD Algorithm Output table
+    if not f.tab_pages or len(f.tab_pages) < 1:
+        print(f"[VAD] No tab_pages in VWP for {radar}")
+        return []
+
+    full_text = "".join(f.tab_pages[0])
+    import re as _re
+
+    winds = []
+    # Each data line: altitude(100ft)  U(m/s)  V(m/s)  W(cm/s)  DIR(deg)  SPD(kts) ...
+    for match in _re.finditer(
+        r"^\s*(\d{3})\s+([\d.\-]+|NA)\s+([\d.\-]+|NA)\s+\S+\s+(\d+|NA)\s+(\d+|NA)",
+        full_text,
+        _re.MULTILINE,
+    ):
+        alt_100ft = int(match.group(1))
+        alt_ft = alt_100ft * 100
+        dir_str = match.group(4)
+        spd_str = match.group(5)
+        if dir_str == "NA" or spd_str == "NA":
+            continue
+        wdir = int(dir_str)
+        wspd = int(spd_str)
+        alt_m = alt_ft * 0.3048
+        # Compute u, v in knots from direction/speed
+        u_kt = -wspd * np.sin(np.radians(wdir))
+        v_kt = -wspd * np.cos(np.radians(wdir))
+        winds.append({
+            "alt_ft": alt_ft,
+            "alt_m": round(alt_m),
+            "dir": wdir,
+            "spd_kt": wspd,
+            "u_kt": round(float(u_kt), 1),
+            "v_kt": round(float(v_kt), 1),
+        })
+
+    # Also attach metadata
+    meta = {}
+    if hasattr(f, "metadata"):
+        m = f.metadata
+        if "vol_time" in m:
+            meta["time"] = m["vol_time"].strftime("%Y-%m-%d %H:%MZ")
+        if "max" in m:
+            meta["max_wind_kt"] = m["max"]
+        if "dir_max" in m:
+            meta["max_wind_dir"] = m["dir_max"]
+        if "alt_max" in m:
+            meta["max_wind_alt_ft"] = m["alt_max"]
+
+    return {"winds": winds, "radar": radar, "meta": meta}
+
+
+# ─────────────────────────────────────────────────────────────────────
 # UNIFIED FETCH DISPATCHER
 # ─────────────────────────────────────────────────────────────────────
 # Recognised source keywords (for --source flag / interactive menu)
@@ -1627,7 +1716,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
 # ─────────────────────────────────────────────────────────────────────
 # PLOTTING
 # ─────────────────────────────────────────────────────────────────────
-def plot_sounding(data, params, station_id, dt):
+def plot_sounding(data, params, station_id, dt, vad_data=None):
     """Create a comprehensive sounding analysis figure (dark theme)."""
     p = data["pressure"]
     T = data["temperature"]
@@ -2078,6 +2167,50 @@ def plot_sounding(data, params, station_id, dt):
             va="top", ha="left",
             bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
                      edgecolor=BORDER, alpha=0.92)
+        )
+
+    # --- VAD Wind Profile overlay ---
+    if vad_data and isinstance(vad_data, dict) and vad_data.get("winds"):
+        vad_winds = vad_data["winds"]
+        vad_u = np.array([w["u_kt"] for w in vad_winds])
+        vad_v = np.array([w["v_kt"] for w in vad_winds])
+        vad_alt_m = np.array([w["alt_m"] for w in vad_winds])
+        vad_alt_agl = vad_alt_m  # VWP altitudes are already AGL (above radar level ≈ AGL)
+
+        VAD_COLOR = "#00ff88"  # bright green for contrast
+        # Draw VAD hodograph line
+        hodo.ax.plot(vad_u, vad_v, color=VAD_COLOR, linewidth=2.5,
+                     linestyle='-', alpha=0.85, zorder=8, clip_on=True)
+        # Draw dots at each VAD level
+        hodo.ax.scatter(vad_u, vad_v, c=VAD_COLOR, s=30, zorder=9,
+                       edgecolors='black', linewidths=0.5, alpha=0.9, clip_on=True)
+
+        # Height labels at select VAD levels (every ~1 km)
+        labeled_km = set()
+        for i, alt in enumerate(vad_alt_agl):
+            km_val = round(alt / 1000.0)
+            if km_val >= 1 and km_val not in labeled_km and alt >= 800:
+                labeled_km.add(km_val)
+                hodo.ax.annotate(
+                    f"{km_val}k", (vad_u[i], vad_v[i]),
+                    xytext=(5, 5), textcoords='offset pixels',
+                    fontsize=7, color=VAD_COLOR, fontweight='bold',
+                    alpha=0.8, clip_on=True,
+                    path_effects=[path_effects.withStroke(linewidth=2, foreground=BG)]
+                )
+
+        # VAD label
+        vad_label = f"VAD: {vad_data.get('radar', '???')}"
+        vad_meta = vad_data.get("meta", {})
+        if vad_meta.get("time"):
+            vad_label += f" | {vad_meta['time']}"
+        hodo.ax.text(
+            0.98, 0.02, vad_label,
+            transform=ax_hodo.transAxes, fontsize=8,
+            color=VAD_COLOR, fontfamily="monospace", fontweight="bold",
+            va="bottom", ha="right", alpha=0.9,
+            bbox=dict(boxstyle="round,pad=0.2", facecolor=BG,
+                     edgecolor=VAD_COLOR, alpha=0.8, linewidth=0.8)
         )
     
     # ════════════════════════════════════════════════════════════════
