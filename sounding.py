@@ -1823,10 +1823,30 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         skew.plot(p, params["dcape_profile"], color="gray", linewidth=1.5,
                   linestyle="--", alpha=0.85, zorder=7, label="DWNDRFT PARCEL")
     
-    # SB parcel trace (orange, dashed)
+    # SB parcel trace (orange, dashed) + CAPE/CIN shading
     if params.get("sb_profile") is not None:
-        skew.plot(p, params["sb_profile"], color="#ff8800", linewidth=2.0,
+        sb_prof = params["sb_profile"]
+        skew.plot(p, sb_prof, color="#ff8800", linewidth=2.0,
                   linestyle="--", alpha=0.85, zorder=5, label="SB PARCEL")
+        # --- CAPE shading (red) — parcel warmer than environment ---
+        try:
+            sb_T = sb_prof.to("degC").magnitude
+            env_T = T.to("degC").magnitude
+            cape_mask = sb_T > env_T
+            skew.ax.fill_betweenx(
+                p.magnitude, sb_T, env_T,
+                where=cape_mask, facecolor="#ff3333", alpha=0.18,
+                interpolate=True, zorder=3
+            )
+            # --- CIN shading (blue) — parcel cooler than environment ---
+            cin_mask = sb_T < env_T
+            skew.ax.fill_betweenx(
+                p.magnitude, sb_T, env_T,
+                where=cin_mask, facecolor="#4488ff", alpha=0.12,
+                interpolate=True, zorder=3
+            )
+        except Exception:
+            pass
     
     # MU parcel trace (white/light, dashed)
     if params.get("mu_profile") is not None and params.get("mu_start_idx") is not None:
@@ -1947,6 +1967,76 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
             fontsize=12, va="center", fontfamily="monospace",
             fontweight="bold", path_effects=[pe]
         )
+    
+    # --- Dendritic Growth Zone (DGZ) shading: -12°C to -17°C ---
+    # Find pressure levels where T crosses -12°C and -17°C for the band
+    try:
+        T_mag = T.to("degC").magnitude
+        p_mag = p.magnitude
+        # Find pressure at -12°C and -17°C by interpolation
+        dgz_top_p, dgz_bot_p = None, None
+        for i in range(len(T_mag) - 1):
+            if dgz_bot_p is None and ((T_mag[i] >= -12 and T_mag[i+1] < -12) or
+                                       (T_mag[i] <= -12 and T_mag[i+1] > -12)):
+                frac = (T_mag[i] - (-12)) / (T_mag[i] - T_mag[i+1])
+                dgz_bot_p = p_mag[i] + frac * (p_mag[i+1] - p_mag[i])
+            if dgz_top_p is None and ((T_mag[i] >= -17 and T_mag[i+1] < -17) or
+                                       (T_mag[i] <= -17 and T_mag[i+1] > -17)):
+                frac = (T_mag[i] - (-17)) / (T_mag[i] - T_mag[i+1])
+                dgz_top_p = p_mag[i] + frac * (p_mag[i+1] - p_mag[i])
+        if dgz_bot_p is not None and dgz_top_p is not None:
+            skew.ax.axhspan(dgz_top_p, dgz_bot_p, color="#00ccff", alpha=0.06, zorder=1)
+            skew.ax.text(
+                skew.ax.get_xlim()[0] + 3, (dgz_bot_p + dgz_top_p) / 2,
+                "DGZ", color="#00ccff", fontsize=9, fontweight="bold",
+                fontfamily="monospace", alpha=0.6, va="center",
+                path_effects=[path_effects.withStroke(linewidth=2, foreground=BG)]
+            )
+    except Exception:
+        pass
+    
+    # --- Hail Growth Zone (HGZ) shading: -10°C to -30°C ---
+    try:
+        hgz_top_p, hgz_bot_p = None, None
+        for i in range(len(T_mag) - 1):
+            if hgz_bot_p is None and ((T_mag[i] >= -10 and T_mag[i+1] < -10) or
+                                       (T_mag[i] <= -10 and T_mag[i+1] > -10)):
+                frac = (T_mag[i] - (-10)) / (T_mag[i] - T_mag[i+1])
+                hgz_bot_p = p_mag[i] + frac * (p_mag[i+1] - p_mag[i])
+            if hgz_top_p is None and ((T_mag[i] >= -30 and T_mag[i+1] < -30) or
+                                       (T_mag[i] <= -30 and T_mag[i+1] > -30)):
+                frac = (T_mag[i] - (-30)) / (T_mag[i] - T_mag[i+1])
+                hgz_top_p = p_mag[i] + frac * (p_mag[i+1] - p_mag[i])
+        if hgz_bot_p is not None and hgz_top_p is not None:
+            skew.ax.axhspan(hgz_top_p, hgz_bot_p, color="#22ff88", alpha=0.04, zorder=1)
+            skew.ax.text(
+                skew.ax.get_xlim()[0] + 3, hgz_top_p,
+                "HGZ", color="#22ff88", fontsize=9, fontweight="bold",
+                fontfamily="monospace", alpha=0.5, va="top",
+                path_effects=[path_effects.withStroke(linewidth=2, foreground=BG)]
+            )
+    except Exception:
+        pass
+    
+    # --- PBL (Planetary Boundary Layer) top marker ---
+    # Estimate PBL using the ML (mixed-layer) LCL height as proxy
+    try:
+        ml_lcl_m = params.get("ml_lcl_m")
+        if ml_lcl_m is not None and ml_lcl_m > 0:
+            pbl_h_msl = ml_lcl_m + h[0].magnitude
+            pbl_idx = np.argmin(np.abs(h.magnitude - pbl_h_msl))
+            pbl_p = p.magnitude[pbl_idx]
+            skew.ax.axhline(y=pbl_p, color="#bb88ff", linestyle="-.",
+                            alpha=0.5, linewidth=1.0)
+            skew.ax.text(
+                skew.ax.get_xlim()[1] - 2, pbl_p,
+                f"←PBL ({ml_lcl_m:.0f}m)", color="#bb88ff",
+                fontsize=10, va="center", fontfamily="monospace",
+                fontweight="bold",
+                path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
+            )
+    except Exception:
+        pass
     
     # Set axis limits
     skew.ax.set_xlim(-100, 50)
@@ -2216,6 +2306,27 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
             us_u, us_v = mw_u_kt, mw_v_kt
             ds_u, ds_v = mw_u_kt, mw_v_kt
 
+        # --- Critical Angle ---
+        # Angle between the 0-500m shear vector and the storm-relative inflow vector
+        try:
+            # 0-500m shear vector (surface to 500m AGL)
+            shr_u = hodo_u[min(5, n_full-1)] - hodo_u[0]
+            shr_v = hodo_v[min(5, n_full-1)] - hodo_v[0]
+            # Storm-relative inflow vector (surface wind - storm motion)
+            sri_u = hodo_u[0] - sm_u_kt
+            sri_v = hodo_v[0] - sm_v_kt
+            shr_mag = np.sqrt(shr_u**2 + shr_v**2)
+            sri_mag = np.sqrt(sri_u**2 + sri_v**2)
+            if shr_mag > 0.5 and sri_mag > 0.5:
+                cos_angle = (shr_u * sri_u + shr_v * sri_v) / (shr_mag * sri_mag)
+                cos_angle = np.clip(cos_angle, -1, 1)
+                crit_angle = np.degrees(np.arccos(cos_angle))
+                crit_angle_str = f"CRIT∠: {crit_angle:.0f}°"
+            else:
+                crit_angle_str = "CRIT∠: N/A"
+        except Exception:
+            crit_angle_str = "CRIT∠: N/A"
+        
         sm_lines = [
             f"SM: RIGHT MOVING | {_wind_to_dir_str(rm_u_kt, rm_v_kt)} @ {_wind_spd(rm_u_kt, rm_v_kt)} kts",
             f"RM: {_wind_to_dir_str(rm_u_kt, rm_v_kt)} @ {_wind_spd(rm_u_kt, rm_v_kt)} kts",
@@ -2224,6 +2335,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
             f"DTM: {_wind_to_dir_str(dtm_u_kt, dtm_v_kt)} @ {_wind_spd(dtm_u_kt, dtm_v_kt)} kts",
             f"US: {_wind_to_dir_str(us_u, us_v)} @ {_wind_spd(us_u, us_v)} kts",
             f"DS: {_wind_to_dir_str(ds_u, ds_v)} @ {_wind_spd(ds_u, ds_v)} kts",
+            crit_angle_str,
         ]
 
     sm_text = "\n".join(sm_lines) if sm_lines else ""
