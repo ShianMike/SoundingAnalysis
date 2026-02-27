@@ -44,6 +44,8 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - VAD Wind Profiler overlay (green)
 - Effective inflow layer SRH fill
 - Dynamic bounds based on wind profile
+- **Storm-relative mode** — toggle to shift all winds into the storm-relative frame (SM → origin crosshair)
+- **Profile smoothing** — Gaussian filter (adjustable σ) to tame noisy ACARS profiles
 
 ### Computed Parameters
 | Category | Parameters |
@@ -323,8 +325,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Theta / Theta-e profile toggle | ❌ | ✅ |
 | Hodograph boundary lines | ❌ | ✅ |
 | Composite sounding (overlay multiple profiles) | ❌ | ✅ |
-| VAD (radar wind profiler) hodograph | ❌ | ✅ |
-| Storm-relative hodograph mode | ❌ | ✅ |
+| VAD (radar wind profiler) hodograph | ✅ | ✅ |
+| Storm-relative hodograph mode | ✅ | ✅ |
 
 ### Parcel & Parameter Calculations
 
@@ -332,7 +334,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 |---|:---:|:---:|
 | SB / MU / ML CAPE & CIN | ✅ | ✅ |
 | DCAPE | ✅ | ✅ |
-| ECAPE (entraining CAPE) | ❌ | ✅ |
+| ECAPE (entraining CAPE) | ✅ | ✅ |
 | Irreversible adiabatic ascent parcels | ❌ | ✅ |
 | Pseudoadiabatic ascent parcels | ✅ (implicit) | ✅ (explicit) |
 | STP, SCP, SHIP, DCP composites | ✅ | ✅ (via SHARPpy) |
@@ -353,7 +355,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Export to CM1 format | ❌ | ✅ |
 | Export to SHARPpy format | ❌ | ✅ |
 | Profile merging (weighted average) | ❌ | ✅ |
-| Profile smoothing (Gaussian) | ❌ | ✅ |
+| Profile smoothing (Gaussian) | ✅ | ✅ |
 | Vertical interpolation utility | ✅ (internal, 100 m) | ✅ (exposed API) |
 | Print variables to console | ✅ (CLI) | ✅ |
 | Find nearest station | ✅ | ✅ |
@@ -406,11 +408,9 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [x] **Export Parameters to CSV** — One-click CSV download of all computed thermodynamic, kinematic, and moisture parameters ✅
 - [ ] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1
 - [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
-- [ ] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS)
-- [ ] **ERA5 / RUC / NCEP-FNL Reanalysis** — Add ERA5 (CDS API), RUC (2005–2020), and NCEP-FNL as additional reanalysis sources
-- [ ] **IGRAv2 Global Obs Archive** — IGRAv2 global radiosonde data via UWyo for worldwide sounding coverage
-- [ ] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph
-- [ ] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames
+- [x] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS); adjustable sigma parameter ✅
+- [x] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph ✅
+- [x] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames; SM at origin with crosshair marker ✅
 - [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
 - [ ] **Color-Blind Mode** — Swap dewpoint trace from green/blue and adjust color palettes for accessibility
 - [ ] **Light Theme Toggle** — Add a light-mode theme option alongside the current dark theme

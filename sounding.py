@@ -42,6 +42,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.patheffects as path_effects
 import numpy as np
 import requests
+from scipy.ndimage import gaussian_filter1d
 
 import metpy.calc as mpcalc
 from metpy.plots import SkewT, Hodograph
@@ -1222,7 +1223,7 @@ def _mixing_ratio_from_dewpoint(pressure, dewpoint):
     return mpcalc.mixing_ratio(e, pressure)
 
 
-def compute_parameters(data, storm_motion=None, surface_mod=None):
+def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None):
     """Compute a comprehensive set of thermodynamic & kinematic parameters.
 
     Parameters
@@ -1236,6 +1237,10 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
         Surface modification: {"temperature": °C, "dewpoint": °C,
         "wind_speed": knots, "wind_direction": degrees}.
         When provided, replaces surface-level values before computation.
+    smoothing : float or None
+        Gaussian smoothing sigma (in number of data levels).
+        Typical values: 2-5. Applied to T, Td, u, v before computation.
+        Useful for noisy profiles (e.g. ACARS). Preserves surface values.
     """
     p = data["pressure"]
     T = data["temperature"].copy()
@@ -1260,7 +1265,35 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
 
     params = {}
     params["surface_modified"] = params_mod_applied
-    
+    params["smoothing_applied"] = smoothing is not None and smoothing > 0
+
+    # ── Profile smoothing (Gaussian) ─────────────────────────────────
+    if smoothing and smoothing > 0 and len(T) > 5:
+        sigma = float(smoothing)
+        # Smooth T and Td (preserving surface values)
+        T_raw = T.magnitude.copy()
+        Td_raw = Td.magnitude.copy()
+        T_smooth = gaussian_filter1d(T_raw, sigma=sigma, mode='nearest')
+        Td_smooth = gaussian_filter1d(Td_raw, sigma=sigma, mode='nearest')
+        # Keep surface value unchanged
+        T_smooth[0] = T_raw[0]
+        Td_smooth[0] = Td_raw[0]
+        # Ensure Td <= T at every level
+        Td_smooth = np.minimum(Td_smooth, T_smooth)
+        T = T_smooth * T.units
+        Td = Td_smooth * Td.units
+
+        # Smooth wind components (convert to u/v, smooth, convert back)
+        u_raw, v_raw = mpcalc.wind_components(wspd, wdir)
+        u_smooth = gaussian_filter1d(u_raw.to("knot").magnitude, sigma=sigma, mode='nearest')
+        v_smooth = gaussian_filter1d(v_raw.to("knot").magnitude, sigma=sigma, mode='nearest')
+        # Preserve surface wind
+        u_smooth[0] = u_raw.to("knot").magnitude[0]
+        v_smooth[0] = v_raw.to("knot").magnitude[0]
+        wspd = mpcalc.wind_speed(u_smooth * units.knot, v_smooth * units.knot)
+        wdir = mpcalc.wind_direction(u_smooth * units.knot, v_smooth * units.knot)
+        print(f"  Smoothing applied: sigma={sigma}, {len(T)} levels")
+
     # Wind components
     u, v = mpcalc.wind_components(wspd, wdir)
     params["u"] = u
@@ -1975,8 +2008,15 @@ def compute_parameters(data, storm_motion=None, surface_mod=None):
 # ─────────────────────────────────────────────────────────────────────
 # PLOTTING
 # ─────────────────────────────────────────────────────────────────────
-def plot_sounding(data, params, station_id, dt, vad_data=None):
-    """Create a comprehensive sounding analysis figure (dark theme)."""
+def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False):
+    """Create a comprehensive sounding analysis figure (dark theme).
+
+    Parameters
+    ----------
+    sr_hodograph : bool
+        If True, plot the hodograph in storm-relative frame (subtract storm
+        motion from all winds so SM is at the origin).
+    """
     p = data["pressure"]
     T = data["temperature"]
     Td = data["dewpoint"]
@@ -2027,9 +2067,15 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     )
     
     # ── TITLE BAR ────────────────────────────────────────────────────
+    title_tags = []
+    if params.get("smoothing_applied"):
+        title_tags.append("SMOOTHED")
+    if sr_hodograph:
+        title_tags.append("SR HODO")
+    tag_str = f" [{', '.join(title_tags)}]" if title_tags else ""
     title_str = (
         f"OBSERVED UPPER-AIR SOUNDING | {station_id} | "
-        f"VALID: {dt.strftime('%m/%d/%Y %HZ')}"
+        f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
     )
     fig.suptitle(title_str, fontsize=20, fontweight="bold",
                  color=FG, y=0.985, x=0.36, ha="center",
@@ -2416,6 +2462,16 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     hodo_v = params["v_interp"].to("knot").magnitude.copy()
     hodo_z = params["h_interp"].to("meter").magnitude.copy()
 
+    # --- Storm-relative hodograph mode ---
+    # Subtract storm motion from all winds so SM sits at origin (0,0)
+    sr_offset_u = 0.0
+    sr_offset_v = 0.0
+    if sr_hodograph and params.get("rm_u") is not None:
+        sr_offset_u = params["rm_u"].to("knot").magnitude
+        sr_offset_v = params["rm_v"].to("knot").magnitude
+        hodo_u = hodo_u - sr_offset_u
+        hodo_v = hodo_v - sr_offset_v
+
     # Cap at 9 km for hodograph bounds
     if hodo_z.max() > 9001:
         hodo_bound_idx = np.argmin(np.abs(hodo_z - 9000))
@@ -2525,12 +2581,12 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
 
     # --- Storm motion annotations ---
     if params.get("rm_u") is not None:
-        rm_u_kt = params["rm_u"].to("knot").magnitude
-        rm_v_kt = params["rm_v"].to("knot").magnitude
-        lm_u_kt = params["lm_u"].to("knot").magnitude
-        lm_v_kt = params["lm_v"].to("knot").magnitude
-        mw_u_kt = params["mw_u"].to("knot").magnitude
-        mw_v_kt = params["mw_v"].to("knot").magnitude
+        rm_u_kt = params["rm_u"].to("knot").magnitude - sr_offset_u
+        rm_v_kt = params["rm_v"].to("knot").magnitude - sr_offset_v
+        lm_u_kt = params["lm_u"].to("knot").magnitude - sr_offset_u
+        lm_v_kt = params["lm_v"].to("knot").magnitude - sr_offset_v
+        mw_u_kt = params["mw_u"].to("knot").magnitude - sr_offset_u
+        mw_v_kt = params["mw_v"].to("knot").magnitude - sr_offset_v
 
         sm_u_kt = rm_u_kt
         sm_v_kt = rm_v_kt
@@ -2555,11 +2611,19 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         hodo.ax.plot(dtm_u_kt, dtm_v_kt, marker='v', color='brown',
                      markersize=8, zorder=7, alpha=0.8, ls='')
 
-        # SM arrow from origin to storm motion
-        hodo.ax.arrow(0, 0, sm_u_kt - 0.3, sm_v_kt - 0.3,
-                      linewidth=3, color=FG, alpha=0.2,
-                      label='SM Vector', length_includes_head=True,
-                      head_width=0.6)
+        # SM arrow / origin marker
+        if sr_hodograph:
+            # In SR mode, SM is at origin — mark it with a crosshair
+            hodo.ax.plot(0, 0, '+', color=ACCENT, markersize=15, markeredgewidth=2.5,
+                         zorder=7, alpha=0.9)
+            hodo.ax.text(2, -3, 'SM', weight='bold', fontsize=12, color=ACCENT,
+                         ha='left', zorder=7, alpha=0.9)
+        else:
+            # Ground-relative: arrow from origin to storm motion
+            hodo.ax.arrow(0, 0, sm_u_kt - 0.3, sm_v_kt - 0.3,
+                          linewidth=3, color=FG, alpha=0.2,
+                          label='SM Vector', length_includes_head=True,
+                          head_width=0.6)
 
         # --- Effective inflow layer SRH fill (0-3 km, using RM) ---
         eil_bot_idx = 0
@@ -2652,14 +2716,37 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
         except Exception:
             crit_angle_str = "CRIT∠: N/A"
         
+        # For the info text box, use original (ground-relative) values
+        _info_rm_u = params["rm_u"].to("knot").magnitude
+        _info_rm_v = params["rm_v"].to("knot").magnitude
+        _info_lm_u = params["lm_u"].to("knot").magnitude
+        _info_lm_v = params["lm_v"].to("knot").magnitude
+        _info_mw_u = params["mw_u"].to("knot").magnitude
+        _info_mw_v = params["mw_v"].to("knot").magnitude
+        _info_dtm_u = _info_mw_u + (_info_rm_v - _info_mw_v)
+        _info_dtm_v = _info_mw_v - (_info_rm_u - _info_mw_u)
+
+        # US/DS use BWD from hodo winds (which is the same in both frames)
+        bwd_u = (hodo_u[min(60, n_full-1)] - hodo_u[0])
+        bwd_v = (hodo_v[min(60, n_full-1)] - hodo_v[0])
+        bwd_mag = np.sqrt(bwd_u**2 + bwd_v**2)
+        if bwd_mag > 0.1:
+            _info_us_u = _info_mw_u + 7.5 * 1.94384 * (-bwd_u / bwd_mag)
+            _info_us_v = _info_mw_v + 7.5 * 1.94384 * (-bwd_v / bwd_mag)
+            _info_ds_u = _info_mw_u + 7.5 * 1.94384 * (bwd_u / bwd_mag)
+            _info_ds_v = _info_mw_v + 7.5 * 1.94384 * (bwd_v / bwd_mag)
+        else:
+            _info_us_u, _info_us_v = _info_mw_u, _info_mw_v
+            _info_ds_u, _info_ds_v = _info_mw_u, _info_mw_v
+
         sm_lines = [
-            f"SM: RIGHT MOVING | {_wind_to_dir_str(rm_u_kt, rm_v_kt)} @ {_wind_spd(rm_u_kt, rm_v_kt)} kts",
-            f"RM: {_wind_to_dir_str(rm_u_kt, rm_v_kt)} @ {_wind_spd(rm_u_kt, rm_v_kt)} kts",
-            f"LM: {_wind_to_dir_str(lm_u_kt, lm_v_kt)} @ {_wind_spd(lm_u_kt, lm_v_kt)} kts",
-            f"MW: {_wind_to_dir_str(mw_u_kt, mw_v_kt)} @ {_wind_spd(mw_u_kt, mw_v_kt)} kts",
-            f"DTM: {_wind_to_dir_str(dtm_u_kt, dtm_v_kt)} @ {_wind_spd(dtm_u_kt, dtm_v_kt)} kts",
-            f"US: {_wind_to_dir_str(us_u, us_v)} @ {_wind_spd(us_u, us_v)} kts",
-            f"DS: {_wind_to_dir_str(ds_u, ds_v)} @ {_wind_spd(ds_u, ds_v)} kts",
+            f"{'STORM-RELATIVE | ' if sr_hodograph else ''}SM: RIGHT MOVING",
+            f"RM: {_wind_to_dir_str(_info_rm_u, _info_rm_v)} @ {_wind_spd(_info_rm_u, _info_rm_v)} kts",
+            f"LM: {_wind_to_dir_str(_info_lm_u, _info_lm_v)} @ {_wind_spd(_info_lm_u, _info_lm_v)} kts",
+            f"MW: {_wind_to_dir_str(_info_mw_u, _info_mw_v)} @ {_wind_spd(_info_mw_u, _info_mw_v)} kts",
+            f"DTM: {_wind_to_dir_str(_info_dtm_u, _info_dtm_v)} @ {_wind_spd(_info_dtm_u, _info_dtm_v)} kts",
+            f"US: {_wind_to_dir_str(_info_us_u, _info_us_v)} @ {_wind_spd(_info_us_u, _info_us_v)} kts",
+            f"DS: {_wind_to_dir_str(_info_ds_u, _info_ds_v)} @ {_wind_spd(_info_ds_u, _info_ds_v)} kts",
             crit_angle_str,
         ]
 
@@ -2677,8 +2764,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None):
     # --- VAD Wind Profile overlay ---
     if vad_data and isinstance(vad_data, dict) and vad_data.get("winds"):
         vad_winds = vad_data["winds"]
-        vad_u = np.array([w["u_kt"] for w in vad_winds])
-        vad_v = np.array([w["v_kt"] for w in vad_winds])
+        vad_u = np.array([w["u_kt"] for w in vad_winds]) - sr_offset_u
+        vad_v = np.array([w["v_kt"] for w in vad_winds]) - sr_offset_v
         vad_alt_m = np.array([w["alt_m"] for w in vad_winds])
         vad_alt_agl = vad_alt_m  # VWP altitudes are already AGL (above radar level ≈ AGL)
 
