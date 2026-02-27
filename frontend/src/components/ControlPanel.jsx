@@ -265,7 +265,12 @@ export default function ControlPanel({
       setLat(String(stn.lat));
       setLon(String(stn.lon));
       // Auto-fill WMO ID for IGRAv2
-      if (stn.wmo) setWmoId(stn.wmo);
+      // For intl stations, the id IS the WMO ID; for US stations, use stn.wmo
+      if (source === "igrav2") {
+        setWmoId(stn.wmo || id);
+      } else if (stn.wmo) {
+        setWmoId(stn.wmo);
+      }
     }
     if (autoFetch && !loading) {
       const params = { source, station: id };
