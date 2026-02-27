@@ -3,8 +3,7 @@ import { createPortal } from "react-dom";
 import { Github, MessageSquarePlus, X, Send, Loader2 } from "lucide-react";
 import "./Header.css";
 
-export default function Header() {
-  const [showFeedback, setShowFeedback] = useState(false);
+export default function Header({ showFeedback, onCloseFeedback }) {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackType, setFeedbackType] = useState("suggestion");
   const [submitted, setSubmitted] = useState(false);
@@ -30,7 +29,7 @@ export default function Header() {
       setFeedbackText("");
       setTimeout(() => {
         setSubmitted(false);
-        setShowFeedback(false);
+        onCloseFeedback();
       }, 2000);
     } catch {
       // Fallback to localStorage if backend is unreachable
@@ -46,7 +45,7 @@ export default function Header() {
       setFeedbackText("");
       setTimeout(() => {
         setSubmitted(false);
-        setShowFeedback(false);
+        onCloseFeedback();
       }, 2000);
     } finally {
       setSending(false);
@@ -55,63 +54,12 @@ export default function Header() {
 
   return (
     <>
-    <header className="header">
-      <div className="header-inner">
-        <div className="header-brand">
-          <div className="header-logo">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="2" y="2" width="24" height="24" rx="4" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth="1.5"/>
-              <path d="M8 22 L10 18 L11 16 L12 13 L14 10 L16 8 L19 5" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-              <path d="M6 22 L8 19 L9 17 L9.5 15 L10 13 L10 11 L10.5 9 L11 6" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-              <line x1="21" y1="10" x2="21" y2="22" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-              <line x1="21" y1="10" x2="24" y2="8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-              <line x1="21" y1="13" x2="24" y2="11" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div>
-            <h1 className="header-title">Sounding Analysis</h1>
-            <p className="header-subtitle">Atmospheric Vertical Profile Tool</p>
-          </div>
-        </div>
-
-        <div className="header-right">
-          <div className="header-tags">
-            <span className="header-tag">IEM</span>
-            <span className="header-tag">UWyo</span>
-            <span className="header-tag">RAP</span>
-            <span className="header-tag">BUFKIT</span>
-            <span className="header-tag">ERA5</span>
-            <span className="header-tag">ACARS</span>
-          </div>
-
-          <div className="header-actions">
-            <button
-              className={`header-action-btn ${showFeedback ? "active" : ""}`}
-              onClick={() => setShowFeedback((v) => !v)}
-              title="Send feedback or suggestion"
-            >
-              <MessageSquarePlus size={16} />
-            </button>
-            <a
-              href="https://github.com/ShianMike/SoundingAnalysis"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="header-action-btn"
-              title="View on GitHub"
-            >
-              <Github size={16} />
-            </a>
-          </div>
-        </div>
-      </div>
-
-    </header>
       {showFeedback && createPortal(
-        <div className="fb-overlay" onClick={() => setShowFeedback(false)}>
+        <div className="fb-overlay" onClick={() => onCloseFeedback()}>
           <div className="fb-modal" onClick={(e) => e.stopPropagation()}>
             <div className="fb-header">
               <h3>Feedback & Suggestions</h3>
-              <button className="fb-close" onClick={() => setShowFeedback(false)}>
+              <button className="fb-close" onClick={() => onCloseFeedback()}>
                 <X size={16} />
               </button>
             </div>

@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$API_URL = "https://soundinganalysis-uvktu4ziyq-as.a.run.app"
+$API_URL = "https://soundinganalysis-752306366750.asia-southeast1.run.app"
 $REPO    = "https://github.com/ShianMike/SoundingAnalysis.git"
 $BASE    = "/SoundingAnalysis/"
 

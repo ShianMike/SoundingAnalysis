@@ -15,6 +15,8 @@ import {
   Star,
   TrendingUp,
   GitCompareArrows,
+  MessageSquarePlus,
+  Github,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -66,6 +68,8 @@ export default function ControlPanel({
   onStationChange,
   onSourceChange,
   mapLatLon,
+  onFeedbackClick,
+  showFeedback: feedbackActive,
 }) {
   const [source, setSourceLocal] = useState("obs");
   const [station, setStationLocal] = useState("OUN");
@@ -241,6 +245,20 @@ export default function ControlPanel({
   if (initialLoading || connectError) {
     return (
       <aside className="control-panel">
+        <div className="cp-brand">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="24" height="24" rx="4" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth="1.5"/>
+            <path d="M8 22 L10 18 L11 16 L12 13 L14 10 L16 8 L19 5" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <path d="M6 22 L8 19 L9 17 L9.5 15 L10 13 L10 11 L10.5 9 L11 6" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <line x1="21" y1="10" x2="21" y2="22" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+            <line x1="21" y1="10" x2="24" y2="8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+            <line x1="21" y1="13" x2="24" y2="11" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+          <div>
+            <h1 className="cp-brand-title">Sounding Analysis</h1>
+            <p className="cp-brand-sub">Atmospheric Profile Tool</p>
+          </div>
+        </div>
         <div className="cp-loading">
           {initialLoading ? (
             <>
@@ -274,6 +292,22 @@ export default function ControlPanel({
 
   return (
     <aside className="control-panel">
+      {/* Brand */}
+      <div className="cp-brand">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="24" height="24" rx="4" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth="1.5"/>
+          <path d="M8 22 L10 18 L11 16 L12 13 L14 10 L16 8 L19 5" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <path d="M6 22 L8 19 L9 17 L9.5 15 L10 13 L10 11 L10.5 9 L11 6" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <line x1="21" y1="10" x2="21" y2="22" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+          <line x1="21" y1="10" x2="24" y2="8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+          <line x1="21" y1="13" x2="24" y2="11" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
+        </svg>
+        <div>
+          <h1 className="cp-brand-title">Sounding Analysis</h1>
+          <p className="cp-brand-sub">Atmospheric Profile Tool</p>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="cp-form">
         {/* Source */}
         <div className="cp-section">
@@ -618,6 +652,29 @@ export default function ControlPanel({
           </button>
         </div>
       </form>
+
+      {/* Footer actions */}
+      <div className="cp-footer">
+        <button
+          type="button"
+          className={`cp-footer-btn ${feedbackActive ? "active" : ""}`}
+          onClick={onFeedbackClick}
+          title="Send feedback"
+        >
+          <MessageSquarePlus size={14} />
+          <span>Feedback</span>
+        </button>
+        <a
+          href="https://github.com/ShianMike/SoundingAnalysis"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="cp-footer-btn"
+          title="View on GitHub"
+        >
+          <Github size={14} />
+          <span>GitHub</span>
+        </a>
+      </div>
     </aside>
   );
 }

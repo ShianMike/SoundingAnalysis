@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import { X, Crosshair, CloudLightning } from "lucide-react";
 import { fetchSpcOutlook } from "../api";
 import "leaflet/dist/leaflet.css";
@@ -22,12 +22,18 @@ function riskColor(stp) {
 
 /* ── SPC outlook category styling ───────────────────────────── */
 const SPC_CATEGORIES = [
-  { label: "TSTM", name: "General Thunder", color: "#55BB55", fill: "#C1E9C1" },
-  { label: "MRGL", name: "Marginal",        color: "#005500", fill: "#66A366" },
-  { label: "SLGT", name: "Slight",          color: "#DDB600", fill: "#FFE066" },
-  { label: "ENH",  name: "Enhanced",        color: "#FF6600", fill: "#FFA366" },
-  { label: "MDT",  name: "Moderate",        color: "#CC0000", fill: "#E06666" },
-  { label: "HIGH", name: "High",            color: "#FF00FF", fill: "#FF99FF" },
+  { label: "TSTM", name: "General Thunder", color: "#55BB55", fill: "#C1E9C1",
+    info: "Non-severe thunderstorms possible" },
+  { label: "MRGL", name: "Marginal",        color: "#005500", fill: "#66A366",
+    info: "5% severe · 2% tornado" },
+  { label: "SLGT", name: "Slight",          color: "#DDB600", fill: "#FFE066",
+    info: "15% severe · 5% tornado" },
+  { label: "ENH",  name: "Enhanced",        color: "#FF6600", fill: "#FFA366",
+    info: "30% severe · 10% tornado" },
+  { label: "MDT",  name: "Moderate",        color: "#CC0000", fill: "#E06666",
+    info: "45% severe · 15% tornado" },
+  { label: "HIGH", name: "High",            color: "#FF00FF", fill: "#FF99FF",
+    info: "60%+ severe · 30%+ tornado" },
 ];
 
 function spcStyle(feature) {
@@ -41,10 +47,19 @@ function spcStyle(feature) {
   };
 }
 
-/* ── GeoJSON overlay (keyed so it re-renders on data change) ── */
+/* ── GeoJSON overlay in a non-interactive pane below markers ── */
 function OutlookLayer({ data }) {
   if (!data || !data.features || data.features.length === 0) return null;
-  return <GeoJSON key={JSON.stringify(data).slice(0, 100)} data={data} style={spcStyle} />;
+  return (
+    <Pane name="spc-outlook" style={{ zIndex: 250, pointerEvents: "none" }}>
+      <GeoJSON
+        key={JSON.stringify(data).slice(0, 100)}
+        data={data}
+        style={spcStyle}
+        interactive={false}
+      />
+    </Pane>
+  );
 }
 
 /* ── click-for-coords layer ─────────────────────────────────── */
@@ -197,9 +212,10 @@ export default function StationMap({
         {showOutlook && activeCategories.length > 0 && (
           <div className="smap-legend smap-legend-outlook">
             {activeCategories.map((c) => (
-              <span key={c.label} className="smap-legend-item">
+              <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
                 <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
-                {c.name}
+                <span className="smap-cat-label">{c.name}</span>
+                <span className="smap-cat-info">{c.info}</span>
               </span>
             ))}
           </div>

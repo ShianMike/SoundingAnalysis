@@ -1,10 +1,13 @@
 /* ── Station Map Panel (inline inside ResultsView) ──────────── */
+
 .station-map-panel {
   width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
   animation: smapSlideIn 0.2s ease;
+  overflow: hidden;
 }
 
 @keyframes smapSlideIn {
@@ -156,7 +159,23 @@
 }
 
 .smap-legend-outlook {
-  gap: 10px;
+  gap: 4px 14px;
+  flex-wrap: wrap;
+}
+
+.smap-outlook-cat {
+  gap: 5px;
+}
+
+.smap-cat-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.smap-cat-info {
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.75;
 }
 
 .smap-legend-item {
@@ -188,6 +207,8 @@
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
+  position: relative;
+  z-index: 0; /* creates stacking context — keeps Leaflet z-indexes contained */
 }
 
 .smap-leaflet {
