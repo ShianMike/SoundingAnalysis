@@ -1055,11 +1055,20 @@ def fetch_igrav2_sounding(wmo_id, dt, lat=None, lon=None):
 
     print(f"  Fetching from UWyo (global): {url}")
     resp = requests.get(url, timeout=25)
+    if resp.status_code == 404:
+        raise ValueError(
+            f"No sounding data found for WMO {wmo_id} at {dt:%Y-%m-%d %HZ}. "
+            f"The station may not have reported, or data isn't available yet. "
+            f"For US stations, try the OBS source instead."
+        )
     resp.raise_for_status()
     html = resp.text
 
     if "Can't get" in html or "No data" in html:
-        raise ValueError(f"No IGRAv2/UWyo data for WMO {wmo_id} at {dt}")
+        raise ValueError(
+            f"No sounding data for WMO {wmo_id} at {dt:%Y-%m-%d %HZ}. "
+            f"Try a different date/time or use OBS for US stations."
+        )
 
     pre_start = html.find("<pre>")
     pre_end = html.find("</pre>")
