@@ -555,34 +555,208 @@
   color: var(--text-secondary);
 }
 
-/* Surface Modification & Storm Motion toggle */
-.cp-toggle-inline {
+/* ─── Accordion panels (Surface Mod, Storm Motion) ─── */
+.cp-accordion {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cp-accordion--active {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1),
+              0 0 12px -4px rgba(59, 130, 246, 0.15);
+}
+
+.cp-accordion-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
   width: 100%;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  padding: 10px 12px;
+  background: none;
+  border: none;
   cursor: pointer;
-  transition: all 0.15s;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  transition: background 0.15s ease;
 }
 
-.cp-toggle-inline:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+.cp-accordion-header:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.cp-toggle-inline.active {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
+.cp-accordion-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-accordion-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.cp-accordion--active .cp-accordion-icon {
   color: #60a5fa;
+}
+
+.cp-accordion-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.cp-accordion-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-toggle-chip {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+
+.cp-toggle-chip.on {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.cp-accordion-chevron {
+  color: var(--text-muted);
+  transition: transform 0.25s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.cp-accordion-chevron.open {
+  transform: rotate(90deg);
+  color: var(--text-secondary);
+}
+
+/* Animated expand/collapse body */
+.cp-accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.cp-accordion-body.expanded {
+  max-height: 220px;
+}
+
+.cp-accordion-content {
+  padding: 0 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp-accordion-content::before {
+  content: "";
+  display: block;
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 4px;
+}
+
+/* Input rows inside accordion */
+.cp-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.cp-input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cp-input-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.cp-input-with-unit {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cp-input-with-unit:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.cp-input-with-unit .cp-input {
+  border: none;
+  background: transparent;
+  padding: 7px 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  outline: none;
+  box-shadow: none;
+}
+
+.cp-input-with-unit .cp-input:focus {
+  box-shadow: none;
+  border: none;
+}
+
+.cp-unit-badge {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Reset button */
+.cp-reset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  align-self: flex-end;
+}
+
+.cp-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
 }
 
 .cp-mod-grid {
