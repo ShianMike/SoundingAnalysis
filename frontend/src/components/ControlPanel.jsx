@@ -118,6 +118,8 @@ export default function ControlPanel({
   connectError,
   riskData,
   onRiskDataChange,
+  showRisk,
+  onToggleRisk,
   showHistory,
   onToggleHistory,
   showMap,
@@ -932,6 +934,16 @@ export default function ControlPanel({
             <Map size={14} />
             {showMap ? "Hide Map" : "Map"}
           </button>
+          {riskData && (
+            <button
+              type="button"
+              className={`cp-toggle-btn ${showRisk ? "active" : ""}`}
+              onClick={onToggleRisk}
+            >
+              <Zap size={14} />
+              {showRisk ? "Hide Risk" : "Risk"}
+            </button>
+          )}
           <button
             type="button"
             className={`cp-toggle-btn ${showTimeSeries ? "active" : ""}`}

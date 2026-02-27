@@ -112,12 +112,12 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
   if (error) {
     return (
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
-        <RiskTable riskData={riskData} />
+        {showRisk && <RiskTable riskData={riskData} />}
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
         )}
@@ -139,7 +139,7 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
     return (
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
-        <RiskTable riskData={riskData} />
+        {showRisk && <RiskTable riskData={riskData} />}
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
         )}
@@ -164,7 +164,7 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
     return (
       <div className="results-view">
         {showMap && mapProps && <StationMap {...mapProps} />}
-        <RiskTable riskData={riskData} />
+        {showRisk && <RiskTable riskData={riskData} />}
         {showTimeSeries && (
           <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
         )}
@@ -329,7 +329,7 @@ export default function ResultsView({ result, loading, error, riskData, showMap,
 
       {/* Map + Risk scan table */}
       {showMap && mapProps && <StationMap {...mapProps} />}
-      <RiskTable riskData={riskData} />
+      {showRisk && <RiskTable riskData={riskData} />}
 
       {/* Time-Series Chart */}
       {showTimeSeries && (
