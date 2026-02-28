@@ -21,6 +21,7 @@ export default function App() {
   const [showRisk, setShowRisk] = useState(false);
   const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
+  const [showVwp, setShowVwp] = useState(false);
   const [compareHistoryData, setCompareHistoryData] = useState(null);
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
@@ -116,6 +117,8 @@ export default function App() {
           onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
           showCompare={showCompare}
           onToggleCompare={() => setShowCompare((v) => !v)}
+          showVwp={showVwp}
+          onToggleVwp={() => setShowVwp((v) => !v)}
           selectedStation={selectedStation}
           onStationChange={handleStationChange}
           onSourceChange={handleSourceChange}
@@ -141,6 +144,8 @@ export default function App() {
           onCloseTimeSeries={() => setShowTimeSeries(false)}
           showCompare={showCompare}
           onCloseCompare={() => setShowCompare(false)}
+          showVwp={showVwp}
+          onCloseVwp={() => setShowVwp(false)}
           compareHistoryData={compareHistoryData}
           onCompareHistoryConsumed={() => setCompareHistoryData(null)}
           stations={stations}

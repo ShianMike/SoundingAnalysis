@@ -30,7 +30,8 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - **Dendritic Growth Zone (DGZ)** shading (-12°C to -17°C)
 - **Hail Growth Zone (HGZ)** shading (-10°C to -30°C)
 - **PBL top** marker (mixed-layer depth)
-- Wind barbs
+- **OBS wind barbs** column (right edge)
+- **VAD wind barbs** column (green, alongside OBS) — NEXRAD radar-derived winds plotted directly on the Skew-T for comparison
 - Key level annotations (LCL, LFC, EL, Freezing level, WBZ)
 - **Surface T/Td in °F** labels
 - Height labels in km AGL
@@ -57,6 +58,13 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 ### Additional Panels
 - Storm-relative wind & streamwise vorticity profiles
 - Comprehensive parameter text readout (thermodynamic + kinematic indices)
+
+### VAD Wind Profile (VWP) Time-Height Display
+- Standalone VWP panel showing wind barbs across time and height
+- Fetches NEXRAD Level-III VAD data from Iowa Environmental Mesonet
+- Configurable time range (up to 24 hours)
+- Dark-themed time-height section with color-coded wind speed
+- Toggle via toolbar button in the control panel
 
 ### Risk Scanner
 - Scans all CONUS upper-air stations in parallel
@@ -164,6 +172,7 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
     │       ├── HistoryPanel.jsx   # Sounding history sidebar
     │       ├── TimeSeriesChart.jsx # Recharts time-series parameter charts
     │       ├── ComparisonView.jsx  # Multi-sounding comparison view
+    │       ├── VwpDisplay.jsx     # VAD Wind Profile time-height display
     │       └── *.css              # Component styles (dark theme)
     ├── public/
     │   └── favicon.svg          # Custom skew-T favicon
@@ -254,6 +263,7 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 | `POST` | `/api/compare` | Fetch multiple soundings for side-by-side comparison |
 | `POST` | `/api/feedback` | Submit user feedback/suggestion |
 | `GET`  | `/api/feedback` | Retrieve all submitted feedback |
+| `GET`  | `/api/vwp-display` | Fetch VAD Wind Profile time-height display image |
 
 ### `POST /api/sounding` — Request Body
 
@@ -326,6 +336,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Hodograph boundary lines | ❌ | ✅ |
 | Composite sounding (overlay multiple profiles) | ❌ | ✅ |
 | VAD (radar wind profiler) hodograph | ✅ | ✅ |
+| VAD barbs on Skew-T (dual OBS/VAD columns) | ✅ | ✅ |
+| VWP time-height display (standalone panel) | ✅ | ✅ |
 | Storm-relative hodograph mode | ✅ | ✅ |
 
 ### Parcel & Parameter Calculations
@@ -379,6 +391,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 | **Comparison history** | Auto-saved comparisons with reload from History panel |
 | **Feedback system** | In-app bug report / feature request modal |
 | **Download comparison PNG** | Tiles all compared sounding plots into a single image |
+| **VWP time-height display** | Standalone panel showing wind barbs across time and height from NEXRAD VAD data |
 
 ---
 
@@ -410,6 +423,8 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
 - [x] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS); adjustable sigma parameter ✅
 - [x] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph ✅
+- [x] **VAD Barbs on Skew-T** — Dual OBS/VAD barb columns on the Skew-T for direct wind comparison ✅
+- [x] **VWP Time-Height Display** — Standalone panel showing NEXRAD VAD wind barbs across time and height ✅
 - [x] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames; SM at origin with crosshair marker ✅
 - [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
 - [ ] **Color-Blind Mode** — Swap dewpoint trace from green/blue and adjust color palettes for accessibility

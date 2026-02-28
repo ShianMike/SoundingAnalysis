@@ -1,0 +1,151 @@
+.vwp-panel {
+  background: var(--bg-card, #16213e);
+  border: 1px solid var(--border, #1a1a3e);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.vwp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-darker, #0f1729);
+  border-bottom: 1px solid var(--border, #1a1a3e);
+}
+
+.vwp-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vwp-header-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+}
+
+.vwp-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.vwp-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.vwp-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border, #1a1a3e);
+  flex-wrap: wrap;
+}
+
+.vwp-radar-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #888);
+}
+
+.vwp-radar-input {
+  width: 70px;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  text-transform: uppercase;
+  background: var(--bg-input, #0d1b2a);
+  border: 1px solid var(--border, #1a1a3e);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.vwp-hours-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #888);
+}
+
+.vwp-hours-select {
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  background: var(--bg-input, #0d1b2a);
+  border: 1px solid var(--border, #1a1a3e);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.vwp-fetch-btn {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vwp-fetch-btn:hover {
+  background: var(--accent-hover, #2563eb);
+}
+
+.vwp-fetch-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vwp-body {
+  position: relative;
+}
+
+.vwp-image-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  background: #1a1a2e;
+}
+
+.vwp-image-wrap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.vwp-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+}
+
+.vwp-error {
+  padding: 20px;
+  text-align: center;
+  color: var(--danger, #e74c3c);
+  font-size: 0.85rem;
+}
+
+.vwp-empty {
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+}
