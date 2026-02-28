@@ -20,6 +20,7 @@ import {
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
 import ComparisonView from "./ComparisonView";
+import VwpDisplay from "./VwpDisplay";
 import "./ResultsView.css";
 
 function ParamCard({ label, value, unit, color, desc }) {
@@ -112,7 +113,7 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
   if (error) {
     return (
       <div className="results-view">
@@ -123,6 +124,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         )}
         {showCompare && (
           <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+        )}
+        {showVwp && (
+          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
         )}
         <div className="rv-state rv-error">
           <AlertTriangle size={24} />
@@ -145,6 +149,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         )}
         {showCompare && (
           <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+        )}
+        {showVwp && (
+          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
         )}
         <div className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
@@ -170,6 +177,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         )}
         {showCompare && (
           <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+        )}
+        {showVwp && (
+          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
         )}
         {!riskData && (
           <div className="rv-state rv-empty">
@@ -339,6 +349,11 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       {/* Comparison View */}
       {showCompare && (
         <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+      )}
+
+      {/* VWP Display */}
+      {showVwp && (
+        <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
       )}
 
       {/* Plot */}

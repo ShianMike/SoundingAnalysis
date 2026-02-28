@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Crosshair,
   Waves,
+  Radio,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -128,6 +129,8 @@ export default function ControlPanel({
   onToggleTimeSeries,
   showCompare,
   onToggleCompare,
+  showVwp,
+  onToggleVwp,
   selectedStation,
   onStationChange,
   onSourceChange,
@@ -959,6 +962,14 @@ export default function ControlPanel({
           >
             <GitCompareArrows size={14} />
             {showCompare ? "Hide" : "Compare"}
+          </button>
+          <button
+            type="button"
+            className={`cp-toggle-btn ${showVwp ? "active" : ""}`}
+            onClick={onToggleVwp}
+          >
+            <Radio size={14} />
+            {showVwp ? "Hide VWP" : "VWP"}
           </button>
           <button
             type="button"

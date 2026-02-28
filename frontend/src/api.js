@@ -112,3 +112,17 @@ export async function fetchSpcOutlook(day = 1) {
   if (!res.ok) throw new Error(data.error || "Failed to fetch SPC outlook");
   return data;
 }
+
+/**
+ * Fetch VWP time-height display image for a given NEXRAD radar.
+ */
+export async function fetchVwpDisplay(radar, hours = 12) {
+  const res = await fetchWithTimeout(
+    `${API_BASE}/api/vwp-display?radar=${encodeURIComponent(radar)}&hours=${hours}`,
+    {},
+    120000 // 2 min timeout — fetches many files
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch VWP display");
+  return data;
+}
