@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Layers, X, Loader2 } from "lucide-react";
+import { Layers, X, Loader2, AlertTriangle, Info } from "lucide-react";
 import { fetchEnsemblePlume } from "../api";
 import "./EnsemblePlume.css";
 
 const MODELS = [
-  { id: "sref", label: "SREF" },
-  { id: "rap", label: "RAP" },
-  { id: "hrrr", label: "HRRR" },
-  { id: "nam", label: "NAM" },
-  { id: "namnest", label: "NAM Nest" },
-  { id: "gfs", label: "GFS" },
+  { id: "rap", label: "RAP", desc: "Hourly, 13 km" },
+  { id: "hrrr", label: "HRRR", desc: "Hourly, 3 km" },
+  { id: "nam", label: "NAM", desc: "Hourly, 12 km" },
+  { id: "namnest", label: "NAM Nest", desc: "Hourly, 3 km" },
+  { id: "gfs", label: "GFS", desc: "3-hourly, global" },
+  { id: "sref", label: "SREF", desc: "Ensemble (legacy)" },
 ];
 
 const HOUR_PRESETS = {
@@ -20,9 +20,9 @@ const HOUR_PRESETS = {
 };
 
 export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
-  const [model, setModel] = useState("sref");
+  const [model, setModel] = useState("rap");
   const [hourPreset, setHourPreset] = useState("Medium (0-12h)");
-  const [source, setSource] = useState("bufkit");
+  const [source, setSource] = useState("psu");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -49,50 +49,73 @@ export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
     }
   };
 
+  const modelInfo = MODELS.find((m) => m.id === model);
+
   return (
     <div className="ens-panel">
+      {/* Header */}
       <div className="ens-header">
-        <span className="ens-title"><Layers size={14} /> Ensemble Sounding Plume</span>
-        <button className="ens-close" onClick={onClose}><X size={14} /></button>
+        <div className="ens-header-left">
+          <Layers size={15} className="ens-header-icon" />
+          <div>
+            <span className="ens-title">Ensemble Sounding Plume</span>
+            <span className="ens-subtitle">
+              {station || "OUN"} &middot; {modelInfo?.label || model.toUpperCase()}
+            </span>
+          </div>
+        </div>
+        <button className="ens-close" onClick={onClose} title="Close"><X size={14} /></button>
       </div>
 
+      {/* Controls */}
       <div className="ens-controls">
-        <label>
-          Station:
-          <input type="text" value={station || "OUN"} readOnly style={{ width: 50 }} />
-        </label>
-        <label>
-          Model:
+        <div className="ens-ctrl-group">
+          <span className="ens-ctrl-label">Model</span>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             {MODELS.map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
-        </label>
-        <label>
-          Source:
+        </div>
+        <div className="ens-ctrl-group">
+          <span className="ens-ctrl-label">Source</span>
           <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="bufkit">Iowa State</option>
-            <option value="psu">Penn State</option>
+            <option value="psu">Penn State (latest)</option>
+            <option value="bufkit">Iowa State (archive)</option>
           </select>
-        </label>
-        <label>
-          Hours:
+        </div>
+        <div className="ens-ctrl-group">
+          <span className="ens-ctrl-label">Fcst Range</span>
           <select value={hourPreset} onChange={(e) => setHourPreset(e.target.value)}>
             {Object.keys(HOUR_PRESETS).map((k) => (
               <option key={k} value={k}>{k}</option>
             ))}
           </select>
-        </label>
+        </div>
         <button className="ens-fetch-btn" onClick={handleFetch} disabled={loading}>
-          {loading ? <><Loader2 size={12} className="spin" /> Loading...</> : "Generate Plume"}
+          {loading ? <><Loader2 size={13} className="spin" /> Generating...</> : "Generate Plume"}
         </button>
       </div>
 
-      {error && <div className="ens-error">{error}</div>}
+      {/* Hint for SREF */}
+      {model === "sref" && !result && !loading && (
+        <div className="ens-hint">
+          <Info size={12} />
+          SREF was discontinued. Data may be unavailable for recent dates. Consider using RAP or HRRR instead.
+        </div>
+      )}
 
+      {/* Error */}
+      {error && (
+        <div className="ens-error">
+          <AlertTriangle size={14} />
+          <div className="ens-error-text">{error}</div>
+        </div>
+      )}
+
+      {/* Results */}
       {result && (
-        <>
+        <div className="ens-result">
           <div className="ens-plot-wrap">
             <img
               src={`data:image/png;base64,${result.image}`}
@@ -100,12 +123,14 @@ export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
               className="ens-plot-img"
             />
           </div>
-          <div className="ens-info">
-            {result.members} members loaded
-            {result.hours && ` • f${result.hours.join(", f")}`}
-            {result.errors?.length > 0 && ` • ${result.errors.length} failed`}
+          <div className="ens-meta-bar">
+            <span className="ens-meta-badge">{result.members} members</span>
+            <span className="ens-meta-badge">f{Math.min(...result.hours).toString().padStart(3,"0")} – f{Math.max(...result.hours).toString().padStart(3,"0")}</span>
+            {result.meta?.source && <span className="ens-meta-badge">{result.meta.source === "psu" ? "Penn State" : "Iowa State"}</span>}
+            {result.meta?.date && <span className="ens-meta-badge">{result.meta.date}</span>}
+            {result.errors?.length > 0 && <span className="ens-meta-badge ens-meta-warn">{result.errors.length} failed</span>}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
