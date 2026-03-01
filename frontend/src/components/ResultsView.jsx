@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   ImageIcon,
   BarChart3,
@@ -19,6 +19,7 @@ import {
   Link2,
   Check,
   FileText,
+  ChevronDown,
 } from "lucide-react";
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -203,8 +204,20 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   const { image, params, meta } = result;
   const [zoomed, setZoomed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef(null);
   const plotRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e) => {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
 
   const handleMouseDown = useCallback((e) => {
     if (!zoomed) return;
@@ -423,17 +436,38 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <button className="rv-btn" onClick={handleDownload} title="Download PNG">
             <Download size={14} />
           </button>
-          <button className="rv-btn" onClick={handleCsvExport} title="Export CSV">
-            <FileSpreadsheet size={14} />
-          </button>
-          <button className="rv-btn" onClick={handleSharppy} title="Export SHARPpy format">
-            <FileText size={14} />
-            <span className="rv-btn-label">SHARPpy</span>
-          </button>
-          <button className="rv-btn" onClick={handleCm1} title="Export CM1 input_sounding">
-            <FileText size={14} />
-            <span className="rv-btn-label">CM1</span>
-          </button>
+          <div className="rv-export-wrap" ref={exportRef}>
+            <button className={`rv-btn ${exportOpen ? "rv-btn-active" : ""}`} onClick={() => setExportOpen((v) => !v)} title="Export sounding data">
+              <Download size={14} />
+              <span className="rv-btn-label">Export</span>
+              <ChevronDown size={10} />
+            </button>
+            {exportOpen && (
+              <div className="rv-export-menu">
+                <button onClick={() => { handleCsvExport(); setExportOpen(false); }}>
+                  <FileSpreadsheet size={13} />
+                  <div>
+                    <span className="rv-export-title">CSV Parameters</span>
+                    <span className="rv-export-desc">All computed parameters in spreadsheet format</span>
+                  </div>
+                </button>
+                <button onClick={() => { handleSharppy(); setExportOpen(false); }}>
+                  <FileText size={13} />
+                  <div>
+                    <span className="rv-export-title">SHARPpy Format</span>
+                    <span className="rv-export-desc">Raw profile for SHARPpy analysis software</span>
+                  </div>
+                </button>
+                <button onClick={() => { handleCm1(); setExportOpen(false); }}>
+                  <FileText size={13} />
+                  <div>
+                    <span className="rv-export-title">CM1 input_sounding</span>
+                    <span className="rv-export-desc">Profile for Cloud Model 1 simulations</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
           <button className={`rv-btn ${linkCopied ? "rv-btn-active" : ""}`} onClick={handleCopyLink} title={linkCopied ? "Link copied!" : "Copy shareable link"}>
             {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
           </button>

@@ -196,6 +196,72 @@
   gap: 3px;
 }
 
+/* ── Export dropdown ── */
+.rv-export-wrap {
+  position: relative;
+}
+
+.rv-export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 240px;
+  background: var(--bg-card, #1a1a1a);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  padding: 4px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rv-export-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary, #aaa);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.rv-export-menu button:hover {
+  background: var(--bg-hover, #2a2a2a);
+  color: var(--text-primary, #eee);
+}
+
+.rv-export-menu button > svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.rv-export-menu button > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rv-export-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #eee);
+  font-family: var(--font-mono, monospace);
+}
+
+.rv-export-desc {
+  font-size: 10px;
+  color: var(--text-secondary, #888);
+  line-height: 1.3;
+}
+
 /* ── Risk Scan Table ── */
 .rv-risk-table-wrap {
   background: var(--bg-card);
