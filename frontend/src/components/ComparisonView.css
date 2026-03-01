@@ -266,22 +266,28 @@
 }
 
 /* Compare button */
+.cv-action-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
 .cv-compare-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px;
+  gap: 6px;
+  flex: 1;
+  padding: 9px 6px;
   background: linear-gradient(135deg, #60a5fa, #818cf8);
   border: none;
   border-radius: 8px;
   color: #fff;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 12px;
+  white-space: nowrap;
 }
 
 .cv-compare-btn:hover:not(:disabled) {
@@ -295,52 +301,42 @@
 }
 
 /* ── Merge controls ─────────────────────────────────────────── */
+.cv-merge-btn {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+}
+
 .cv-merge-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.cv-merge-slider {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  flex: 1;
+  margin-bottom: 10px;
   background: var(--bg-secondary, #141414);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 6px;
+  padding: 5px 10px;
   border: 1px solid var(--border, #333);
 }
 
 .cv-merge-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--fg-dim, #b0b0b0);
-  min-width: 30px;
+  min-width: 24px;
   text-align: center;
   font-family: "JetBrains Mono", monospace;
 }
 
 .cv-merge-pct {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--fg-faint, #707070);
   font-family: "JetBrains Mono", monospace;
-  min-width: 40px;
+  min-width: 36px;
   text-align: center;
 }
 
 .cv-merge-range {
   flex: 1;
   accent-color: #a78bfa;
-  height: 4px;
-}
-
-.cv-merge-btn {
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
-  min-width: 90px;
-  flex-shrink: 0;
-  margin-bottom: 0 !important;
+  height: 3px;
 }
 
 /* Error */
