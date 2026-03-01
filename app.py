@@ -911,34 +911,70 @@ def ensemble_plume():
         else:
             errors.extend(errors_fb)
 
-    # If still not enough, try previous init cycle (12h earlier)
+    # If still not enough, try previous init cycle (12h earlier) with both sources
     if len(profiles) < 2 and dt:
         prev_dt = dt - timedelta(hours=12)
         print(f"  [ensemble-plume] Trying previous init cycle: {prev_dt:%Y-%m-%d %H}Z...")
-        profiles.clear()
-        errors_prev = []
-        for fh in hours:
-            try:
-                from sounding import fetch_bufkit_sounding
-                data = fetch_bufkit_sounding(station, prev_dt, model=model, fhour=int(fh))
-                profiles.append({"fhour": fh, "data": data})
-            except Exception as e:
-                errors_prev.append(f"f{fh:03d}: {e}")
-        if len(profiles) >= 2:
-            errors = errors_prev
-            dt = prev_dt
-            used_source = "bufkit"
+        for try_src_label, try_fn in [("psu", "fetch_psu_bufkit"), ("bufkit", "fetch_bufkit_sounding")]:
+            profiles.clear()
+            errors_prev = []
+            for fh in hours:
+                try:
+                    if try_src_label == "psu":
+                        from sounding import fetch_psu_bufkit
+                        data = fetch_psu_bufkit(station, model=model, fhour=int(fh))
+                    else:
+                        from sounding import fetch_bufkit_sounding
+                        data = fetch_bufkit_sounding(station, prev_dt, model=model, fhour=int(fh))
+                    profiles.append({"fhour": fh, "data": data})
+                except Exception as e:
+                    errors_prev.append(f"f{fh:03d}: {e}")
+            if len(profiles) >= 2:
+                errors = errors_prev
+                dt = prev_dt
+                used_source = try_src_label
+                break
 
     if len(profiles) < 2:
+        # Build a concise, user-friendly error
+        # Deduplicate error reasons (strip the fXXX prefix)
+        unique_reasons = []
+        seen = set()
+        for e in errors:
+            reason = e.split(": ", 1)[1] if ": " in e else e
+            # Normalise repeated "BUFKIT data not found" messages
+            short = reason.split(".")[0].strip()
+            if short not in seen:
+                seen.add(short)
+                unique_reasons.append(short)
+
+        tried_sources = []
+        if src == "bufkit" or used_source == "bufkit":
+            tried_sources.append("Iowa State")
+        if src == "psu" or used_source == "psu":
+            tried_sources.append("Penn State")
+        tried_str = " and ".join(tried_sources) if tried_sources else src
+
+        summary = (
+            f"Could not load forecast data for {station.upper()} ({model.upper()}).\n"
+            f"Tried {len(hours)} forecast hours from {tried_str} — none returned data."
+        )
+        if unique_reasons:
+            summary += f"\n\nReason: {unique_reasons[0]}."
+
         suggestions = []
         if model == "sref":
-            suggestions.append("SREF was discontinued — try RAP, HRRR, or NAM instead.")
-        suggestions.append("Try switching source (Iowa State ↔ Penn State).")
-        suggestions.append("Try a different model or earlier date.")
+            suggestions.append("SREF was discontinued in 2025 — switch to RAP, HRRR, or NAM.")
+        if src == "bufkit":
+            suggestions.append("Switch source to \"Penn State (latest)\" — it has the most recent model runs.")
+        elif src == "psu":
+            suggestions.append("Switch source to \"Iowa State (archive)\" for historical data.")
+        suggestions.append("Try a different model (RAP and HRRR have the best station coverage).")
+        suggestions.append("Try a different station — not all sites are available in all model feeds.")
+
         return jsonify({
-            "error": f"Need ≥2 ensemble members, got {len(profiles)}. "
-                     + ("; ".join(errors[:3]) if errors else "")
-                     + ("\n\nSuggestions: " + " ".join(suggestions) if suggestions else "")
+            "error": summary,
+            "suggestions": suggestions,
         }), 400
 
     # Compute parameters for the analysis profile (first member)
