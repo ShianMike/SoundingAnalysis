@@ -279,7 +279,7 @@
   gap: 6px;
   flex: 1;
   padding: 9px 6px;
-  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  background: #60a5fa;
   border: none;
   border-radius: 8px;
   color: #fff;
@@ -302,7 +302,7 @@
 
 /* ── Merge controls ─────────────────────────────────────────── */
 .cv-merge-btn {
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+  background: #a78bfa !important;
 }
 
 .cv-merge-row {
