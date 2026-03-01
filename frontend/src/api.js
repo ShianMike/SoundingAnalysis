@@ -140,3 +140,17 @@ export async function fetchCustomSounding({ text, format = "auto", theme = "dark
   if (!res.ok) throw new Error(data.error || "Custom sounding analysis failed");
   return data;
 }
+
+/**
+ * Merge two soundings into a weighted-average blended profile.
+ */
+export async function fetchMergeProfiles({ soundings, weight = 0.5, theme = "dark", colorblind = false }) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/merge-profiles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ soundings, weight, theme, colorblind }),
+  }, 300000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Profile merge failed");
+  return data;
+}

@@ -294,6 +294,55 @@
   cursor: not-allowed;
 }
 
+/* ── Merge controls ─────────────────────────────────────────── */
+.cv-merge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cv-merge-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  background: var(--bg-secondary, #141414);
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #333);
+}
+
+.cv-merge-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-dim, #b0b0b0);
+  min-width: 30px;
+  text-align: center;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.cv-merge-pct {
+  font-size: 10px;
+  color: var(--fg-faint, #707070);
+  font-family: "JetBrains Mono", monospace;
+  min-width: 40px;
+  text-align: center;
+}
+
+.cv-merge-range {
+  flex: 1;
+  accent-color: #a78bfa;
+  height: 4px;
+}
+
+.cv-merge-btn {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+  min-width: 90px;
+  flex-shrink: 0;
+  margin-bottom: 0 !important;
+}
+
 /* Error */
 .cv-error {
   display: flex;

@@ -28,6 +28,7 @@ import {
   Moon,
   Eye,
   Upload,
+  Minus,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -190,6 +191,10 @@ export default function ControlPanel({
   // Profile smoothing state
   const [smoothEnabled, setSmoothEnabled] = useState(false);
   const [smoothSigma, setSmoothSigma] = useState("3");
+
+  // Boundary line state
+  const [boundaryEnabled, setBoundaryEnabled] = useState(false);
+  const [boundaryOrientation, setBoundaryOrientation] = useState("");
 
   // Sync source to parent
   const setSource = (src) => {
@@ -358,6 +363,12 @@ export default function ControlPanel({
     if (smoothEnabled) {
       const sigma = parseFloat(smoothSigma);
       if (sigma > 0) params.smoothing = sigma;
+    }
+
+    // Boundary line
+    if (boundaryEnabled && boundaryOrientation !== "") {
+      const deg = parseFloat(boundaryOrientation);
+      if (!isNaN(deg)) params.boundaryOrientation = deg;
     }
 
     onSubmit(params);
@@ -897,6 +908,47 @@ export default function ControlPanel({
             {srHodoEnabled ? "ON" : "OFF"}
           </span>
         </button>
+
+        {/* Boundary Line */}
+        <div className="cp-accordion-section">
+          <button
+            type="button"
+            className={`cp-toggle-btn ${boundaryEnabled ? "cp-toggle-btn--active" : ""}`}
+            onClick={() => setBoundaryEnabled((v) => !v)}
+            title="Draw a boundary orientation line on the hodograph — represents an outflow boundary, front, or dryline orientation"
+          >
+            <Minus size={14} />
+            <span>Boundary Line</span>
+            <span className={`cp-toggle-chip ${boundaryEnabled ? "on" : ""}`}>
+              {boundaryEnabled ? "ON" : "OFF"}
+            </span>
+          </button>
+          {boundaryEnabled && (
+            <div style={{ padding: "6px 10px" }}>
+              <div className="cp-input-row">
+                <div className="cp-input-group">
+                  <label className="cp-input-group-label">Orientation</label>
+                  <div className="cp-input-with-unit">
+                    <input
+                      type="number"
+                      step="5"
+                      min="0"
+                      max="360"
+                      className="cp-input cp-input-sm"
+                      placeholder="e.g. 210"
+                      value={boundaryOrientation}
+                      onChange={(e) => setBoundaryOrientation(e.target.value)}
+                    />
+                    <span className="cp-unit-badge">°</span>
+                  </div>
+                </div>
+              </div>
+              <p style={{ margin: "4px 0 0", fontSize: 10, color: "var(--fg-faint, #707070)" }}>
+                Direction the boundary runs (0–360°). e.g. 210° = SW–NE oriented.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Profile Smoothing */}
         <div className="cp-accordion-section">

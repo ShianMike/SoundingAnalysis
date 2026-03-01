@@ -12,7 +12,7 @@ import {
   Search,
   Download,
 } from "lucide-react";
-import { fetchCompare, fetchComposite } from "../api";
+import { fetchCompare, fetchComposite, fetchMergeProfiles } from "../api";
 import { saveCompareToHistory } from "../history";
 import "./ComparisonView.css";
 
@@ -229,6 +229,9 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
   const [error, setError] = useState(null);
   const [compositeImage, setCompositeImage] = useState(null);
   const [compositeLoading, setCompositeLoading] = useState(false);
+  const [mergeWeight, setMergeWeight] = useState(50);
+  const [mergeResult, setMergeResult] = useState(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
 
   // Load from history if provided
   useEffect(() => {
@@ -307,6 +310,37 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
       setError(e.message);
     } finally {
       setCompositeLoading(false);
+    }
+  };
+
+  const handleMerge = async () => {
+    const valid = slots.filter((s) => s.station);
+    if (valid.length < 2) {
+      setError("Select at least 2 stations for merging (first two will be used).");
+      return;
+    }
+
+    setMergeLoading(true);
+    setError(null);
+    setMergeResult(null);
+
+    try {
+      const soundings = valid.slice(0, 2).map((s) => {
+        const params = { source: s.source, station: s.station };
+        if (s.date) {
+          params.date = s.date.replace(/[-T:]/g, "").slice(0, 10);
+        }
+        return params;
+      });
+      const data = await fetchMergeProfiles({
+        soundings,
+        weight: mergeWeight / 100,
+      });
+      setMergeResult(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMergeLoading(false);
     }
   };
 
@@ -423,6 +457,45 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
           )}
         </button>
       </div>
+
+      {/* Merge controls — uses first two slots */}
+      {slots.filter((s) => s.station).length >= 2 && (
+        <div className="cv-merge-row">
+          <div className="cv-merge-slider">
+            <span className="cv-merge-label">{slots[0].station || "A"}</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={mergeWeight}
+              onChange={(e) => setMergeWeight(Number(e.target.value))}
+              className="cv-merge-range"
+              title={`Weight: ${mergeWeight}% / ${100 - mergeWeight}%`}
+            />
+            <span className="cv-merge-label">{slots[1].station || "B"}</span>
+            <span className="cv-merge-pct">{mergeWeight}/{100 - mergeWeight}</span>
+          </div>
+          <button
+            className="cv-compare-btn cv-merge-btn"
+            onClick={handleMerge}
+            disabled={loading || compositeLoading || mergeLoading || slots.filter((s) => s.station).length < 2}
+            title="Merge the first two profiles into a weighted-average blended sounding"
+          >
+            {mergeLoading ? (
+              <>
+                <Loader2 size={16} className="spin" />
+                Merging...
+              </>
+            ) : (
+              <>
+                <GitCompareArrows size={16} />
+                Merge
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="cv-error">
@@ -560,6 +633,71 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
               style={{ width: "100%", borderRadius: 8 }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Merged profile result */}
+      {mergeResult && (
+        <div className="cv-results">
+          <div className="cv-results-actions">
+            <span style={{ color: "#a78bfa", fontWeight: 600, fontSize: 13 }}>
+              {mergeResult.label || "Merged Profile"}
+            </span>
+            <button
+              className="cv-download-btn"
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = `data:image/png;base64,${mergeResult.image}`;
+                link.download = "merged_sounding.png";
+                link.click();
+              }}
+              title="Download merged sounding"
+            >
+              <Download size={14} />
+              Download Merge
+            </button>
+          </div>
+          <div className="cv-composite-plot">
+            <img
+              src={`data:image/png;base64,${mergeResult.image}`}
+              alt="Merged sounding"
+              style={{ width: "100%", borderRadius: 8 }}
+            />
+          </div>
+          {mergeResult.params && (
+            <div className="cv-table-wrap">
+              <table className="cv-table">
+                <thead>
+                  <tr>
+                    <th className="cv-th-param">Parameter</th>
+                    <th style={{ color: "#a78bfa" }}>Merged</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PARAM_GROUPS.map((group) => (
+                    <>
+                      <tr key={group.title} className="cv-group-row">
+                        <td colSpan={2} className="cv-group-label">
+                          {group.title}
+                        </td>
+                      </tr>
+                      {group.params.map((p) => (
+                        <tr key={p.key}>
+                          <td className="cv-td-label">
+                            {p.label}
+                            {p.unit && <span className="cv-td-unit">{p.unit}</span>}
+                          </td>
+                          <td className="cv-td-val">
+                            {mergeResult.params[p.key] != null ? mergeResult.params[p.key] : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

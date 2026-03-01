@@ -34,6 +34,7 @@ from sounding import (
     plot_vwp,
     compute_parameters,
     plot_sounding,
+    merge_profiles,
     get_latest_sounding_time,
     find_nearest_station,
     _quick_tornado_score,
@@ -139,6 +140,7 @@ def get_sounding():
     sr_hodograph = body.get("srHodograph", False)  # Storm-relative hodograph mode
     theme = body.get("theme", "dark")              # "dark" or "light"
     colorblind = body.get("colorblind", False)     # color-blind safe palette
+    boundary_orientation = body.get("boundaryOrientation")  # degrees or null
 
     # Parse date
     if date_str:
@@ -195,7 +197,8 @@ def get_sounding():
         plot_id = station or source.upper()
         fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result,
                             sr_hodograph=sr_hodograph, theme=theme,
-                            colorblind=colorblind)
+                            colorblind=colorblind,
+                            boundary_orientation=boundary_orientation)
 
         _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
         buf = io.BytesIO()
@@ -953,6 +956,109 @@ def composite_sounding():
             "image": image_b64,
             "count": len(profiles),
             "errors": errors if errors else None,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Merge Profiles endpoint ─────────────────────────────────────────
+@app.route("/api/merge-profiles", methods=["POST", "OPTIONS"])
+def merge_profiles_endpoint():
+    """
+    Merge two soundings into a weighted-average blended profile.
+
+    Expected JSON body:
+      {
+        "soundings": [
+          { "source": "obs", "station": "OUN", "date": "2024061200" },
+          { "source": "obs", "station": "FWD", "date": "2024061200" }
+        ],
+        "weight": 0.5,
+        "theme": "dark",
+        "colorblind": false
+      }
+    weight = proportion of profile A (0–1).  Default 0.5.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True)
+    items = body.get("soundings", [])
+    weight = float(body.get("weight", 0.5))
+    theme = body.get("theme", "dark")
+    cb = body.get("colorblind", False)
+
+    if len(items) != 2:
+        return jsonify({"error": "Exactly 2 soundings required for merging."}), 400
+
+    try:
+        datasets = []
+        labels = []
+        for item in items:
+            src = item.get("source", "obs").lower()
+            stn = item.get("station")
+            date_str = item.get("date")
+            lat_v = item.get("lat")
+            lon_v = item.get("lon")
+            mdl = item.get("model", "rap")
+            fhr = item.get("fhour", 0)
+
+            if date_str:
+                dt = datetime.strptime(str(date_str), "%Y%m%d%H").replace(
+                    tzinfo=timezone.utc
+                )
+            else:
+                dt = get_latest_sounding_time()
+
+            if src == "obs" and stn is None and lat_v is not None and lon_v is not None:
+                stn = find_nearest_station(lat_v, lon_v)
+            if stn:
+                stn = stn.upper()
+            if src in ("rap", "era5") and lat_v is None and lon_v is None:
+                if stn and stn in STATIONS:
+                    _, lat_v, lon_v = STATIONS[stn]
+
+            data = fetch_sounding(
+                station_id=stn, dt=dt, source=src,
+                lat=lat_v, lon=lon_v, model=mdl, fhour=fhr,
+            )
+            datasets.append(data)
+            labels.append(f"{stn or src.upper()} {dt.strftime('%d/%HZ')}")
+
+        # Merge
+        merged_data = merge_profiles(datasets[0], datasets[1], weight_a=weight)
+        merged_params = compute_parameters(merged_data)
+
+        merge_label = f"MERGE: {int(weight*100)}% {labels[0]} + {int((1-weight)*100)}% {labels[1]}"
+        plot_id = "MERGED"
+        fig = plot_sounding(merged_data, merged_params, plot_id, dt, theme=theme,
+                            colorblind=cb)
+
+        _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor=_facecolor)
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+        serialized = _serialize_params(merged_params, merged_data, "MERGED", dt, "merge")
+
+        return jsonify({
+            "image": image_b64,
+            "params": serialized,
+            "label": merge_label,
+            "meta": {
+                "station": "MERGED",
+                "stationName": merge_label,
+                "source": "merge",
+                "date": dt.strftime("%Y-%m-%d %HZ"),
+                "levels": len(merged_data["pressure"]),
+                "weight": weight,
+                "profileA": labels[0],
+                "profileB": labels[1],
+            },
         })
 
     except Exception as e:
