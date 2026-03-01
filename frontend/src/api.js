@@ -178,6 +178,10 @@ export async function fetchEnsemblePlume(params) {
     body: JSON.stringify(params),
   }, 300000);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Ensemble plume request failed");
+  if (!res.ok) {
+    const err = new Error(data.error || "Ensemble plume request failed");
+    err.suggestions = data.suggestions || [];
+    throw err;
+  }
   return data;
 }
