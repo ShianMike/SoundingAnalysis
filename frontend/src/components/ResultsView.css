@@ -398,11 +398,16 @@
   background: rgba(234, 179, 8, 0.03);
 }
 
-/* Parameters */
+/* Parameters — 2-column explicit grid */
 .rv-params {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+/* Full-width composites row */
+.param-section--composites {
+  grid-column: 1 / -1;
 }
 
 .param-section {
@@ -434,6 +439,85 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
+}
+
+/* ── Composite Indices grid ─────────────────────────── */
+.param-grid--composites {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.composite-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px 10px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  cursor: default;
+  text-align: center;
+}
+
+.composite-card:hover {
+  background: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.composite-card:hover .param-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%);
+}
+
+.composite-card--highlight {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.composite-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.composite-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.composite-unit {
+  font-size: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Severity alert borders on composite cards */
+.composite-value.param-alert-mod { color: #eab308; }
+.composite-value.param-alert-high { color: #f97316; }
+.composite-value.param-alert-extreme { color: #ef4444; }
+
+.composite-card:has(.param-alert-mod) {
+  border-color: rgba(234, 179, 8, 0.3);
+  background: rgba(234, 179, 8, 0.04);
+}
+.composite-card:has(.param-alert-high) {
+  border-color: rgba(249, 115, 22, 0.3);
+  background: rgba(249, 115, 22, 0.05);
+}
+.composite-card:has(.param-alert-extreme) {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .param-card {
@@ -572,6 +656,21 @@
   }
 }
 
+@media (max-width: 1200px) {
+  .param-grid--composites {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .rv-params {
+    grid-template-columns: 1fr;
+  }
+  .param-grid--composites {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 640px) {
   .param-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -579,6 +678,14 @@
 
   .rv-params {
     grid-template-columns: 1fr;
+  }
+
+  .param-grid--composites {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .composite-value {
+    font-size: 17px;
   }
 
   /* Reset 3-col tooltip alignment, apply 2-col alignment */
