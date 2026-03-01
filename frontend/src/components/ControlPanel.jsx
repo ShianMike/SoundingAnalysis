@@ -163,11 +163,10 @@ export default function ControlPanel({
   const [model, setModel] = useState(urlParams?.model || "hrrr");
   const [fhour, setFhour] = useState(urlParams?.fhour != null ? String(urlParams.fhour) : "0");
   const [stationSearch, setStationSearch] = useState("");
-  const [hoveredSource, setHoveredSource] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [sortMode, setSortMode] = useState("az");
   const [favorites, setFavorites] = useState(() => getFavorites());
-  const [soundingHour, setSoundingHour] = useState("12");
+  const [soundingHour, setSoundingHour] = useState("latest");
   const listRef = useRef(null);
 
   // Surface modification state
@@ -465,29 +464,22 @@ export default function ControlPanel({
             Data Source
           </label>
           <div className="cp-source-grid">
-            {sources.map((s) => (
-              <div
-                key={s.id}
-                className="cp-source-btn-wrap"
-                onMouseEnter={() => setHoveredSource(s.id)}
-                onMouseLeave={() => setHoveredSource(null)}
-              >
-                <button
-                  type="button"
-                  className={`cp-source-btn ${source === s.id ? "active" : ""}`}
-                  onClick={() => setSource(s.id)}
-                >
-                  <span className="cp-source-id">{s.id.toUpperCase()}</span>
-                </button>
-              </div>
-            ))}
+            {sources.map((s) => {
+              const meta = SOURCE_META[s.id];
+              return (
+                <div key={s.id} className="cp-source-btn-wrap">
+                  <button
+                    type="button"
+                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
+                    onClick={() => setSource(s.id)}
+                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
+                  >
+                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          {SOURCE_META[hoveredSource || source] && (
-            <div className="cp-source-info">
-              <span className="cp-source-info-title">{SOURCE_META[hoveredSource || source].label}</span>
-              <span className="cp-source-info-desc">{SOURCE_META[hoveredSource || source].desc}</span>
-            </div>
-          )}
         </div>
 
         {/* Station */}
@@ -696,6 +688,16 @@ export default function ControlPanel({
               <div className="cp-sounding-hour-row">
                 <button
                   type="button"
+                  className={`cp-hour-btn ${soundingHour === "latest" ? "active" : ""}`}
+                  onClick={() => {
+                    setSoundingHour("latest");
+                    setDate("");
+                  }}
+                >
+                  Latest
+                </button>
+                <button
+                  type="button"
                   className={`cp-hour-btn ${soundingHour === "00" ? "active" : ""}`}
                   onClick={() => {
                     setSoundingHour("00");
@@ -716,7 +718,7 @@ export default function ControlPanel({
                 </button>
               </div>
               <p className="cp-hint">
-                Radiosondes launch at 00Z and 12Z only
+                Latest fetches the most recent available sounding
               </p>
             </>
           ) : (
