@@ -420,80 +420,78 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
       </div>
 
       {/* Compare and Composite buttons */}
-      <div className="cv-action-row" style={{ display: "flex", gap: "8px" }}>
+      <div className="cv-action-row">
         <button
           className="cv-compare-btn"
           onClick={handleCompare}
-          disabled={loading || compositeLoading || slots.filter((s) => s.station).length < 2}
+          disabled={loading || compositeLoading || mergeLoading || slots.filter((s) => s.station).length < 2}
         >
           {loading ? (
             <>
-              <Loader2 size={16} className="spin" />
-              Fetching soundings...
+              <Loader2 size={14} className="spin" />
+              Comparing...
             </>
           ) : (
             <>
-              <GitCompareArrows size={16} />
-              Compare ({slots.filter((s) => s.station).length})
+              <GitCompareArrows size={14} />
+              Compare
             </>
           )}
         </button>
         <button
           className="cv-compare-btn cv-composite-btn"
           onClick={handleComposite}
-          disabled={loading || compositeLoading || slots.filter((s) => s.station).length < 2}
+          disabled={loading || compositeLoading || mergeLoading || slots.filter((s) => s.station).length < 2}
           title="Overlay all profiles on a single Skew-T"
         >
           {compositeLoading ? (
             <>
-              <Loader2 size={16} className="spin" />
-              Generating overlay...
+              <Loader2 size={14} className="spin" />
+              Overlay...
             </>
           ) : (
             <>
-              <GitCompareArrows size={16} />
+              <GitCompareArrows size={14} />
               Overlay
+            </>
+          )}
+        </button>
+        <button
+          className="cv-compare-btn cv-merge-btn"
+          onClick={handleMerge}
+          disabled={loading || compositeLoading || mergeLoading || slots.filter((s) => s.station).length < 2}
+          title="Merge the first two profiles into a weighted-average blended sounding"
+        >
+          {mergeLoading ? (
+            <>
+              <Loader2 size={14} className="spin" />
+              Merging...
+            </>
+          ) : (
+            <>
+              <GitCompareArrows size={14} />
+              Merge
             </>
           )}
         </button>
       </div>
 
-      {/* Merge controls — uses first two slots */}
+      {/* Merge weight slider — uses first two slots */}
       {slots.filter((s) => s.station).length >= 2 && (
         <div className="cv-merge-row">
-          <div className="cv-merge-slider">
-            <span className="cv-merge-label">{slots[0].station || "A"}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value={mergeWeight}
-              onChange={(e) => setMergeWeight(Number(e.target.value))}
-              className="cv-merge-range"
-              title={`Weight: ${mergeWeight}% / ${100 - mergeWeight}%`}
-            />
-            <span className="cv-merge-label">{slots[1].station || "B"}</span>
-            <span className="cv-merge-pct">{mergeWeight}/{100 - mergeWeight}</span>
-          </div>
-          <button
-            className="cv-compare-btn cv-merge-btn"
-            onClick={handleMerge}
-            disabled={loading || compositeLoading || mergeLoading || slots.filter((s) => s.station).length < 2}
-            title="Merge the first two profiles into a weighted-average blended sounding"
-          >
-            {mergeLoading ? (
-              <>
-                <Loader2 size={16} className="spin" />
-                Merging...
-              </>
-            ) : (
-              <>
-                <GitCompareArrows size={16} />
-                Merge
-              </>
-            )}
-          </button>
+          <span className="cv-merge-label">{slots[0].station || "A"}</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={mergeWeight}
+            onChange={(e) => setMergeWeight(Number(e.target.value))}
+            className="cv-merge-range"
+            title={`Weight: ${mergeWeight}% / ${100 - mergeWeight}%`}
+          />
+          <span className="cv-merge-label">{slots[1].station || "B"}</span>
+          <span className="cv-merge-pct">{mergeWeight}/{100 - mergeWeight}</span>
         </div>
       )}
 
