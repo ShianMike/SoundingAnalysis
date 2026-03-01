@@ -933,6 +933,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
 
       {/* Parameters */}
       <div className="rv-params">
+        {/* ── Row 1: Instability (SB/MU/ML parcels) + Lapse Rates & Moisture ── */}
         <ParamSection
           title="Thermodynamic"
           icon={<Thermometer size={14} />}
@@ -946,17 +947,6 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="ML CAPE" value={params.mlCape} unit="J/kg" color="#d946ef" desc="Mixed-Layer CAPE — CAPE for a parcel representing the mean of the lowest 100 hPa. Best estimate for surface-based storms in a well-mixed boundary layer." />
           <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" desc="Mixed-Layer CIN — inhibition for the ML parcel. More representative than SB CIN in the afternoon when the boundary layer is mixed." />
           <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" desc="Mixed-Layer LCL — cloud base height for the ML parcel. Lower values increase tornado probability; <1000m is favorable." />
-          <ParamCard label="DCAPE" value={params.dcape} unit="J/kg" desc="Downdraft CAPE — energy available for downdrafts. Higher values (>800) indicate strong outflow winds and potential for damaging gusts." />
-          <ParamCard label="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" desc="Entraining CAPE — CAPE adjusted for entrainment of dry environmental air (Peters et al. 2023). More physically realistic than standard CAPE." />
-          <ParamCard label="3CAPE" value={params.cape3km} unit="J/kg" color="#fb923c" desc="0–3 km CAPE — buoyant energy in the lowest 3 km (MU parcel). Higher values indicate stronger low-level accelerations; key for tornado intensity." />
-          <ParamCard label="6CAPE" value={params.cape6km} unit="J/kg" color="#facc15" desc="0–6 km CAPE — buoyant energy in the lowest 6 km (MU parcel). Indicates how quickly an updraft develops in the mid-levels." />
-          <ParamCard label="DCIN" value={params.dcin} unit="J/kg" color="#818cf8" desc="Downdraft CIN — inhibition of downdrafts reaching the surface. More negative = stronger capping of downdrafts. Near 0 means downdrafts easily penetrate to the surface." />
-          <ParamCard label="NCAPE" value={params.ncape} unit="J/kg/m" color="#38bdf8" desc="Normalized CAPE — MUCAPE divided by the LFC-to-EL depth. Measures buoyancy intensity per unit depth. >0.3 is very buoyant; indicates narrow, intense updrafts." />
-          <ParamCard label="STP" value={params.stp} unit="" color="#60a5fa" desc="Significant Tornado Parameter (fixed-layer) — uses SB CAPE, SB LCL, 0-1km SRH, and 0-6km BWD. Values ≥1 suggest significant (EF2+) tornado environment." />
-          <ParamCard label="STP-Eff" value={params.stpEff} unit="" color="#818cf8" desc="Effective-Layer STP (Thompson et al. 2012) — uses ML CAPE, ML LCL, ML CIN, effective SRH, and effective BWD. SPC's operational version; more skillful than fixed-layer STP. Values ≥1 favor significant tornadoes." />
-          <ParamCard label="SCP" value={params.scp} unit="" color="#f59e0b" desc="Supercell Composite Parameter — combines CAPE, deep shear, and SRH. Values ≥1 support supercells; >4 strongly favors discrete supercells." />
-          <ParamCard label="SHIP" value={params.ship} unit="" color="#10b981" desc="Significant Hail Parameter — composite for significant hail (≥2 in.). Values ≥1 indicate potential; >1.5 strongly favors significant hail." />
-          <ParamCard label="DCP" value={params.dcp} unit="" color="#a78bfa" desc="Derecho Composite Parameter — combines DCAPE, MUCAPE, shear, and mean wind. Values ≥2 suggest potential for long-lived wind events (derechos)." />
         </ParamSection>
 
         <ParamSection
@@ -976,6 +966,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="RH 3-6 km" value={params.rh36} unit="%" desc="Relative Humidity 3–6 km — mid-level moisture. Dry air here entrains into storms, increasing evaporative cooling and downdraft strength." />
         </ParamSection>
 
+        {/* ── Row 2: Kinematic + Downburst & Microburst ── */}
         <ParamSection
           title="Kinematic"
           icon={<ArrowUpDown size={14} />}
@@ -1003,6 +994,83 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="Max Gust" value={params.maxGust} unit="kt" color="#ef4444" desc="Maximum estimated downburst gust speed — derived from √(2×DCAPE). Simple theoretical maximum; actual gusts may differ. >58 kt = severe." />
         </ParamSection>
 
+        {/* ── Row 3: Composite Indices (full‑width, prominent) ── */}
+        <div className="param-section param-section--composites">
+          <div className="param-section-header">
+            <Gauge size={14} />
+            <h3>Composite Indices & Derived Parameters</h3>
+          </div>
+          <div className="param-grid param-grid--composites">
+            <div className="composite-card">
+              <span className="composite-label">DCAPE</span>
+              <span className={`composite-value ${getAlertClass("DCAPE", params.dcape)}`}>{params.dcape ?? "---"}</span>
+              <span className="composite-unit">J/kg</span>
+              <span className="param-tooltip">Downdraft CAPE — energy available for downdrafts. Higher values (&gt;800) indicate strong outflow winds and potential for damaging gusts.</span>
+            </div>
+            <div className="composite-card">
+              <span className="composite-label">ECAPE</span>
+              <span className={`composite-value ${getAlertClass("ECAPE", params.ecape)}`} style={{color: "#06b6d4"}}>{params.ecape ?? "---"}</span>
+              <span className="composite-unit">J/kg</span>
+              <span className="param-tooltip">Entraining CAPE (Peters et al. 2023) — CAPE adjusted for entrainment. More physically realistic than standard CAPE.</span>
+            </div>
+            <div className="composite-card">
+              <span className="composite-label">3CAPE</span>
+              <span className={`composite-value ${getAlertClass("3CAPE", params.cape3km)}`} style={{color: "#fb923c"}}>{params.cape3km ?? "---"}</span>
+              <span className="composite-unit">J/kg</span>
+              <span className="param-tooltip">0–3 km CAPE — buoyant energy in the lowest 3 km. Key for tornado intensity.</span>
+            </div>
+            <div className="composite-card">
+              <span className="composite-label">6CAPE</span>
+              <span className="composite-value" style={{color: "#facc15"}}>{params.cape6km ?? "---"}</span>
+              <span className="composite-unit">J/kg</span>
+              <span className="param-tooltip">0–6 km CAPE — indicates how quickly an updraft develops in the mid-levels.</span>
+            </div>
+            <div className="composite-card">
+              <span className="composite-label">DCIN</span>
+              <span className="composite-value" style={{color: "#818cf8"}}>{params.dcin ?? "---"}</span>
+              <span className="composite-unit">J/kg</span>
+              <span className="param-tooltip">Downdraft CIN — inhibition of downdrafts reaching the surface. Near 0 means downdrafts easily penetrate.</span>
+            </div>
+            <div className="composite-card">
+              <span className="composite-label">NCAPE</span>
+              <span className="composite-value" style={{color: "#38bdf8"}}>{params.ncape ?? "---"}</span>
+              <span className="composite-unit">J/kg/m</span>
+              <span className="param-tooltip">Normalized CAPE — buoyancy intensity per unit depth. &gt;0.3 is very buoyant.</span>
+            </div>
+            <div className="composite-card composite-card--highlight">
+              <span className="composite-label">STP</span>
+              <span className={`composite-value ${getAlertClass("STP", params.stp)}`} style={{color: "#60a5fa"}}>{params.stp ?? "---"}</span>
+              <span className="composite-unit">Sig Tornado</span>
+              <span className="param-tooltip">Significant Tornado Parameter (fixed-layer) — values ≥1 suggest significant (EF2+) tornado environment.</span>
+            </div>
+            <div className="composite-card composite-card--highlight">
+              <span className="composite-label">STP-Eff</span>
+              <span className={`composite-value ${getAlertClass("STP", params.stpEff)}`} style={{color: "#818cf8"}}>{params.stpEff ?? "---"}</span>
+              <span className="composite-unit">Eff Tornado</span>
+              <span className="param-tooltip">Effective-Layer STP (Thompson et al. 2012) — SPC's operational version. Values ≥1 favor significant tornadoes.</span>
+            </div>
+            <div className="composite-card composite-card--highlight">
+              <span className="composite-label">SCP</span>
+              <span className={`composite-value ${getAlertClass("SCP", params.scp)}`} style={{color: "#f59e0b"}}>{params.scp ?? "---"}</span>
+              <span className="composite-unit">Supercell</span>
+              <span className="param-tooltip">Supercell Composite Parameter — values ≥1 support supercells; &gt;4 strongly favors discrete supercells.</span>
+            </div>
+            <div className="composite-card composite-card--highlight">
+              <span className="composite-label">SHIP</span>
+              <span className={`composite-value ${getAlertClass("SHIP", params.ship)}`} style={{color: "#10b981"}}>{params.ship ?? "---"}</span>
+              <span className="composite-unit">Sig Hail</span>
+              <span className="param-tooltip">Significant Hail Parameter — values ≥1 indicate potential; &gt;1.5 strongly favors significant hail.</span>
+            </div>
+            <div className="composite-card composite-card--highlight">
+              <span className="composite-label">DCP</span>
+              <span className={`composite-value ${getAlertClass("DCP", params.dcp)}`} style={{color: "#a78bfa"}}>{params.dcp ?? "---"}</span>
+              <span className="composite-unit">Derecho</span>
+              <span className="param-tooltip">Derecho Composite Parameter — values ≥2 suggest potential for long-lived wind events.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 4: Winter / Fire / Hazard combined ── */}
         <ParamSection
           title="Winter Wx / Precip Type"
           icon={<CloudRain size={14} />}
