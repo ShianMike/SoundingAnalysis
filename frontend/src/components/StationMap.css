@@ -141,6 +141,25 @@
   background: var(--bg-hover);
 }
 
+.smap-btn-disabled {
+  opacity: 0.35;
+  cursor: not-allowed !important;
+}
+
+.smap-type-btns {
+  margin-left: 4px;
+  border-left: 1px solid var(--border);
+  padding-left: 4px;
+}
+
+.smap-sig-hatch {
+  background: repeating-linear-gradient(
+    45deg,
+    #111 0px, #111 2px,
+    transparent 2px, transparent 5px
+  ) !important;
+}
+
 .smap-outlook-loading {
   font-size: 10px;
   color: var(--text-muted);

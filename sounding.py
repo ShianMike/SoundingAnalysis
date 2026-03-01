@@ -2363,24 +2363,26 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         print(f"  Warning: NCAPE calc failed: {e}")
         params["ncape"] = 0
 
-    # ── Piecewise CAPE (500 hPa layers from LFC to EL) ──────────────
+    # ── Piecewise CAPE (50 hPa layers from LFC to EL) ──────────────
     try:
         _pw_layers = []
         _mu_cape_pw = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _mu_si_pw = params.get("mu_start_idx", 0) or 0
         if _mu_cape_pw > 0 and params.get("mu_profile") is not None:
-            _T_env = T.magnitude
-            _T_parcel = params["mu_profile"].magnitude
-            _p_arr = p.magnitude
-            _h_arr = h.magnitude
+            # Slice environment arrays to match the MU profile (starts at mu_start_idx)
+            _T_env_pw = T[_mu_si_pw:].magnitude
+            _T_parcel_pw = params["mu_profile"].magnitude
+            _p_arr_pw = p[_mu_si_pw:].magnitude
+            _h_arr_pw = h[_mu_si_pw:].magnitude
             # Define layers by pressure: each ~50 hPa thick from 900 to 200 hPa
             _layer_edges = list(range(900, 150, -50))
             for i in range(len(_layer_edges) - 1):
                 _p_top = _layer_edges[i + 1]
                 _p_bot = _layer_edges[i]
-                _mask_pw = (_p_arr <= _p_bot) & (_p_arr >= _p_top)
+                _mask_pw = (_p_arr_pw <= _p_bot) & (_p_arr_pw >= _p_top)
                 if np.sum(_mask_pw) < 2:
                     continue
-                _buoy = _T_parcel[_mask_pw] - _T_env[_mask_pw]
+                _buoy = _T_parcel_pw[_mask_pw] - _T_env_pw[_mask_pw]
                 _pos = np.sum(_buoy[_buoy > 0]) * 9.81 / 273.15  # crude integration
                 _neg = np.sum(_buoy[_buoy < 0]) * 9.81 / 273.15
                 if abs(_pos) > 0.1 or abs(_neg) > 0.1:
