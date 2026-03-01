@@ -44,21 +44,26 @@
   text-transform: uppercase;
 }
 
-/* Footer actions */
-.cp-footer {
-  display: flex;
-  gap: 6px;
+/* ── Sidebar bottom group (settings + footer) ────────── */
+.cp-bottom {
   margin-top: auto;
-  padding-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* Settings row: theme / CB / upload */
 .cp-settings-row {
   display: flex;
   gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+}
+
+/* Footer actions */
+.cp-footer {
+  display: flex;
+  gap: 6px;
 }
 
 .cp-settings-btn {
