@@ -16,6 +16,25 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 
 ---
 
+## Screenshots
+
+### Example Sounding — Dark Theme (Default)
+Full Skew-T Log-P diagram with hodograph, storm-relative wind/vorticity profiles, theta/theta-e panel, and computed parameters for OUN (Norman, OK):
+
+![Example Sounding - Dark Theme](docs/screenshots/example-sounding.png)
+
+### Light Theme
+The same sounding rendered in light mode — toggle via the sidebar:
+
+![Example Sounding - Light Theme](docs/screenshots/example-sounding-light.png)
+
+### Color-Blind Mode
+Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
+
+![Example Sounding - Color-Blind Mode](docs/screenshots/example-sounding-cb.png)
+
+---
+
 ## Features
 
 ### Skew-T Log-P Diagram
