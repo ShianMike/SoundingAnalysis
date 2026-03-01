@@ -438,7 +438,7 @@
 .param-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
+  gap: 8px;
 }
 
 /* ── Composite Indices grid ─────────────────────────── */
@@ -536,39 +536,50 @@
 .param-card {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
-  padding: 8px 6px;
-  border-radius: var(--radius-sm);
-  transition: background 0.1s ease, padding 0.1s ease;
+  padding: 12px 8px 10px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  transition: background 0.15s ease, border-color 0.15s ease, padding 0.15s ease;
   position: relative;
   cursor: default;
+  text-align: center;
 }
 
 /* Extra top padding when badge is present */
 .param-card:has(.param-severity-badge) {
-  padding-top: 14px;
+  padding-top: 18px;
 }
 
 .param-card:hover {
   background: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ── Parameter severity alerts ──────────────────────────── */
 .param-alert-mod {
   background: rgba(234, 179, 8, 0.05);
   border-top: 2px solid #eab308;
+  border-color: rgba(234, 179, 8, 0.3);
+  border-top-color: #eab308;
 }
 .param-alert-mod .param-value { color: #eab308 !important; }
 
 .param-alert-high {
   background: rgba(249, 115, 22, 0.06);
   border-top: 2px solid #f97316;
+  border-color: rgba(249, 115, 22, 0.3);
+  border-top-color: #f97316;
 }
 .param-alert-high .param-value { color: #f97316 !important; }
 
 .param-alert-extreme {
   background: rgba(239, 68, 68, 0.07);
   border-top: 2px solid #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+  border-top-color: #ef4444;
   box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.06), 0 0 8px rgba(239, 68, 68, 0.08);
 }
 .param-alert-extreme .param-value { color: #ef4444 !important; }
@@ -680,24 +691,26 @@
 
 .param-label {
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
 .param-value {
   font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--text-primary);
   line-height: 1.2;
 }
 
 .param-unit {
-  font-size: 9px;
+  font-size: 8px;
   color: var(--text-muted);
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Spin animation (shared) */
