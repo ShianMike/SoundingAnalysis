@@ -63,16 +63,32 @@ def health():
 
 # ─── Helper ────────────────────────────────────────────────────────
 def _fmt(val, unit_str="", decimals=0):
-    """Format a pint-style value, returning None for missing data."""
+    """Format a pint-style value, returning None for missing/NaN data."""
     if val is None:
         return None
     try:
         v = val.magnitude if hasattr(val, "magnitude") else val
+        fv = float(v)
+        if math.isnan(fv) or math.isinf(fv):
+            return None
         if decimals == 0:
-            return round(float(v))
-        return round(float(v), decimals)
+            return round(fv)
+        return round(fv, decimals)
     except Exception:
         return None
+
+
+def _nan_safe(obj):
+    """Recursively replace NaN/Inf float values with None for JSON safety."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _nan_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_nan_safe(item) for item in obj]
+    return obj
 
 
 # ─── Endpoints ─────────────────────────────────────────────────────
@@ -218,25 +234,27 @@ def get_sounding():
         n = len(data["pressure"])
         profile_rows = []
         for i in range(n):
+            def _safe_round(val, decimals=1):
+                try:
+                    v = float(val.magnitude) if hasattr(val, "magnitude") else float(val)
+                    return None if (math.isnan(v) or math.isinf(v)) else round(v, decimals)
+                except Exception:
+                    return None
             row = {
-                "p": round(float(data["pressure"][i].magnitude), 1),
-                "h": round(float(data["height"][i].magnitude), 1),
-                "t": round(float(data["temperature"][i].magnitude), 1),
-                "td": round(float(data["dewpoint"][i].magnitude), 1),
+                "p": _safe_round(data["pressure"][i]),
+                "h": _safe_round(data["height"][i]),
+                "t": _safe_round(data["temperature"][i]),
+                "td": _safe_round(data["dewpoint"][i]),
             }
-            wd_val = data["wind_direction"][i]
-            ws_val = data["wind_speed"][i]
-            wd_mag = float(wd_val.magnitude) if hasattr(wd_val, "magnitude") else float(wd_val)
-            ws_mag = float(ws_val.magnitude) if hasattr(ws_val, "magnitude") else float(ws_val)
-            row["wd"] = round(wd_mag, 1) if not math.isnan(wd_mag) else None
-            row["ws"] = round(ws_mag, 1) if not math.isnan(ws_mag) else None
+            row["wd"] = _safe_round(data["wind_direction"][i])
+            row["ws"] = _safe_round(data["wind_speed"][i])
             profile_rows.append(row)
 
         # Station elevation (metres MSL) — used by CM1 input_sounding format
         stn_info = data.get("station_info", {})
         sfc_elev = stn_info.get("elev", data["height"][0].magnitude if n > 0 else 0)
 
-        return jsonify({
+        return jsonify(_nan_safe({
             "image": image_b64,
             "params": serialized,
             "profile": profile_rows,
@@ -252,7 +270,7 @@ def get_sounding():
                 "vadRadar": vad_result.get("radar") if vad_result and isinstance(vad_result, dict) else None,
                 "vadTime": vad_result.get("meta", {}).get("time") if vad_result and isinstance(vad_result, dict) else None,
             },
-        })
+        }))
 
     except ValueError as e:
         # Data not found / invalid input — not a server error
@@ -1377,7 +1395,7 @@ def time_series():
 
         station_name = STATIONS.get(station, (station or source.upper(),))[0]
 
-        return jsonify({
+        return jsonify(_nan_safe({
             "station": station or f"{lat},{lon}",
             "stationName": station_name,
             "source": source,
@@ -1385,7 +1403,7 @@ def time_series():
             "endDate": end_dt.strftime("%Y-%m-%d %HZ"),
             "resolution": "00Z & 12Z" if span_days <= 7 else "12Z only",
             "points": points,
-        })
+        }))
 
     except Exception as e:
         traceback.print_exc()
@@ -1688,38 +1706,60 @@ def merge_profiles_endpoint():
 
 
 # ─── SPC Convective Outlook ────────────────────────────────────────
+# Keyed by "{day}_{type}" — type: cat, torn, wind, hail
 _SPC_OUTLOOK_URLS = {
-    "1": "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson",
-    "2": "https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson",
-    "3": "https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson",
+    # Categorical
+    "1_cat": "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson",
+    "2_cat": "https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson",
+    "3_cat": "https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson",
+    # Tornado probability
+    "1_torn": "https://www.spc.noaa.gov/products/outlook/day1otlk_torn.lyr.geojson",
+    "2_torn": "https://www.spc.noaa.gov/products/outlook/day2otlk_torn.lyr.geojson",
+    # Wind probability
+    "1_wind": "https://www.spc.noaa.gov/products/outlook/day1otlk_wind.lyr.geojson",
+    "2_wind": "https://www.spc.noaa.gov/products/outlook/day2otlk_wind.lyr.geojson",
+    # Hail probability
+    "1_hail": "https://www.spc.noaa.gov/products/outlook/day1otlk_hail.lyr.geojson",
+    "2_hail": "https://www.spc.noaa.gov/products/outlook/day2otlk_hail.lyr.geojson",
 }
 
-# Simple in-memory cache: { day: { "data": ..., "ts": ... } }
+# Simple in-memory cache: { key: { "data": ..., "ts": ... } }
 _spc_cache = {}
 _SPC_CACHE_TTL = 600  # 10 minutes
 
 
 @app.route("/api/spc-outlook", methods=["GET"])
 def spc_outlook():
-    """Proxy SPC categorical outlook GeoJSON (avoids CORS)."""
+    """Proxy SPC outlook GeoJSON (categorical or probabilistic)."""
     day = request.args.get("day", "1")
-    if day not in _SPC_OUTLOOK_URLS:
+    otype = request.args.get("type", "cat")
+    if day not in ("1", "2", "3"):
         return jsonify({"error": f"Invalid day: {day}. Use 1, 2, or 3."}), 400
+    if otype not in ("cat", "torn", "wind", "hail"):
+        return jsonify({"error": f"Invalid type: {otype}. Use cat, torn, wind, or hail."}), 400
+
+    cache_key = f"{day}_{otype}"
+    # Day 3 only has categorical
+    if day == "3" and otype != "cat":
+        return jsonify({"error": "Day 3 only has categorical outlook."}), 400
+
+    if cache_key not in _SPC_OUTLOOK_URLS:
+        return jsonify({"error": f"No SPC product for day={day} type={otype}"}), 400
 
     # Return cached if fresh
-    cached = _spc_cache.get(day)
+    cached = _spc_cache.get(cache_key)
     if cached and (time.time() - cached["ts"]) < _SPC_CACHE_TTL:
         return jsonify(cached["data"])
 
-    url = _SPC_OUTLOOK_URLS[day]
+    url = _SPC_OUTLOOK_URLS[cache_key]
     try:
         resp = _requests.get(url, timeout=15)
         resp.raise_for_status()
         geojson = resp.json()
-        _spc_cache[day] = {"data": geojson, "ts": time.time()}
+        _spc_cache[cache_key] = {"data": geojson, "ts": time.time()}
         return jsonify(geojson)
     except Exception as e:
-        print(f"[SPC] Failed to fetch Day {day} outlook: {e}")
+        print(f"[SPC] Failed to fetch Day {day} {otype} outlook: {e}")
         return jsonify({"error": f"Failed to fetch SPC outlook: {e}"}), 502
 
 

@@ -114,26 +114,83 @@ const SPC_CATEGORIES = [
     info: "60%+ severe · 30%+ tornado" },
 ];
 
-function spcStyle(feature) {
-  const label = feature.properties?.LABEL || "";
-  const cat = SPC_CATEGORIES.find((c) => c.label === label);
+/* ── SPC probability outlook styling (tornado/wind/hail) ───── */
+const PROB_COLORS = {
+  torn: [
+    { label: "0.02", pct: "2%",  color: "#008B00", fill: "#66CC66" },
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.10", pct: "10%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.15", pct: "15%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.30", pct: "30%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.45", pct: "45%", color: "#9400D3", fill: "#C488FF" },
+    { label: "0.60", pct: "60%", color: "#000080", fill: "#6666CC" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+  wind: [
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+  hail: [
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+};
+
+const OUTLOOK_TYPES = [
+  { id: "cat",  name: "Categorical" },
+  { id: "torn", name: "Tornado" },
+  { id: "wind", name: "Wind" },
+  { id: "hail", name: "Hail" },
+];
+
+function spcStyle(feature, outlookType) {
+  const label = feature.properties?.LABEL || feature.properties?.LABEL2 || "";
+  if (outlookType === "cat" || !outlookType) {
+    const cat = SPC_CATEGORIES.find((c) => c.label === label);
+    return {
+      color: cat?.color || feature.properties?.stroke || "#888",
+      fillColor: cat?.fill || feature.properties?.fill || "#888",
+      fillOpacity: 0.25,
+      weight: 1.5,
+    };
+  }
+  // Probabilistic layers
+  const probList = PROB_COLORS[outlookType] || [];
+  const prob = probList.find((p) => p.label === label);
+  if (label === "SIGN") {
+    return {
+      color: "#111",
+      fillColor: "transparent",
+      fillOpacity: 0,
+      weight: 2.5,
+      dashArray: "8 4",
+    };
+  }
   return {
-    color: cat?.color || feature.properties?.stroke || "#888",
-    fillColor: cat?.fill || feature.properties?.fill || "#888",
-    fillOpacity: 0.25,
+    color: prob?.color || feature.properties?.stroke || "#888",
+    fillColor: prob?.fill || feature.properties?.fill || "#888",
+    fillOpacity: 0.3,
     weight: 1.5,
   };
 }
 
 /* ── GeoJSON overlay in a non-interactive pane below markers ── */
-function OutlookLayer({ data }) {
+function OutlookLayer({ data, outlookType }) {
   if (!data || !data.features || data.features.length === 0) return null;
   return (
     <Pane name="spc-outlook" style={{ zIndex: 250, pointerEvents: "none" }}>
       <GeoJSON
-        key={JSON.stringify(data).slice(0, 100)}
+        key={JSON.stringify(data).slice(0, 100) + outlookType}
         data={data}
-        style={spcStyle}
+        style={(f) => spcStyle(f, outlookType)}
         interactive={false}
       />
     </Pane>
@@ -174,6 +231,7 @@ export default function StationMap({
   onClose,
 }) {
   const [outlookDay, setOutlookDay] = useState(1);
+  const [outlookType, setOutlookType] = useState("cat");
   const [outlookData, setOutlookData] = useState(null);
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
@@ -185,24 +243,31 @@ export default function StationMap({
     setVelocityRadar(nearestNexrad(lat, lng));
   }, []);
 
-  // Fetch SPC outlook on mount and when day changes
+  // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
     if (!showOutlook) return;
+    // Day 3 only has categorical
+    const effectiveType = outlookDay === 3 ? "cat" : outlookType;
     let cancelled = false;
     setOutlookLoading(true);
-    fetchSpcOutlook(outlookDay)
+    fetchSpcOutlook(outlookDay, effectiveType)
       .then((data) => { if (!cancelled) setOutlookData(data); })
       .catch(() => { if (!cancelled) setOutlookData(null); })
       .finally(() => { if (!cancelled) setOutlookLoading(false); });
     return () => { cancelled = true; };
-  }, [outlookDay, showOutlook]);
+  }, [outlookDay, outlookType, showOutlook]);
 
   // Determine which SPC categories are present in the current data
+  const effectiveType = outlookDay === 3 ? "cat" : outlookType;
   const activeCategories = useMemo(() => {
     if (!outlookData?.features) return [];
-    const labels = new Set(outlookData.features.map((f) => f.properties?.LABEL));
-    return SPC_CATEGORIES.filter((c) => labels.has(c.label));
-  }, [outlookData]);
+    const labels = new Set(outlookData.features.map((f) => f.properties?.LABEL || f.properties?.LABEL2));
+    if (effectiveType === "cat") {
+      return SPC_CATEGORIES.filter((c) => labels.has(c.label));
+    }
+    const probList = PROB_COLORS[effectiveType] || [];
+    return probList.filter((p) => labels.has(p.label));
+  }, [outlookData, effectiveType]);
 
   // Get outlook metadata (valid/expire/forecaster)
   const outlookMeta = useMemo(() => {
@@ -273,17 +338,31 @@ export default function StationMap({
           Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar}</span>}
         </button>
         {showOutlook && (
-          <div className="smap-day-btns">
-            {[1, 2, 3].map((d) => (
-              <button
-                key={d}
-                className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
-                onClick={() => setOutlookDay(d)}
-              >
-                Day {d}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="smap-day-btns">
+              {[1, 2, 3].map((d) => (
+                <button
+                  key={d}
+                  className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
+                  onClick={() => setOutlookDay(d)}
+                >
+                  Day {d}
+                </button>
+              ))}
+            </div>
+            <div className="smap-day-btns smap-type-btns">
+              {OUTLOOK_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${outlookDay === 3 && t.id !== "cat" ? " smap-btn-disabled" : ""}`}
+                  onClick={() => { if (outlookDay !== 3 || t.id === "cat") setOutlookType(t.id); }}
+                  title={outlookDay === 3 && t.id !== "cat" ? "Day 3 only has categorical" : t.name}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </>
         )}
         {showOutlook && outlookLoading && (
           <span className="smap-outlook-loading">Loading…</span>
@@ -315,13 +394,26 @@ export default function StationMap({
         )}
         {showOutlook && activeCategories.length > 0 && (
           <div className="smap-legend smap-legend-outlook">
-            {activeCategories.map((c) => (
-              <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
-                <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
-                <span className="smap-cat-label">{c.name}</span>
-                <span className="smap-cat-info">{c.info}</span>
-              </span>
-            ))}
+            {effectiveType === "cat" ? (
+              activeCategories.map((c) => (
+                <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
+                  <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
+                  <span className="smap-cat-label">{c.name}</span>
+                  <span className="smap-cat-info">{c.info}</span>
+                </span>
+              ))
+            ) : (
+              activeCategories.map((p) => (
+                <span key={p.label} className="smap-legend-item smap-outlook-cat">
+                  {p.label === "SIGN" ? (
+                    <span className="smap-dot-rect smap-sig-hatch" style={{ borderColor: "#111" }} />
+                  ) : (
+                    <span className="smap-dot-rect" style={{ background: p.fill, borderColor: p.color }} />
+                  )}
+                  <span className="smap-cat-label">{p.label === "SIGN" ? "Significant" : p.pct}</span>
+                </span>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -361,7 +453,7 @@ export default function StationMap({
           )}
 
           {/* SPC outlook polygons (render first so stations sit on top) */}
-          {showOutlook && outlookData && <OutlookLayer data={outlookData} />}
+          {showOutlook && outlookData && <OutlookLayer data={outlookData} outlookType={effectiveType} />}
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />
