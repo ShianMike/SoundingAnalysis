@@ -11,8 +11,8 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
   const [entries, setEntries] = useState(() => getHistory());
   const [compareEntries, setCompareEntries] = useState(() => getCompareHistory());
 
-  const handleLoad = (id) => {
-    const result = loadFromHistory(id);
+  const handleLoad = async (id) => {
+    const result = await loadFromHistory(id);
     if (result) {
       onLoad(result);
     }
@@ -29,8 +29,8 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
     setEntries([]);
   };
 
-  const handleLoadCompare = (id) => {
-    const data = loadCompareFromHistory(id);
+  const handleLoadCompare = async (id) => {
+    const data = await loadCompareFromHistory(id);
     if (data && onLoadCompare) {
       onLoadCompare(data);
     }
