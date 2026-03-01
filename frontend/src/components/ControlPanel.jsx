@@ -943,8 +943,10 @@ export default function ControlPanel({
             </>
           )}
         </button>
+      </form>
 
-        {/* Map / Trends / History */}
+      {/* ── Bottom group: toggles + settings + footer ── */}
+      <div className="cp-bottom">
         <div className="cp-toggle-row">
           <button
             type="button"
@@ -997,10 +999,7 @@ export default function ControlPanel({
             {showHistory ? "Hide" : "History"}
           </button>
         </div>
-      </form>
 
-      {/* ── Bottom group: settings + footer ── */}
-      <div className="cp-bottom">
         <div className="cp-settings-row">
           <button
             type="button"
