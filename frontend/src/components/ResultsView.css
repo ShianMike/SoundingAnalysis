@@ -503,21 +503,29 @@
 }
 
 /* Severity alert borders on composite cards */
-.composite-value.param-alert-mod { color: #eab308; }
-.composite-value.param-alert-high { color: #f97316; }
-.composite-value.param-alert-extreme { color: #ef4444; }
+.composite-value.param-alert-mod { color: #eab308 !important; }
+.composite-value.param-alert-high { color: #f97316 !important; }
+.composite-value.param-alert-extreme { color: #ef4444 !important; }
 
 .composite-card:has(.param-alert-mod) {
   border-color: rgba(234, 179, 8, 0.3);
   background: rgba(234, 179, 8, 0.04);
 }
 .composite-card:has(.param-alert-high) {
-  border-color: rgba(249, 115, 22, 0.3);
+  border-color: rgba(249, 115, 22, 0.35);
   background: rgba(249, 115, 22, 0.05);
 }
 .composite-card:has(.param-alert-extreme) {
-  border-color: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.4);
   background: rgba(239, 68, 68, 0.06);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.08);
+}
+
+/* Severity badge inside composite cards */
+.composite-card .param-severity-badge {
+  top: 3px;
+  right: 3px;
+  font-size: 6.5px;
 }
 
 .param-card {
@@ -537,16 +545,58 @@
 
 /* ── Parameter severity alerts ──────────────────────────── */
 .param-alert-mod {
-  border-left: 3px solid #eab308;
-  background: rgba(234, 179, 8, 0.06);
+  border-left: 4px solid #eab308;
+  background: rgba(234, 179, 8, 0.05);
 }
+.param-alert-mod .param-value { color: #eab308 !important; }
+
 .param-alert-high {
-  border-left: 3px solid #f97316;
-  background: rgba(249, 115, 22, 0.08);
+  border-left: 4px solid #f97316;
+  background: rgba(249, 115, 22, 0.06);
 }
+.param-alert-high .param-value { color: #f97316 !important; }
+
 .param-alert-extreme {
-  border-left: 3px solid #ef4444;
-  background: rgba(239, 68, 68, 0.10);
+  border-left: 4px solid #ef4444;
+  background: rgba(239, 68, 68, 0.07);
+  box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.06), 0 0 8px rgba(239, 68, 68, 0.08);
+}
+.param-alert-extreme .param-value { color: #ef4444 !important; }
+
+/* Severity badge inside cards */
+.param-severity-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.param-severity-badge--mod {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+.param-severity-badge--high {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+.param-severity-badge--extreme {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  animation: badge-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .param-card:hover .param-tooltip {
