@@ -1,16 +1,79 @@
 /**
- * Sounding history stored in localStorage.
- * Each entry stores the request params, result metadata, and parameter values.
- * The base64 plot image is stored separately to allow listing without loading images.
+ * Sounding history — metadata in localStorage, images in IndexedDB.
+ * IndexedDB has ~50 MB+ quota vs localStorage's ~5-10 MB,
+ * so large base64 sounding PNGs survive across reloads reliably.
  */
 
 const HISTORY_KEY = "sounding_history";
 const IMAGE_PREFIX = "sounding_img_";
 const MAX_ENTRIES = 20;
 
+/* ── IndexedDB helpers ────────────────────────────────────────── */
+
+const DB_NAME = "SoundingHistoryDB";
+const DB_VERSION = 1;
+const IMG_STORE = "images";
+
+function _openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IMG_STORE)) {
+        db.createObjectStore(IMG_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _putImage(key, data) {
+  try {
+    const db = await _openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, "readwrite");
+      tx.objectStore(IMG_STORE).put(data, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // IndexedDB unavailable — silent fail
+  }
+}
+
+async function _getImage(key) {
+  try {
+    const db = await _openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, "readonly");
+      const req = tx.objectStore(IMG_STORE).get(key);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function _deleteImage(key) {
+  try {
+    const db = await _openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, "readwrite");
+      tx.objectStore(IMG_STORE).delete(key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/* ── Public API ───────────────────────────────────────────────── */
+
 /**
- * Get all history entries (without images).
- * Returns newest-first.
+ * Get all history entries (without images).  Returns newest-first.
  */
 export function getHistory() {
   try {
@@ -23,10 +86,9 @@ export function getHistory() {
 
 /**
  * Save a sounding result to history.
- * @param {Object} requestParams - The params sent to the API (source, station, date, etc.)
- * @param {Object} result - The full API response { image, params, meta }
+ * Metadata → localStorage, image → IndexedDB.
  */
-export function saveToHistory(requestParams, result) {
+export async function saveToHistory(requestParams, result) {
   try {
     const entries = getHistory();
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -39,18 +101,8 @@ export function saveToHistory(requestParams, result) {
       params: result.params,
     };
 
-    // Store image separately (can be large)
-    try {
-      localStorage.setItem(IMAGE_PREFIX + id, result.image);
-    } catch {
-      // If storage is full, remove oldest images first
-      _pruneOldImages(entries, 5);
-      try {
-        localStorage.setItem(IMAGE_PREFIX + id, result.image);
-      } catch {
-        // Still can't store — skip image
-      }
-    }
+    // Store image in IndexedDB (much larger quota than localStorage)
+    await _putImage(IMAGE_PREFIX + id, result.image);
 
     // Add to front
     entries.unshift(entry);
@@ -58,7 +110,8 @@ export function saveToHistory(requestParams, result) {
     // Trim to max
     while (entries.length > MAX_ENTRIES) {
       const removed = entries.pop();
-      localStorage.removeItem(IMAGE_PREFIX + removed.id);
+      _deleteImage(IMAGE_PREFIX + removed.id);          // async cleanup
+      localStorage.removeItem(IMAGE_PREFIX + removed.id); // legacy cleanup
     }
 
     localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
@@ -69,14 +122,28 @@ export function saveToHistory(requestParams, result) {
 }
 
 /**
- * Load a full history entry including the image.
+ * Load a full history entry including the image (from IndexedDB).
+ * Falls back to localStorage for entries saved before the IndexedDB migration.
  */
-export function loadFromHistory(id) {
+export async function loadFromHistory(id) {
   const entries = getHistory();
   const entry = entries.find((e) => e.id === id);
   if (!entry) return null;
 
-  const image = localStorage.getItem(IMAGE_PREFIX + id);
+  // Try IndexedDB first
+  let image = await _getImage(IMAGE_PREFIX + id);
+
+  // Fall back to localStorage (legacy migration)
+  if (!image) {
+    image = localStorage.getItem(IMAGE_PREFIX + id);
+    if (image) {
+      // Migrate to IndexedDB, then remove from localStorage
+      _putImage(IMAGE_PREFIX + id, image).then(() => {
+        localStorage.removeItem(IMAGE_PREFIX + id);
+      });
+    }
+  }
+
   return {
     image: image || null,
     params: entry.params,
@@ -91,7 +158,8 @@ export function deleteFromHistory(id) {
   try {
     const entries = getHistory().filter((e) => e.id !== id);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
-    localStorage.removeItem(IMAGE_PREFIX + id);
+    _deleteImage(IMAGE_PREFIX + id);          // async fire-and-forget
+    localStorage.removeItem(IMAGE_PREFIX + id); // legacy cleanup
   } catch {
     // ignore
   }
@@ -103,16 +171,14 @@ export function deleteFromHistory(id) {
 export function clearHistory() {
   try {
     const entries = getHistory();
-    entries.forEach((e) => localStorage.removeItem(IMAGE_PREFIX + e.id));
+    entries.forEach((e) => {
+      _deleteImage(IMAGE_PREFIX + e.id);          // async fire-and-forget
+      localStorage.removeItem(IMAGE_PREFIX + e.id); // legacy cleanup
+    });
     localStorage.removeItem(HISTORY_KEY);
   } catch {
     // ignore
   }
-}
-
-function _pruneOldImages(entries, count) {
-  const toRemove = entries.slice(-count);
-  toRemove.forEach((e) => localStorage.removeItem(IMAGE_PREFIX + e.id));
 }
 
 /* ── Comparison History ─────────────────────────────────────────── */
@@ -135,15 +201,13 @@ export function getCompareHistory() {
 
 /**
  * Save a comparison to history.
- * @param {Array} slots - The slot configs [{source, station, date, hour}, ...]
- * @param {Array} results - The comparison results from the API
+ * Metadata → localStorage, images → IndexedDB.
  */
-export function saveCompareToHistory(slots, results) {
+export async function saveCompareToHistory(slots, results) {
   try {
     const entries = getCompareHistory();
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-    // Build a summary of the results (without images)
     const summary = results.map((r) => ({
       meta: r.meta,
       params: r.params,
@@ -157,22 +221,14 @@ export function saveCompareToHistory(slots, results) {
       summary,
     };
 
-    // Store images as a JSON array of base64 strings
+    // Store images in IndexedDB as JSON array
     const images = results.map((r) => r.image || null);
-    try {
-      localStorage.setItem(COMPARE_IMG_PREFIX + id, JSON.stringify(images));
-    } catch {
-      _pruneCompareImages(entries, 3);
-      try {
-        localStorage.setItem(COMPARE_IMG_PREFIX + id, JSON.stringify(images));
-      } catch {
-        // skip images
-      }
-    }
+    await _putImage(COMPARE_IMG_PREFIX + id, JSON.stringify(images));
 
     entries.unshift(entry);
     while (entries.length > MAX_COMPARE) {
       const removed = entries.pop();
+      _deleteImage(COMPARE_IMG_PREFIX + removed.id);
       localStorage.removeItem(COMPARE_IMG_PREFIX + removed.id);
     }
 
@@ -184,16 +240,30 @@ export function saveCompareToHistory(slots, results) {
 }
 
 /**
- * Load a comparison entry including images.
+ * Load a comparison entry including images (from IndexedDB).
+ * Falls back to localStorage for legacy entries.
  */
-export function loadCompareFromHistory(id) {
+export async function loadCompareFromHistory(id) {
   const entries = getCompareHistory();
   const entry = entries.find((e) => e.id === id);
   if (!entry) return null;
 
+  // Try IndexedDB first
+  let imagesRaw = await _getImage(COMPARE_IMG_PREFIX + id);
+
+  // Fall back to localStorage (legacy)
+  if (!imagesRaw) {
+    imagesRaw = localStorage.getItem(COMPARE_IMG_PREFIX + id);
+    if (imagesRaw) {
+      _putImage(COMPARE_IMG_PREFIX + id, imagesRaw).then(() => {
+        localStorage.removeItem(COMPARE_IMG_PREFIX + id);
+      });
+    }
+  }
+
   let images = [];
   try {
-    images = JSON.parse(localStorage.getItem(COMPARE_IMG_PREFIX + id) || "[]");
+    images = JSON.parse(imagesRaw || "[]");
   } catch {
     images = [];
   }
@@ -214,6 +284,7 @@ export function deleteCompareFromHistory(id) {
   try {
     const entries = getCompareHistory().filter((e) => e.id !== id);
     localStorage.setItem(COMPARE_KEY, JSON.stringify(entries));
+    _deleteImage(COMPARE_IMG_PREFIX + id);
     localStorage.removeItem(COMPARE_IMG_PREFIX + id);
   } catch {
     // ignore
@@ -226,14 +297,12 @@ export function deleteCompareFromHistory(id) {
 export function clearCompareHistory() {
   try {
     const entries = getCompareHistory();
-    entries.forEach((e) => localStorage.removeItem(COMPARE_IMG_PREFIX + e.id));
+    entries.forEach((e) => {
+      _deleteImage(COMPARE_IMG_PREFIX + e.id);
+      localStorage.removeItem(COMPARE_IMG_PREFIX + e.id);
+    });
     localStorage.removeItem(COMPARE_KEY);
   } catch {
     // ignore
   }
-}
-
-function _pruneCompareImages(entries, count) {
-  const toRemove = entries.slice(-count);
-  toRemove.forEach((e) => localStorage.removeItem(COMPARE_IMG_PREFIX + e.id));
 }

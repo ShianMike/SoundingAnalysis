@@ -2875,7 +2875,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         CLR_VAD       = "#009E73"   # green
     else:
         CLR_TEMP      = "red"
-        CLR_DEW       = "blue"
+        CLR_DEW       = "#22dd22"
         CLR_WETBULB   = "cyan"
         CLR_VTEMP     = "red"
         CLR_SB_PARCEL = "#ff8800"
@@ -2909,8 +2909,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     gs = gridspec.GridSpec(
         2, 5, figure=fig,
         width_ratios=[1.8, 1.6, 0.36, 0.38, 0.42],
-        height_ratios=[3.0, 1.0],
-        hspace=0.12, wspace=0.12,
+        height_ratios=[2.7, 1.3],
+        hspace=0.10, wspace=0.12,
         left=0.05, right=0.97, top=0.94, bottom=0.04
     )
     
@@ -2957,9 +2957,9 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                  fontweight="bold", va="top", ha="left", alpha=0)  # hidden, merged into legend title
     
     # Temperature (red, solid thick)
-    skew.plot(p, T, color="red", linewidth=4.0, zorder=6, label="TEMPERATURE")
-    # Dewpoint (blue, solid thick)
-    skew.plot(p, Td, color="blue", linewidth=4.0, zorder=6, label="DEWPOINT")
+    skew.plot(p, T, color=CLR_TEMP, linewidth=4.0, zorder=6, label="TEMPERATURE")
+    # Dewpoint (green, solid thick)
+    skew.plot(p, Td, color=CLR_DEW, linewidth=4.0, zorder=6, label="DEWPOINT")
     
     # Wet-bulb temperature (cyan, solid thin)
     if params.get("wetbulb") is not None:
@@ -4119,30 +4119,29 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     haines_v = f"{params['haines']}" if params.get('haines') is not None else "---"
     hdw_v = f"{params['hdw']:.0f}" if params.get('hdw') is not None else "---"
     
-    # Rows: (text, color, y_position) — tightly spaced
+    # Rows: (text, color, y_position) — evenly spaced for readability
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.91),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.85),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.79),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.73),
-        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.67),
-        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.61),
-        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.55),
-        (f"   DCIN: {dcin_v}", FG_DIM, 0.49),
+        (header, FG_FAINT, 0.90),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.84),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.77),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.70),
+        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.63),
+        (f"   DCAPE: {dcape_v}  |  DCIN: {dcin_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.57),
+        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.50),
         (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.43),
         (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.37),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.31),
-        (f"   Precip Type: {precip_type_v}", "#22d3ee", 0.25),
-        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.18),
-        (f"   DCP: {fv(params.get('dcp'), '', 1)}  |  FireWx: FWI {fosberg_v}  Haines {haines_v}", ACCENT, 0.11),
-        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.04),
+        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.30),
+        (f"   Precip Type: {precip_type_v}", "#22d3ee", 0.23),
+        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.17),
+        (f"   DCP: {fv(params.get('dcp'), '', 1)}  |  FireWx: FWI {fosberg_v}  Haines {haines_v}", ACCENT, 0.10),
+        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.03),
     ]
     
     for text, color, y_pos in thermo_rows:
         ax_params.text(0.01, y_pos, text,
                       transform=ax_params.transAxes,
-                      fontsize=12, color=color, fontfamily="monospace",
+                      fontsize=11, color=color, fontfamily="monospace",
                       fontweight="bold", va="top")
     
     # ── KINEMATIC TABLE ──
@@ -4227,7 +4226,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     for text, color, y_pos in kin_rows:
         ax_kin.text(0.01, y_pos, text,
                    transform=ax_kin.transAxes,
-                   fontsize=12, color=color, fontfamily="monospace",
+                   fontsize=11, color=color, fontfamily="monospace",
                    fontweight="bold", va="top")
     
     # ════════════════════════════════════════════════════════════════
