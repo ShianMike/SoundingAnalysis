@@ -735,6 +735,9 @@ def _serialize_params(params, data, station, dt, source):
         "lr03":    [4.5, 5.5, 6.2, 7.0, 7.8, 8.3, 9.2],
         "lr36":    [4.0, 5.0, 5.8, 6.5, 7.3, 7.8, 8.8],
         "pwat":    [8, 15, 25, 35, 48, 58, 72],
+        "wmsi":    [0, 0.5, 1.5, 3.0, 5.0, 8.0, 12.0],
+        "mdpi":    [0, 0.3, 0.8, 1.5, 2.5, 3.5, 5.0],
+        "fosbergFwi": [10, 20, 35, 50, 65, 75, 90],
     }
 
     def _percentile(key, val):
@@ -799,6 +802,29 @@ def _serialize_params(params, data, station, dt, source):
         "rh01": round(params["rh_0_1km"]) if params.get("rh_0_1km") is not None else None,
         "rh13": round(params["rh_1_3km"]) if params.get("rh_1_3km") is not None else None,
         "rh36": round(params["rh_3_6km"]) if params.get("rh_3_6km") is not None else None,
+        # Winter weather / precip type
+        "precipType": params.get("precip_type", "N/A"),
+        "warmLayerEnergy": params.get("warm_layer_energy", 0),
+        "coldLayerEnergy": params.get("cold_layer_energy", 0),
+        # Microburst / downburst composites
+        "wmsi": params.get("wmsi", 0),
+        "mdpi": params.get("mdpi", 0),
+        "maxGust": params.get("max_gust", 0),
+        # Corfidi MCS motion vectors
+        "corfidiUpSpd": params.get("corfidi_up_spd"),
+        "corfidiDnSpd": params.get("corfidi_dn_spd"),
+        "corfidiUpU": params.get("corfidi_up_u"),
+        "corfidiUpV": params.get("corfidi_up_v"),
+        "corfidiDnU": params.get("corfidi_dn_u"),
+        "corfidiDnV": params.get("corfidi_dn_v"),
+        # Fire weather indices
+        "fosbergFwi": params.get("fosberg_fwi"),
+        "haines": params.get("haines"),
+        "hdw": params.get("hdw"),
+        # Hazard classification
+        "hazards": params.get("hazards", []),
+        # Temperature advection
+        "tempAdvection": params.get("temp_advection", []),
         # Kinematic
         "bwd500m": _fmt(params.get("bwd_500m")),
         "bwd1km": _fmt(params.get("bwd_1km")),
