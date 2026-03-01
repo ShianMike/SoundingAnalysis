@@ -840,8 +840,8 @@ def ensemble_plume():
 
     body = request.get_json(force=True) if request.data else {}
     station =  body.get("station", "OUN")
-    model   = body.get("model", "sref")
-    src     = body.get("source", "bufkit")
+    model   = body.get("model", "rap")
+    src     = body.get("source", "psu")
     date_str = body.get("date")
     hours   = body.get("hours", [0, 1, 2, 3, 6, 9, 12])
     theme   = body.get("theme", "dark")
@@ -859,9 +859,11 @@ def ensemble_plume():
     else:
         dt = get_latest_sounding_time()
 
-    # Fetch profiles across forecast hours
+    # Fetch profiles across forecast hours, with auto-fallback
     profiles = []
     errors = []
+    used_source = src  # track which source actually worked
+
     for fh in hours:
         try:
             if src == "psu":
@@ -874,10 +876,69 @@ def ensemble_plume():
         except Exception as e:
             errors.append(f"f{fh:03d}: {e}")
 
+    # Auto-fallback: if Iowa State failed, try PSU; if PSU failed, try Iowa State
+    if len(profiles) < 2 and src == "bufkit":
+        print(f"  [ensemble-plume] Iowa State failed ({len(profiles)} profiles), trying PSU fallback...")
+        profiles.clear()
+        errors_fb = []
+        for fh in hours:
+            try:
+                from sounding import fetch_psu_bufkit
+                data = fetch_psu_bufkit(station, model=model, fhour=int(fh))
+                profiles.append({"fhour": fh, "data": data})
+            except Exception as e:
+                errors_fb.append(f"f{fh:03d}: {e}")
+        if len(profiles) >= 2:
+            errors = errors_fb
+            used_source = "psu"
+        else:
+            errors.extend(errors_fb)
+
+    elif len(profiles) < 2 and src == "psu":
+        print(f"  [ensemble-plume] PSU failed ({len(profiles)} profiles), trying Iowa State fallback...")
+        profiles.clear()
+        errors_fb = []
+        for fh in hours:
+            try:
+                from sounding import fetch_bufkit_sounding
+                data = fetch_bufkit_sounding(station, dt, model=model, fhour=int(fh))
+                profiles.append({"fhour": fh, "data": data})
+            except Exception as e:
+                errors_fb.append(f"f{fh:03d}: {e}")
+        if len(profiles) >= 2:
+            errors = errors_fb
+            used_source = "bufkit"
+        else:
+            errors.extend(errors_fb)
+
+    # If still not enough, try previous init cycle (12h earlier)
+    if len(profiles) < 2 and dt:
+        prev_dt = dt - timedelta(hours=12)
+        print(f"  [ensemble-plume] Trying previous init cycle: {prev_dt:%Y-%m-%d %H}Z...")
+        profiles.clear()
+        errors_prev = []
+        for fh in hours:
+            try:
+                from sounding import fetch_bufkit_sounding
+                data = fetch_bufkit_sounding(station, prev_dt, model=model, fhour=int(fh))
+                profiles.append({"fhour": fh, "data": data})
+            except Exception as e:
+                errors_prev.append(f"f{fh:03d}: {e}")
+        if len(profiles) >= 2:
+            errors = errors_prev
+            dt = prev_dt
+            used_source = "bufkit"
+
     if len(profiles) < 2:
+        suggestions = []
+        if model == "sref":
+            suggestions.append("SREF was discontinued — try RAP, HRRR, or NAM instead.")
+        suggestions.append("Try switching source (Iowa State ↔ Penn State).")
+        suggestions.append("Try a different model or earlier date.")
         return jsonify({
             "error": f"Need ≥2 ensemble members, got {len(profiles)}. "
-                     + ("; ".join(errors) if errors else "")
+                     + ("; ".join(errors[:3]) if errors else "")
+                     + ("\n\nSuggestions: " + " ".join(suggestions) if suggestions else "")
         }), 400
 
     # Compute parameters for the analysis profile (first member)
@@ -987,7 +1048,7 @@ def ensemble_plume():
         "meta": {
             "station": station.upper(),
             "model": model.upper(),
-            "source": src,
+            "source": used_source,
             "date": dt.strftime("%Y-%m-%d %HZ") if dt else "latest",
         },
     })
