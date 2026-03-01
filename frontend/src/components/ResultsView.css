@@ -660,19 +660,150 @@
 }
 .rv-summary-body {
   margin-top: 6px;
-  padding: 14px 18px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 16px 20px 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 10px;
   color: #cbd5e1;
   font-size: 13px;
   line-height: 1.7;
 }
-.rv-summary-body p {
-  margin: 0 0 10px 0;
+
+/* ── Banner header ── */
+.rv-sum-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.rv-summary-body p:last-child {
-  margin-bottom: 0;
+.rv-sum-banner-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.rv-sum-station {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+.rv-sum-date {
+  font-size: 11px;
+  color: #64748b;
+  font-family: var(--font-mono);
+}
+.rv-sum-threat-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 12px;
+  border-radius: 20px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+/* ── Hazard callout ── */
+.rv-sum-callout {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid;
+  border-radius: 0 8px 8px 0;
+}
+.rv-sum-callout-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+.rv-sum-callout-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rv-sum-hazard-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+/* ── Section cards ── */
+.rv-sum-sections {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.rv-sum-card {
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.rv-sum-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.rv-sum-card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+.rv-sum-card-icon {
+  color: var(--accent, #60a5fa);
+  flex-shrink: 0;
+}
+.rv-sum-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+}
+
+/* ── Inline key-value chips ── */
+.rv-sum-card-vals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.rv-sum-kv {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.rv-sum-kv-k {
+  color: #64748b;
+  font-weight: 500;
+}
+.rv-sum-kv-v {
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ── Card body text ── */
+.rv-sum-card-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #94a3b8;
 }
 
 /* ── Mobile Responsive ─────────────────────────────── */
@@ -688,8 +819,20 @@
     gap: 4px;
   }
   .rv-summary-body {
+    padding: 12px 14px 16px;
+  }
+  .rv-sum-card-vals {
+    gap: 4px;
+  }
+  .rv-sum-kv {
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+  .rv-sum-card-text {
     font-size: 12px;
-    padding: 10px 12px;
+  }
+  .rv-sum-sections {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -721,9 +864,39 @@
     padding: 4px 6px;
   }
   .rv-summary-body {
-    font-size: 11px;
+    padding: 8px 10px 12px;
+  }
+  .rv-sum-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+  .rv-sum-station {
+    font-size: 13px;
+  }
+  .rv-sum-callout {
     padding: 8px 10px;
-    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .rv-sum-hazard-tag {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+  .rv-sum-card {
+    padding: 10px 10px;
+  }
+  .rv-sum-card-title {
+    font-size: 10px;
+  }
+  .rv-sum-card-text {
+    font-size: 11px;
+    line-height: 1.55;
+  }
+  .rv-sum-kv {
+    font-size: 9px;
+    padding: 1px 6px;
   }
 }
 
