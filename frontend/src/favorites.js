@@ -33,3 +33,32 @@ export function toggleFavorite(stationId) {
   }
   return { favorites: addFavorite(stationId), added: true };
 }
+
+/* ── Station Groups ─────────────────────────────────────── */
+const GROUPS_KEY = "sounding_station_groups";
+
+export function getStationGroups() {
+  try {
+    return JSON.parse(localStorage.getItem(GROUPS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveStationGroup(name, stationIds) {
+  const groups = getStationGroups();
+  const idx = groups.findIndex((g) => g.name === name);
+  if (idx >= 0) {
+    groups[idx].stations = stationIds;
+  } else {
+    groups.push({ name, stations: stationIds });
+  }
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  return groups;
+}
+
+export function deleteStationGroup(name) {
+  const groups = getStationGroups().filter((g) => g.name !== name);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  return groups;
+}

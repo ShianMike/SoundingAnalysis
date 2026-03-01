@@ -141,6 +141,7 @@ def get_sounding():
     theme = body.get("theme", "dark")              # "dark" or "light"
     colorblind = body.get("colorblind", False)     # color-blind safe palette
     boundary_orientation = body.get("boundaryOrientation")  # degrees or null
+    map_zoom = body.get("mapZoom", 1.0)                      # mini-map zoom factor (1-8)
 
     # Parse date
     if date_str:
@@ -198,7 +199,8 @@ def get_sounding():
         fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result,
                             sr_hodograph=sr_hodograph, theme=theme,
                             colorblind=colorblind,
-                            boundary_orientation=boundary_orientation)
+                            boundary_orientation=boundary_orientation,
+                            map_zoom=map_zoom)
 
         _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
         buf = io.BytesIO()

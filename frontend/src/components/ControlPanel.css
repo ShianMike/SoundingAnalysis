@@ -461,6 +461,79 @@
   color: var(--text-primary);
 }
 
+/* ── Station Groups ──────────────────────────────────────── */
+.cp-groups-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cp-group-select {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cp-group-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cp-group-del:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+.cp-group-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.cp-group-save-btn:hover {
+  color: #60a5fa;
+  border-color: #60a5fa;
+}
+.cp-group-save-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cp-group-confirm {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #60a5fa;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cp-group-confirm:hover {
+  background: #3b82f6;
+}
+
 .cp-station-list {
   max-height: 220px;
   overflow-y: auto;

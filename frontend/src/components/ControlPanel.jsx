@@ -29,9 +29,10 @@ import {
   Eye,
   Upload,
   Minus,
+  X,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
-import { getFavorites, toggleFavorite } from "../favorites";
+import { getFavorites, toggleFavorite, getStationGroups, saveStationGroup, deleteStationGroup } from "../favorites";
 import "./ControlPanel.css";
 
 /* ── NEXRAD radar sites for VAD nearest-radar lookup ──────── */
@@ -196,6 +197,15 @@ export default function ControlPanel({
   const [boundaryEnabled, setBoundaryEnabled] = useState(false);
   const [boundaryOrientation, setBoundaryOrientation] = useState("");
 
+  // Station groups state
+  const [stationGroups, setStationGroups] = useState(() => getStationGroups());
+  const [activeGroup, setActiveGroup] = useState("");
+  const [showGroupSave, setShowGroupSave] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+
+  // Map zoom state
+  const [mapZoom, setMapZoom] = useState("1");
+
   // Sync source to parent
   const setSource = (src) => {
     setSourceLocal(src);
@@ -240,6 +250,30 @@ export default function ControlPanel({
   const needsStation = source === "obs" || source === "bufkit" || source === "acars";
   const needsModel = source === "bufkit";
 
+  // Station group filter
+  const activeGroupStations = activeGroup
+    ? (stationGroups.find((g) => g.name === activeGroup)?.stations || [])
+    : null;
+
+  const handleSaveGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    // Save currently visible (filtered) station IDs
+    const ids = filteredStations.map((s) => s.id);
+    if (ids.length === 0) return;
+    const updated = saveStationGroup(name, ids);
+    setStationGroups(updated);
+    setActiveGroup(name);
+    setShowGroupSave(false);
+    setNewGroupName("");
+  };
+
+  const handleDeleteGroup = (name) => {
+    const updated = deleteStationGroup(name);
+    setStationGroups(updated);
+    if (activeGroup === name) setActiveGroup("");
+  };
+
   // Build risk lookup from scan results
   const riskMap = {};
   if (riskData) {
@@ -283,9 +317,12 @@ export default function ControlPanel({
   });
 
   const filteredStations = sortedStations.filter(
-    (s) =>
-      s.id.toLowerCase().includes(stationSearch.toLowerCase()) ||
-      s.name.toLowerCase().includes(stationSearch.toLowerCase())
+    (s) => {
+      const matchesSearch = s.id.toLowerCase().includes(stationSearch.toLowerCase()) ||
+        s.name.toLowerCase().includes(stationSearch.toLowerCase());
+      const matchesGroup = activeGroupStations ? activeGroupStations.includes(s.id) : true;
+      return matchesSearch && matchesGroup;
+    }
   );
 
   const handleRiskScan = async () => {
@@ -370,6 +407,10 @@ export default function ControlPanel({
       const deg = parseFloat(boundaryOrientation);
       if (!isNaN(deg)) params.boundaryOrientation = deg;
     }
+
+    // Map zoom
+    const mz = parseFloat(mapZoom);
+    if (mz > 1) params.mapZoom = mz;
 
     onSubmit(params);
   };
@@ -550,6 +591,43 @@ export default function ControlPanel({
                   </select>
                 </div>
               </div>
+
+              {/* Station Groups */}
+              <div className="cp-groups-row">
+                <select
+                  className="cp-group-select"
+                  value={activeGroup}
+                  onChange={(e) => setActiveGroup(e.target.value)}
+                >
+                  <option value="">All Stations</option>
+                  {stationGroups.map((g) => (
+                    <option key={g.name} value={g.name}>{g.name} ({g.stations.length})</option>
+                  ))}
+                </select>
+                {activeGroup && (
+                  <button type="button" className="cp-group-del" onClick={() => handleDeleteGroup(activeGroup)} title="Delete group">
+                    <X size={11} />
+                  </button>
+                )}
+                <button type="button" className="cp-group-save-btn" onClick={() => setShowGroupSave((v) => !v)} title="Save current filter as group">
+                  +
+                </button>
+              </div>
+              {showGroupSave && (
+                <div className="cp-group-save-row">
+                  <input
+                    type="text"
+                    className="cp-input cp-input-sm"
+                    placeholder="Group name..."
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSaveGroup(); } }}
+                    autoFocus
+                  />
+                  <button type="button" className="cp-group-confirm" onClick={handleSaveGroup}>Save</button>
+                </div>
+              )}
+
               <div className="cp-station-list" ref={listRef}>
                 {filteredStations.length === 0 && (
                   <div className="cp-station-empty">No stations found</div>
@@ -981,6 +1059,26 @@ export default function ControlPanel({
               </label>
             </div>
           )}
+        </div>
+
+        {/* Map Inset Zoom */}
+        <div className="cp-accordion-section">
+          <div style={{ padding: "6px 10px" }}>
+            <label className="cp-field-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              <Map size={13} />
+              <span style={{ minWidth: 70 }}>Map {mapZoom}x</span>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={mapZoom}
+                onChange={(e) => setMapZoom(e.target.value)}
+                style={{ flex: 1 }}
+                title="Zoom level for the CONUS mini-map inset on the sounding plot (1x = full CONUS)"
+              />
+            </label>
+          </div>
         </div>
         </div>{/* end Modifications */}
 

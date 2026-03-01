@@ -2326,7 +2326,8 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
 # PLOTTING
 # ─────────────────────────────────────────────────────────────────────
 def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False,
-                  theme="dark", colorblind=False, boundary_orientation=None):
+                  theme="dark", colorblind=False, boundary_orientation=None,
+                  map_zoom=1.0):
     """Create a comprehensive sounding analysis figure.
 
     Parameters
@@ -2344,6 +2345,10 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         representing the boundary orientation (e.g. an outflow boundary,
         front, or dryline).  The line is drawn perpendicular to the
         boundary-normal vector.
+    map_zoom : float
+        Zoom factor for CONUS mini-map inset (1.0 = full CONUS, >1 = zoomed in
+        on station, max ~8).  Higher values narrow the map extent around the
+        station location.
     """
     p = data["pressure"]
     T = data["temperature"]
@@ -3690,8 +3695,16 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     ax_map.plot(_conus_lon, _conus_lat, color=FG_FAINT, linewidth=0.8, zorder=2)
     ax_map.plot(lon, lat, marker="o", color="#ff3333", markersize=6,
                 markeredgecolor=FG, markeredgewidth=0.8, zorder=10)
-    ax_map.set_xlim(-128, -65)
-    ax_map.set_ylim(23, 51)
+    # Apply zoom: 1.0 = full CONUS, higher = zoomed in on station
+    _mz = max(1.0, min(float(map_zoom), 8.0))
+    _full_lon_range = 63.0   # -128 to -65
+    _full_lat_range = 28.0   # 23 to 51
+    _half_lon = (_full_lon_range / _mz) / 2
+    _half_lat = (_full_lat_range / _mz) / 2
+    _cx = max(-128 + _half_lon, min(lon, -65 - _half_lon))
+    _cy = max(23 + _half_lat, min(lat, 51 - _half_lat))
+    ax_map.set_xlim(_cx - _half_lon, _cx + _half_lon)
+    ax_map.set_ylim(_cy - _half_lat, _cy + _half_lat)
     ax_map.set_aspect(1.3)
     ax_map.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     for spine in ax_map.spines.values():
