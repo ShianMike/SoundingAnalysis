@@ -81,91 +81,95 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
   return (
     <div className="ens-page">
       <div className="ens-page-inner">
-        {/* Header */}
-        <div className="ens-header">
-          <div className="ens-header-left">
-            <button className="ens-back" onClick={onBack} title="Back to main"><ArrowLeft size={16} /></button>
-            <Layers size={15} className="ens-header-icon" />
-            <div>
-              <span className="ens-title">Forecast Sounding Plume</span>
-              <span className="ens-subtitle">
-                Overlay multiple forecast hours on one Skew-T
-              </span>
+        {/* Header card */}
+        <div className="ens-header-card">
+          <div className="ens-header">
+            <div className="ens-header-left">
+              <button className="ens-back" onClick={onBack} title="Back to main"><ArrowLeft size={16} /></button>
+              <div className="ens-header-icon-wrap"><Layers size={18} className="ens-header-icon" /></div>
+              <div>
+                <span className="ens-title">Forecast Sounding Plume</span>
+                <span className="ens-subtitle">
+                  Overlay multiple forecast hours on one Skew-T
+                </span>
+              </div>
             </div>
+            <button className="ens-help-btn" onClick={() => setShowHelp((v) => !v)} title="How it works">
+              <HelpCircle size={15} />
+            </button>
           </div>
-          <button className="ens-help-btn" onClick={() => setShowHelp((v) => !v)} title="How it works">
-            <HelpCircle size={14} />
-          </button>
+
+          {/* Help explainer */}
+          {showHelp && (
+            <div className="ens-help-box">
+              <p><strong>What is this?</strong> A forecast plume overlays soundings from multiple forecast hours (e.g. f000, f003, f006…) onto one diagram, showing how the atmosphere is predicted to evolve over time.</p>
+              <p><strong>How to use:</strong> Pick a station, model, data source, and forecast range, then click "Generate Plume". The first forecast hour (f000 = analysis) is drawn in bold; later hours are semi-transparent to show the spread.</p>
+              <p><strong>Source tips:</strong> "Penn State (latest)" has the most recent model run and works best for current data. "Iowa State (archive)" is better for past dates.</p>
+            </div>
+          )}
         </div>
 
-        {/* Help explainer */}
-        {showHelp && (
-          <div className="ens-help-box">
-            <p><strong>What is this?</strong> A forecast plume overlays soundings from multiple forecast hours (e.g. f000, f003, f006…) onto one diagram, showing how the atmosphere is predicted to evolve over time.</p>
-            <p><strong>How to use:</strong> Pick a station, model, data source, and forecast range, then click "Generate Plume". The first forecast hour (f000 = analysis) is drawn in bold; later hours are semi-transparent to show the spread.</p>
-            <p><strong>Source tips:</strong> "Penn State (latest)" has the most recent model run and works best for current data. "Iowa State (archive)" is better for past dates.</p>
+        {/* Controls card */}
+        <div className="ens-controls-card">
+          <div className="ens-controls">
+            <div className="ens-ctrl-group">
+              <span className="ens-ctrl-label">Station</span>
+              <div className="ens-station-display">{(station || "OUN").toUpperCase()}</div>
+            </div>
+            <div className="ens-ctrl-group">
+              <span className="ens-ctrl-label">Model</span>
+              <select value={model} onChange={(e) => setModel(e.target.value)}>
+                {MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+              {modelInfo && <span className="ens-ctrl-desc">{modelInfo.desc}</span>}
+            </div>
+            <div className="ens-ctrl-group">
+              <span className="ens-ctrl-label">Source</span>
+              <select value={source} onChange={(e) => setSource(e.target.value)}>
+                {SOURCES.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ens-ctrl-group">
+              <span className="ens-ctrl-label">Forecast Range</span>
+              <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
+                {HOUR_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+              <span className="ens-ctrl-desc">{preset.hours.length} forecast hours</span>
+            </div>
+            <button className="ens-fetch-btn" onClick={() => handleFetch()} disabled={loading}>
+              {loading ? <><Loader2 size={13} className="spin" /> Generating…</> : "Generate Plume"}
+            </button>
           </div>
-        )}
 
-        {/* Controls */}
-        <div className="ens-controls">
-          <div className="ens-ctrl-group">
-            <span className="ens-ctrl-label">Station</span>
-            <div className="ens-station-display">{(station || "OUN").toUpperCase()}</div>
-          </div>
-          <div className="ens-ctrl-group">
-            <span className="ens-ctrl-label">Model</span>
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-            {modelInfo && <span className="ens-ctrl-desc">{modelInfo.desc}</span>}
-          </div>
-          <div className="ens-ctrl-group">
-            <span className="ens-ctrl-label">Source</span>
-            <select value={source} onChange={(e) => setSource(e.target.value)}>
-              {SOURCES.map((s) => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="ens-ctrl-group">
-            <span className="ens-ctrl-label">Forecast Range</span>
-            <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
-              {HOUR_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
-            <span className="ens-ctrl-desc">{preset.hours.length} forecast hours</span>
-          </div>
-          <button className="ens-fetch-btn" onClick={() => handleFetch()} disabled={loading}>
-            {loading ? <><Loader2 size={13} className="spin" /> Generating…</> : "Generate Plume"}
-          </button>
+          {/* SREF warning */}
+          {model === "sref" && !result && !loading && (
+            <div className="ens-hint ens-hint-warn">
+              <AlertTriangle size={13} />
+              <span>SREF was discontinued in 2025. Data is unavailable for recent dates. <button className="ens-link-btn" onClick={() => handleQuickFix("try-rap")}>Switch to RAP</button></span>
+            </div>
+          )}
         </div>
-
-        {/* SREF warning */}
-        {model === "sref" && !result && !loading && (
-          <div className="ens-hint ens-hint-warn">
-            <AlertTriangle size={12} />
-            <span>SREF was discontinued in 2025. Data is unavailable for recent dates. <button className="ens-link-btn" onClick={() => handleQuickFix("try-rap")}>Switch to RAP</button></span>
-          </div>
-        )}
 
         {/* Error */}
         {error && (
           <div className="ens-error-card">
             <div className="ens-error-header">
-              <AlertTriangle size={16} />
+              <AlertTriangle size={18} />
               <span>Data Not Available</span>
             </div>
             <p className="ens-error-msg">{error}</p>
             {suggestions.length > 0 && (
               <div className="ens-suggestions">
-                <div className="ens-suggestions-title"><Lightbulb size={12} /> Try these fixes:</div>
+                <div className="ens-suggestions-title"><Lightbulb size={13} /> Try these fixes:</div>
                 <div className="ens-suggestion-btns">
                   <button className="ens-suggestion-btn" onClick={() => handleQuickFix("switch-source")}>
-                    <RefreshCw size={11} /> Switch to {source === "psu" ? "Iowa State" : "Penn State"}
+                    <RefreshCw size={12} /> Switch to {source === "psu" ? "Iowa State" : "Penn State"}
                   </button>
                   {model !== "rap" && (
                     <button className="ens-suggestion-btn" onClick={() => handleQuickFix("try-rap")}>
@@ -189,28 +193,40 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
         {/* Loading state */}
         {loading && (
           <div className="ens-loading">
-            <Loader2 size={24} className="spin" />
+            <div className="ens-loading-spinner"><Loader2 size={22} className="spin" /></div>
             <p>Fetching {preset.hours.length} forecast hours for {(station || "OUN").toUpperCase()} ({model.toUpperCase()})…</p>
             <span className="ens-loading-sub">This typically takes 10–30 seconds</span>
+            <div className="ens-loading-bar"><div className="ens-loading-bar-fill" /></div>
+          </div>
+        )}
+
+        {/* Empty state — show when no result, no error, not loading */}
+        {!result && !error && !loading && (
+          <div className="ens-empty-state">
+            <div className="ens-empty-icon"><Layers size={24} /></div>
+            <div className="ens-empty-title">No plume generated yet</div>
+            <div className="ens-empty-desc">Configure the settings above and click "Generate Plume" to overlay forecast soundings on one Skew-T diagram.</div>
           </div>
         )}
 
         {/* Results */}
         {result && (
-          <div className="ens-result">
-            <div className="ens-plot-wrap">
-              <img
-                src={`data:image/png;base64,${result.image}`}
-                alt="Forecast sounding plume"
-                className="ens-plot-img"
-              />
-            </div>
-            <div className="ens-meta-bar">
-              <span className="ens-meta-badge">{result.members} forecast hours</span>
-              <span className="ens-meta-badge">f{Math.min(...result.hours).toString().padStart(3,"0")} – f{Math.max(...result.hours).toString().padStart(3,"0")}</span>
-              {result.meta?.source && <span className="ens-meta-badge">{result.meta.source === "psu" ? "Penn State" : "Iowa State"}</span>}
-              {result.meta?.date && <span className="ens-meta-badge">{result.meta.date}</span>}
-              {result.errors?.length > 0 && <span className="ens-meta-badge ens-meta-warn">{result.errors.length} hours failed</span>}
+          <div className="ens-result-card">
+            <div className="ens-result">
+              <div className="ens-plot-wrap">
+                <img
+                  src={`data:image/png;base64,${result.image}`}
+                  alt="Forecast sounding plume"
+                  className="ens-plot-img"
+                />
+              </div>
+              <div className="ens-meta-bar">
+                <span className="ens-meta-badge">{result.members} forecast hours</span>
+                <span className="ens-meta-badge">f{Math.min(...result.hours).toString().padStart(3,"0")} – f{Math.max(...result.hours).toString().padStart(3,"0")}</span>
+                {result.meta?.source && <span className="ens-meta-badge">{result.meta.source === "psu" ? "Penn State" : "Iowa State"}</span>}
+                {result.meta?.date && <span className="ens-meta-badge">{result.meta.date}</span>}
+                {result.errors?.length > 0 && <span className="ens-meta-badge ens-meta-warn">{result.errors.length} hours failed</span>}
+              </div>
             </div>
           </div>
         )}
