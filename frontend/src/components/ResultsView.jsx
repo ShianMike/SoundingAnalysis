@@ -933,58 +933,86 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       </div>
 
       {/* Climatology Percentiles */}
-      {params.percentiles && Object.keys(params.percentiles).length > 0 && (
-        <div className="rv-summary-section">
-          <button className="rv-summary-toggle" onClick={() => setShowClimo((s) => !s)}>
-            <BarChart3 size={14} />
-            <span>Climatology Percentiles</span>
-            <ChevronDown size={12} className={showClimo ? "rv-chev-open" : ""} />
-          </button>
-          {showClimo && (
-            <div className="rv-climo-body">
-              <p className="rv-climo-desc">
-                Percentile rank vs. severe-weather proximity sounding climatology (SPC studies).
-                Higher = more extreme environment.
-              </p>
-              <div className="rv-climo-bars">
-                {[
-                  ["SB CAPE", "sbCape"],
-                  ["ML CAPE", "mlCape"],
-                  ["MU CAPE", "muCape"],
-                  ["ECAPE", "ecape"],
-                  ["ML CIN", "mlCin"],
-                  ["0-6 BWD", "bwd6km"],
-                  ["0-1 BWD", "bwd1km"],
-                  ["0-1 SRH", "srh1km"],
-                  ["0-3 SRH", "srh3km"],
-                  ["Eff SRH", "esrh"],
-                  ["Eff BWD", "ebwd"],
-                  ["STP", "stp"],
-                  ["SCP", "scp"],
-                  ["SHIP", "ship"],
-                  ["DCP", "dcp"],
-                  ["DCAPE", "dcape"],
-                  ["LR 0-3", "lr03"],
-                  ["LR 3-6", "lr36"],
-                  ["PWAT", "pwat"],
-                ].filter(([, k]) => params.percentiles[k] != null).map(([label, key]) => {
-                  const pct = params.percentiles[key];
-                  const color = pct >= 95 ? "#ef4444" : pct >= 75 ? "#f59e0b" : pct >= 50 ? "#22c55e" : "#6b7280";
+      {params.percentiles && Object.keys(params.percentiles).length > 0 && (() => {
+        const CLIMO_GROUPS = [
+          { title: "Instability", icon: "🔥", items: [
+            ["SB CAPE", "sbCape"], ["ML CAPE", "mlCape"], ["MU CAPE", "muCape"],
+            ["ECAPE", "ecape"], ["3km CAPE", "cape3km"], ["ML CIN", "mlCin"], ["DCAPE", "dcape"],
+          ]},
+          { title: "Shear & Kinematics", icon: "🌀", items: [
+            ["0-1 BWD", "bwd1km"], ["0-6 BWD", "bwd6km"], ["Eff BWD", "ebwd"],
+            ["0-1 SRH", "srh1km"], ["0-3 SRH", "srh3km"], ["Eff SRH", "esrh"],
+          ]},
+          { title: "Composite Indices", icon: "📊", items: [
+            ["STP", "stp"], ["SCP", "scp"], ["SHIP", "ship"], ["DCP", "dcp"],
+          ]},
+          { title: "Thermodynamic", icon: "🌡️", items: [
+            ["LR 0-3", "lr03"], ["LR 3-6", "lr36"], ["PWAT", "pwat"],
+          ]},
+        ];
+        const pctTier = (p) => p >= 95 ? "extreme" : p >= 75 ? "high" : p >= 50 ? "moderate" : "low";
+        return (
+          <div className="rv-summary-section">
+            <button className="rv-summary-toggle" onClick={() => setShowClimo((s) => !s)}>
+              <BarChart3 size={14} />
+              <span>Climatology Percentiles</span>
+              <ChevronDown size={12} className={showClimo ? "rv-chev-open" : ""} />
+            </button>
+            {showClimo && (
+              <div className="rv-climo-body">
+                <div className="rv-climo-header">
+                  <p className="rv-climo-desc">
+                    Percentile rank vs. SPC severe-weather proximity sounding climatology.
+                  </p>
+                  <div className="rv-climo-legend">
+                    <span className="rv-climo-leg low"><i/>{"<"}50th</span>
+                    <span className="rv-climo-leg moderate"><i/>50–75th</span>
+                    <span className="rv-climo-leg high"><i/>75–95th</span>
+                    <span className="rv-climo-leg extreme"><i/>≥95th</span>
+                  </div>
+                </div>
+                {CLIMO_GROUPS.map((group) => {
+                  const rows = group.items.filter(([, k]) => params.percentiles[k] != null);
+                  if (!rows.length) return null;
                   return (
-                    <div key={key} className="rv-climo-item">
-                      <span className="rv-climo-label">{label}</span>
-                      <div className="rv-climo-track">
-                        <div className="rv-climo-fill" style={{ width: `${pct}%`, background: color }} />
+                    <div key={group.title} className="rv-climo-group">
+                      <div className="rv-climo-group-hdr">
+                        <span className="rv-climo-group-icon">{group.icon}</span>
+                        <span className="rv-climo-group-title">{group.title}</span>
+                        <div className="rv-climo-group-line" />
                       </div>
-                      <span className="rv-climo-pct">{pct}%</span>
+                      <div className="rv-climo-bars">
+                        {rows.map(([label, key], idx) => {
+                          const pct = params.percentiles[key];
+                          const tier = pctTier(pct);
+                          return (
+                            <div key={key} className={`rv-climo-item rv-climo-${tier}`}
+                                 style={{ animationDelay: `${idx * 40}ms` }}>
+                              <span className="rv-climo-label">{label}</span>
+                              <div className="rv-climo-track">
+                                <div className="rv-climo-markers">
+                                  <span style={{ left: "25%" }} />
+                                  <span style={{ left: "50%" }} />
+                                  <span style={{ left: "75%" }} />
+                                  <span style={{ left: "95%" }} />
+                                </div>
+                                <div className="rv-climo-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className={`rv-climo-badge rv-climo-${tier}`}>
+                                {Math.round(pct)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
