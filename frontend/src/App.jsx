@@ -63,8 +63,7 @@ export default function App() {
   const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showVwp, setShowVwp] = useState(false);
-  const [showMeso, setShowMeso] = useState(false);
-  const [showEnsemble, setShowEnsemble] = useState(false);
+
   const [compareHistoryData, setCompareHistoryData] = useState(null);
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
@@ -228,6 +227,19 @@ export default function App() {
           theme={theme}
           colorblind={colorblind}
         />
+      ) : page === "meso" ? (
+        <MesoPanel
+          riskData={riskData}
+          onStationSelect={(id) => { handleMapStationSelect(id); setPage("main"); }}
+          onBack={() => setPage("main")}
+        />
+      ) : page === "ensemble" ? (
+        <EnsemblePlume
+          station={selectedStation}
+          onBack={() => setPage("main")}
+          theme={theme}
+          colorblind={colorblind}
+        />
       ) : (
         <main className="app-main">
           <ControlPanel
@@ -254,10 +266,8 @@ export default function App() {
             onToggleCompare={() => setShowCompare((v) => !v)}
             showVwp={showVwp}
             onToggleVwp={() => setShowVwp((v) => !v)}
-            showMeso={showMeso}
-            onToggleMeso={() => setShowMeso((v) => !v)}
-            showEnsemble={showEnsemble}
-            onToggleEnsemble={() => setShowEnsemble((v) => !v)}
+            onNavigateMeso={() => setPage("meso")}
+            onNavigateEnsemble={() => setPage("ensemble")}
             selectedStation={selectedStation}
             onStationChange={handleStationChange}
             onSourceChange={handleSourceChange}
@@ -278,21 +288,7 @@ export default function App() {
               onClose={() => setShowHistory(false)}
             />
           )}
-          {showMeso && (
-            <MesoPanel
-              riskData={riskData}
-              onStationSelect={handleMapStationSelect}
-              onClose={() => setShowMeso(false)}
-            />
-          )}
-          {showEnsemble && (
-            <EnsemblePlume
-              station={selectedStation}
-              onClose={() => setShowEnsemble(false)}
-              theme={theme}
-              colorblind={colorblind}
-            />
-          )}
+
           <ResultsView
             result={result}
             loading={loading}

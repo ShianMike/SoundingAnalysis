@@ -108,7 +108,7 @@
   .rv-summary-toggle,
   .shortcuts-overlay,
   .history-panel,
-  .meso-panel {
+  .meso-page {
     display: none !important;
   }
 

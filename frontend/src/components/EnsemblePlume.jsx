@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, X, Loader2, AlertTriangle, Info } from "lucide-react";
+import { Layers, ArrowLeft, Loader2, AlertTriangle, Info } from "lucide-react";
 import { fetchEnsemblePlume } from "../api";
 import "./EnsemblePlume.css";
 
@@ -19,7 +19,7 @@ const HOUR_PRESETS = {
   "Extended (0-48h)": [0, 6, 12, 18, 24, 30, 36, 42, 48],
 };
 
-export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
+export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
   const [model, setModel] = useState("rap");
   const [hourPreset, setHourPreset] = useState("Medium (0-12h)");
   const [source, setSource] = useState("psu");
@@ -52,20 +52,21 @@ export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
   const modelInfo = MODELS.find((m) => m.id === model);
 
   return (
-    <div className="ens-panel">
-      {/* Header */}
-      <div className="ens-header">
-        <div className="ens-header-left">
-          <Layers size={15} className="ens-header-icon" />
-          <div>
-            <span className="ens-title">Ensemble Sounding Plume</span>
-            <span className="ens-subtitle">
-              {station || "OUN"} &middot; {modelInfo?.label || model.toUpperCase()}
-            </span>
+    <div className="ens-page">
+      <div className="ens-page-inner">
+        {/* Header */}
+        <div className="ens-header">
+          <div className="ens-header-left">
+            <button className="ens-back" onClick={onBack} title="Back to main"><ArrowLeft size={16} /></button>
+            <Layers size={15} className="ens-header-icon" />
+            <div>
+              <span className="ens-title">Ensemble Sounding Plume</span>
+              <span className="ens-subtitle">
+                {station || "OUN"} &middot; {modelInfo?.label || model.toUpperCase()}
+              </span>
+            </div>
           </div>
         </div>
-        <button className="ens-close" onClick={onClose} title="Close"><X size={14} /></button>
-      </div>
 
       {/* Controls */}
       <div className="ens-controls">
@@ -132,6 +133,7 @@ export default function EnsemblePlume({ station, onClose, theme, colorblind }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
