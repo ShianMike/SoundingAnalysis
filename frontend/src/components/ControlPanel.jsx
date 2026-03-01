@@ -999,58 +999,59 @@ export default function ControlPanel({
         </div>
       </form>
 
-      {/* Settings row: theme / colorblind / upload */}
-      <div className="cp-settings-row">
-        <button
-          type="button"
-          className="cp-settings-btn"
-          onClick={onToggleTheme}
-          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-        >
-          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-          <span>{theme === "dark" ? "Light" : "Dark"}</span>
-        </button>
-        <button
-          type="button"
-          className={`cp-settings-btn ${colorblind ? "active" : ""}`}
-          onClick={onToggleColorblind}
-          title="Toggle color-blind safe palette"
-        >
-          <Eye size={14} />
-          <span>CB Mode</span>
-        </button>
-        <button
-          type="button"
-          className="cp-settings-btn"
-          onClick={onNavigateUpload}
-          title="Upload custom sounding data"
-        >
-          <Upload size={14} />
-          <span>Upload</span>
-        </button>
-      </div>
+      {/* ── Bottom group: settings + footer ── */}
+      <div className="cp-bottom">
+        <div className="cp-settings-row">
+          <button
+            type="button"
+            className="cp-settings-btn"
+            onClick={onToggleTheme}
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            <span>{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
+          <button
+            type="button"
+            className={`cp-settings-btn ${colorblind ? "active" : ""}`}
+            onClick={onToggleColorblind}
+            title="Toggle color-blind safe palette"
+          >
+            <Eye size={14} />
+            <span>CB Mode</span>
+          </button>
+          <button
+            type="button"
+            className="cp-settings-btn"
+            onClick={onNavigateUpload}
+            title="Upload custom sounding data"
+          >
+            <Upload size={14} />
+            <span>Upload</span>
+          </button>
+        </div>
 
-      {/* Footer actions */}
-      <div className="cp-footer">
-        <button
-          type="button"
-          className={`cp-footer-btn ${feedbackActive ? "active" : ""}`}
-          onClick={onFeedbackClick}
-          title="Send feedback"
-        >
-          <MessageSquarePlus size={14} />
-          <span>Feedback</span>
-        </button>
-        <a
-          href="https://github.com/ShianMike/SoundingAnalysis"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="cp-footer-btn"
-          title="View on GitHub"
-        >
-          <Github size={14} />
-          <span>GitHub</span>
-        </a>
+        <div className="cp-footer">
+          <button
+            type="button"
+            className={`cp-footer-btn ${feedbackActive ? "active" : ""}`}
+            onClick={onFeedbackClick}
+            title="Send feedback"
+          >
+            <MessageSquarePlus size={14} />
+            <span>Feedback</span>
+          </button>
+          <a
+            href="https://github.com/ShianMike/SoundingAnalysis"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cp-footer-btn"
+            title="View on GitHub"
+          >
+            <Github size={14} />
+            <span>GitHub</span>
+          </a>
+        </div>
       </div>
     </aside>
   );
