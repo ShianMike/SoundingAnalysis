@@ -116,6 +116,8 @@
 .cp-footer {
   display: flex;
   gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .cp-settings-btn {
