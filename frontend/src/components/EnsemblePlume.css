@@ -120,18 +120,22 @@
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
-.ens-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-end;
-  padding: 20px 24px;
+.ens-controls-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
 }
-.ens-ctrl-group {
+.ens-ctrl-cell {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+  padding: 18px 20px;
+  border-right: 1px solid var(--border);
   min-width: 0;
+}
+.ens-ctrl-cell:last-child {
+  border-right: none;
 }
 .ens-ctrl-label {
   font-size: 10px;
@@ -140,28 +144,35 @@
   letter-spacing: 0.08em;
   color: var(--text-muted);
 }
-.ens-ctrl-desc {
+.ens-ctrl-hint {
   font-size: 10px;
   color: var(--text-muted);
-  opacity: 0.65;
-  max-width: 200px;
+  opacity: 0.55;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ens-station-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--accent, #60a5fa);
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(96, 165, 250, 0.03));
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(96, 165, 250, 0.03));
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 8px;
   letter-spacing: 0.05em;
+  width: fit-content;
 }
-.ens-controls select {
-  padding: 8px 12px;
+.ens-station-icon {
+  color: rgba(96, 165, 250, 0.5);
+}
+.ens-controls-card select {
+  padding: 8px 30px 8px 12px;
   font-size: 12px;
   background: var(--bg-input, #1a1a2e);
   border: 1px solid var(--border);
@@ -174,18 +185,23 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
-  padding-right: 28px;
+  width: 100%;
 }
-.ens-controls select:hover {
+.ens-controls-card select:hover {
   border-color: var(--text-muted);
 }
-.ens-controls select:focus {
+.ens-controls-card select:focus {
   border-color: var(--accent, #60a5fa);
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.12);
   outline: none;
 }
+.ens-controls-action {
+  display: flex;
+  padding: 14px 20px;
+  justify-content: flex-end;
+}
 .ens-fetch-btn {
-  padding: 10px 24px;
+  padding: 10px 28px;
   font-size: 12px;
   font-weight: 700;
   background: linear-gradient(135deg, #60a5fa, #818cf8);
@@ -197,7 +213,6 @@
   align-items: center;
   gap: 7px;
   transition: all 0.2s ease;
-  margin-left: auto;
   box-shadow: 0 2px 8px rgba(96, 165, 250, 0.25);
   letter-spacing: 0.01em;
 }
@@ -313,25 +328,14 @@
   border-left: 3px solid rgba(239, 68, 68, 0.25);
 }
 
-/* ── Suggestions ── */
-.ens-suggestions {
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+/* ── Suggestions / error actions ── */
+.ens-error-actions {
+  margin-bottom: 16px;
 }
-.ens-suggestions-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fbbf24;
-  margin-bottom: 12px;
-}
-.ens-suggestion-btns {
+.ens-error-actions-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
 }
 .ens-suggestion-btn {
   display: inline-flex;
@@ -354,6 +358,59 @@
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
+
+/* ── Quick combos ── */
+.ens-quick-combos {
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 12px;
+}
+.ens-quick-combos-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent, #60a5fa);
+  margin-bottom: 10px;
+}
+.ens-quick-combos-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ens-combo-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(96, 165, 250, 0.04);
+  border: 1px solid rgba(96, 165, 250, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+.ens-combo-chip:hover {
+  background: rgba(96, 165, 250, 0.10);
+  border-color: rgba(96, 165, 250, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.12);
+}
+.ens-combo-station {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent, #60a5fa);
+  letter-spacing: 0.04em;
+}
+.ens-combo-region {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 .ens-suggestion-list {
   margin: 0;
   padding: 0 0 0 20px;
@@ -478,18 +535,33 @@
 @media (max-width: 1024px) {
   .ens-page { padding: 20px; }
 }
+@media (max-width: 768px) {
+  .ens-controls-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ens-ctrl-cell:nth-child(2) { border-right: none; }
+  .ens-ctrl-cell:nth-child(1),
+  .ens-ctrl-cell:nth-child(2) {
+    border-bottom: 1px solid var(--border);
+  }
+}
 @media (max-width: 680px) {
   .ens-page { padding: 12px; }
   .ens-page-inner { gap: 14px; }
   .ens-header { padding: 14px 16px; }
   .ens-title { font-size: 14px; }
-  .ens-controls { padding: 14px 16px; gap: 12px; }
-  .ens-fetch-btn { width: 100%; justify-content: center; margin-left: 0; margin-top: 4px; }
+  .ens-controls-action { justify-content: stretch; }
+  .ens-fetch-btn { width: 100%; justify-content: center; }
   .ens-error-card { padding: 16px; }
   .ens-empty-state { padding: 40px 20px; }
 }
 @media (max-width: 480px) {
   .ens-page { padding: 8px; }
-  .ens-controls select { font-size: 11px; }
+  .ens-controls-grid { grid-template-columns: 1fr; }
+  .ens-ctrl-cell { border-right: none !important; border-bottom: 1px solid var(--border); }
+  .ens-ctrl-cell:last-child { border-bottom: none; }
+  .ens-controls-card select { font-size: 11px; }
   .ens-result-card { border-radius: 10px; }
+  .ens-quick-combos-grid { gap: 6px; }
+  .ens-combo-chip { min-width: 70px; padding: 8px 12px; }
 }
