@@ -366,3 +366,65 @@
     padding: 8px 0;
   }
 }
+
+/* ── Playback controls ──────────────────────────────────── */
+.ts-playback {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: var(--bg-tertiary, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+}
+
+.ts-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  color: var(--text-secondary, #aaa);
+  cursor: pointer;
+  transition: all 0.15s;
+}  
+.ts-play-btn:hover:not(:disabled) {
+  background: var(--bg-secondary, #252525);
+  color: #fff;
+}
+.ts-play-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.ts-play-main {
+  width: 32px;
+  height: 32px;
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+.ts-play-main.active {
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.ts-speed-select {
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  color: var(--text-secondary, #aaa);
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.ts-play-label {
+  font-size: 11px;
+  color: #60a5fa;
+  margin-left: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+}

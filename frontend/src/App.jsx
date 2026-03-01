@@ -169,9 +169,53 @@ export default function App() {
     setSelectedStation(id);
   };
 
+  // ── Keyboard shortcuts ────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      // Ignore when typing in inputs
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case "h": e.preventDefault(); setShowHistory((v) => !v); break;
+        case "c": e.preventDefault(); setShowCompare((v) => !v); break;
+        case "m": e.preventDefault(); setShowMap((v) => !v); break;
+        case "t": e.preventDefault(); setShowTimeSeries((v) => !v); break;
+        case "v": e.preventDefault(); setShowVwp((v) => !v); break;
+        case "?": e.preventDefault(); setShowShortcuts((v) => !v); break;
+        case "escape": setShowShortcuts(false); break;
+        default: break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   return (
     <div className="app">
       <Header showFeedback={showFeedback} onCloseFeedback={() => setShowFeedback(false)} />
+
+      {/* Keyboard shortcuts modal */}
+      {showShortcuts && (
+        <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
+          <div className="shortcuts-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Keyboard Shortcuts</h3>
+            <div className="shortcuts-grid">
+              <kbd>H</kbd><span>Toggle History panel</span>
+              <kbd>C</kbd><span>Toggle Compare view</span>
+              <kbd>M</kbd><span>Toggle Station Map</span>
+              <kbd>T</kbd><span>Toggle Time-Series</span>
+              <kbd>V</kbd><span>Toggle VWP Display</span>
+              <kbd>?</kbd><span>Show this help</span>
+              <kbd>Esc</kbd><span>Close dialogs</span>
+            </div>
+            <button className="shortcuts-close" onClick={() => setShowShortcuts(false)}>Close</button>
+          </div>
+        </div>
+      )}
       {page === "upload" ? (
         <CustomUpload
           onBack={() => setPage("main")}

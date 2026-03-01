@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   LineChart,
   Line,
@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { TrendingUp, Loader2, AlertTriangle, X, ChevronDown, Info, Calendar } from "lucide-react";
+import { TrendingUp, Loader2, AlertTriangle, X, ChevronDown, Info, Calendar, Play, Pause, SkipBack, SkipForward, RotateCcw } from "lucide-react";
 import { fetchTimeSeries } from "../api";
 import "./TimeSeriesChart.css";
 
@@ -79,6 +79,12 @@ export default function TimeSeriesChart({ station, source, onClose }) {
   const [selected, setSelected] = useState(DEFAULT_SELECTED);
   const [expandedGroup, setExpandedGroup] = useState("Severe Weather Indices");
 
+  // Playback state
+  const [playIdx, setPlayIdx] = useState(-1); // -1 = off
+  const [playing, setPlaying] = useState(false);
+  const [playSpeed, setPlaySpeed] = useState(1000); // ms per frame
+  const playTimer = useRef(null);
+
   // Date range: default to last 7 days
   const todayStr = new Date().toISOString().slice(0, 10);
   const weekAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -141,6 +147,55 @@ export default function TimeSeriesChart({ station, source, onClose }) {
     const groupKeys = Object.keys(PARAM_GROUPS[groupName]);
     setSelected(groupKeys);
   };
+
+  // Playback controls
+  const totalFrames = data?.points?.length || 0;
+
+  const stopPlayback = useCallback(() => {
+    setPlaying(false);
+    if (playTimer.current) { clearInterval(playTimer.current); playTimer.current = null; }
+  }, []);
+
+  const startPlayback = useCallback(() => {
+    if (totalFrames < 2) return;
+    setPlaying(true);
+    setPlayIdx((prev) => (prev < 0 || prev >= totalFrames - 1) ? 0 : prev);
+  }, [totalFrames]);
+
+  const togglePlayback = useCallback(() => {
+    if (playing) stopPlayback(); else startPlayback();
+  }, [playing, stopPlayback, startPlayback]);
+
+  const stepForward = useCallback(() => {
+    setPlayIdx((prev) => Math.min((prev < 0 ? 0 : prev) + 1, totalFrames - 1));
+  }, [totalFrames]);
+
+  const stepBack = useCallback(() => {
+    setPlayIdx((prev) => Math.max((prev < 0 ? 0 : prev) - 1, 0));
+  }, []);
+
+  const resetPlayback = useCallback(() => {
+    stopPlayback();
+    setPlayIdx(-1);
+  }, [stopPlayback]);
+
+  // Auto-advance when playing
+  useEffect(() => {
+    if (!playing) return;
+    playTimer.current = setInterval(() => {
+      setPlayIdx((prev) => {
+        const next = prev + 1;
+        if (next >= totalFrames) {
+          setPlaying(false);
+          clearInterval(playTimer.current);
+          playTimer.current = null;
+          return totalFrames - 1;
+        }
+        return next;
+      });
+    }, playSpeed);
+    return () => { if (playTimer.current) clearInterval(playTimer.current); };
+  }, [playing, playSpeed, totalFrames]);
 
   // Transform data for Recharts
   const chartData =
@@ -277,6 +332,35 @@ export default function TimeSeriesChart({ station, source, onClose }) {
         </div>
       )}
 
+      {/* Playback controls */}
+      {data && chartData.length > 1 && (
+        <div className="ts-playback">
+          <button className="ts-play-btn" onClick={resetPlayback} title="Reset">
+            <RotateCcw size={13} />
+          </button>
+          <button className="ts-play-btn" onClick={stepBack} title="Step back" disabled={playIdx <= 0}>
+            <SkipBack size={13} />
+          </button>
+          <button className={`ts-play-btn ts-play-main ${playing ? "active" : ""}`} onClick={togglePlayback} title={playing ? "Pause" : "Play"}>
+            {playing ? <Pause size={14} /> : <Play size={14} />}
+          </button>
+          <button className="ts-play-btn" onClick={stepForward} title="Step forward" disabled={playIdx >= totalFrames - 1}>
+            <SkipForward size={13} />
+          </button>
+          <select className="ts-speed-select" value={playSpeed} onChange={(e) => setPlaySpeed(Number(e.target.value))}>
+            <option value={2000}>0.5x</option>
+            <option value={1000}>1x</option>
+            <option value={500}>2x</option>
+            <option value={250}>4x</option>
+          </select>
+          {playIdx >= 0 && (
+            <span className="ts-play-label">
+              {chartData[playIdx]?.date} ({playIdx + 1}/{totalFrames})
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Chart */}
       {data && chartData.length > 0 && (
         <div className="ts-chart-wrap">
@@ -304,6 +388,9 @@ export default function TimeSeriesChart({ station, source, onClose }) {
                 formatter={(value) => <span style={{ color: "#aaa", fontSize: 11 }}>{value}</span>}
               />
               <ReferenceLine y={0} stroke="#555" strokeDasharray="2 2" />
+              {playIdx >= 0 && chartData[playIdx] && (
+                <ReferenceLine x={chartData[playIdx].date} stroke="#60a5fa" strokeWidth={2} strokeDasharray="4 2" />
+              )}
               {selected.map(
                 (key) =>
                   ALL_PARAMS[key] && (

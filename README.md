@@ -363,7 +363,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Radar reflectivity overlay (mosaic / single-site) | ✅ (IEM mosaic) | ✅ |
 | Radar velocity overlay (storm-relative) | ✅ (RIDGE N0U) | ❌ |
 | Map inset with station location | ✅ (CONUS outline) | ✅ (with radar) |
-| Map inset zoom control | ❌ | ✅ |
+| Map inset zoom control | ✅ | ✅ |
 | Storm-relative wind profile panel | ✅ | ✅ |
 | Streamwise vorticity / streamwiseness panel | ✅ | ✅ |
 | Piecewise CAPE / stepwise CAPE-CIN plot | ❌ | ✅ |
@@ -473,14 +473,17 @@ These are features that exist in our web app but have **no equivalent in Sounder
 
 ### Lower Priority — Quality of Life
 
-- [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
+- [x] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis ✅
 - [ ] **WRF / CM1 Data Ingestion** — Allow uploading WRF output or CM1 input_sounding files for analysis
 - [x] **Custom Data Upload** — Upload CSV, SHARPpy, or CM1 sounding data for full analysis with auto-format detection ✅
 - [ ] **PSU BUFKIT Feed** — Add Penn State's real-time BUFKIT feed as a secondary forecast model source
-- [ ] **Map Inset Zoom Control** — Adjustable zoom level for the CONUS mini-map on sounding plots
-- [ ] **Animated Time-Series Playback** — Step through time-series soundings as an animation
+- [x] **Map Inset Zoom Control** — Adjustable zoom level for the CONUS mini-map on sounding plots ✅
+- [x] **Animated Time-Series Playback** — Step through time-series soundings as an animation with play/pause/speed controls ✅
 - [ ] **Mobile-Optimized Sounding View** — Pinch-zoom and swipe-friendly sounding plot rendering on mobile
 - [x] **Shareable Sounding Links** — Encode station/source/date in URL for direct sharing; auto-fetch on link open; copy-link button ✅
+- [x] **Parameter Alerts / Thresholds** — Color-coded severity highlighting on parameter cards (moderate/high/extreme) ✅
+- [x] **Keyboard Shortcuts** — Quick-access keys for panels (H=history, C=compare, M=map, T=trends, V=VWP, ?=help) ✅
+- [x] **Sounding Text Summary** — Auto-generated plain-English forecast discussion from computed parameters ✅
 
 ---
 
