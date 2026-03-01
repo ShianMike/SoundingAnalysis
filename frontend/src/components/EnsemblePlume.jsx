@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, ArrowLeft, Loader2, AlertTriangle, Info, RefreshCw, Lightbulb, HelpCircle } from "lucide-react";
+import { Layers, ArrowLeft, Loader2, AlertTriangle, Info, RefreshCw, Lightbulb, HelpCircle, Zap, MapPin } from "lucide-react";
 import { fetchEnsemblePlume } from "../api";
 import "./EnsemblePlume.css";
 
@@ -13,8 +13,8 @@ const MODELS = [
 ];
 
 const SOURCES = [
-  { id: "psu", label: "Penn State (latest)", desc: "Most recent model run — best for current conditions" },
-  { id: "bufkit", label: "Iowa State (archive)", desc: "Historical archive — for past dates" },
+  { id: "psu", label: "Penn State (latest)", desc: "Most recent model run" },
+  { id: "bufkit", label: "Iowa State (archive)", desc: "Historical archive" },
 ];
 
 const HOUR_PRESETS = [
@@ -22,6 +22,16 @@ const HOUR_PRESETS = [
   { id: "medium",   label: "Medium (0–12 h)",   hours: [0, 1, 2, 3, 6, 9, 12],         desc: "Half-day outlook" },
   { id: "long",     label: "Long (0–24 h)",     hours: [0, 3, 6, 9, 12, 15, 18, 21, 24], desc: "Full day outlook" },
   { id: "extended", label: "Extended (0–48 h)",  hours: [0, 6, 12, 18, 24, 30, 36, 42, 48], desc: "2-day outlook" },
+];
+
+/* Stations with reliable BUFKIT data on Penn State */
+const QUICK_COMBOS = [
+  { station: "OUN", model: "rap", source: "psu", label: "OUN", region: "Oklahoma" },
+  { station: "TBW", model: "rap", source: "psu", label: "TBW", region: "Tampa Bay" },
+  { station: "ILX", model: "rap", source: "psu", label: "ILX", region: "Lincoln, IL" },
+  { station: "OAX", model: "rap", source: "psu", label: "OAX", region: "Omaha" },
+  { station: "SGF", model: "rap", source: "psu", label: "SGF", region: "Springfield" },
+  { station: "DVN", model: "rap", source: "psu", label: "DVN", region: "Davenport" },
 ];
 
 export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
@@ -41,12 +51,13 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
     setError(null);
     setSuggestions([]);
     setResult(null);
+    const usedStation = overrides.station || station || "OUN";
     const usedModel = overrides.model || model;
     const usedSource = overrides.source || source;
     const usedHours = preset.hours;
     try {
       const data = await fetchEnsemblePlume({
-        station: station || "OUN",
+        station: usedStation,
         model: usedModel,
         source: usedSource,
         hours: usedHours,
@@ -76,7 +87,14 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
     }
   };
 
+  const handleQuickCombo = (combo) => {
+    setModel(combo.model);
+    setSource(combo.source);
+    handleFetch({ model: combo.model, source: combo.source, station: combo.station });
+  };
+
   const modelInfo = MODELS.find((m) => m.id === model);
+  const sourceInfo = SOURCES.find((s) => s.id === source);
 
   return (
     <div className="ens-page">
@@ -109,41 +127,48 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
           )}
         </div>
 
-        {/* Controls card */}
+        {/* Controls card — grid layout */}
         <div className="ens-controls-card">
-          <div className="ens-controls">
-            <div className="ens-ctrl-group">
+          <div className="ens-controls-grid">
+            <div className="ens-ctrl-cell">
               <span className="ens-ctrl-label">Station</span>
-              <div className="ens-station-display">{(station || "OUN").toUpperCase()}</div>
+              <div className="ens-station-display">
+                <MapPin size={12} className="ens-station-icon" />
+                {(station || "OUN").toUpperCase()}
+              </div>
+              <span className="ens-ctrl-hint">Selected from main page</span>
             </div>
-            <div className="ens-ctrl-group">
+            <div className="ens-ctrl-cell">
               <span className="ens-ctrl-label">Model</span>
               <select value={model} onChange={(e) => setModel(e.target.value)}>
                 {MODELS.map((m) => (
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
               </select>
-              {modelInfo && <span className="ens-ctrl-desc">{modelInfo.desc}</span>}
+              <span className="ens-ctrl-hint">{modelInfo?.desc}</span>
             </div>
-            <div className="ens-ctrl-group">
+            <div className="ens-ctrl-cell">
               <span className="ens-ctrl-label">Source</span>
               <select value={source} onChange={(e) => setSource(e.target.value)}>
                 {SOURCES.map((s) => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
+              <span className="ens-ctrl-hint">{sourceInfo?.desc}</span>
             </div>
-            <div className="ens-ctrl-group">
+            <div className="ens-ctrl-cell">
               <span className="ens-ctrl-label">Forecast Range</span>
               <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
                 {HOUR_PRESETS.map((p) => (
                   <option key={p.id} value={p.id}>{p.label}</option>
                 ))}
               </select>
-              <span className="ens-ctrl-desc">{preset.hours.length} forecast hours</span>
+              <span className="ens-ctrl-hint">{preset.hours.length} forecast hours · {preset.desc}</span>
             </div>
+          </div>
+          <div className="ens-controls-action">
             <button className="ens-fetch-btn" onClick={() => handleFetch()} disabled={loading}>
-              {loading ? <><Loader2 size={13} className="spin" /> Generating…</> : "Generate Plume"}
+              {loading ? <><Loader2 size={14} className="spin" /> Generating…</> : <><Zap size={14} /> Generate Plume</>}
             </button>
           </div>
 
@@ -164,28 +189,43 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
               <span>Data Not Available</span>
             </div>
             <p className="ens-error-msg">{error}</p>
-            {suggestions.length > 0 && (
-              <div className="ens-suggestions">
-                <div className="ens-suggestions-title"><Lightbulb size={13} /> Try these fixes:</div>
-                <div className="ens-suggestion-btns">
-                  <button className="ens-suggestion-btn" onClick={() => handleQuickFix("switch-source")}>
-                    <RefreshCw size={12} /> Switch to {source === "psu" ? "Iowa State" : "Penn State"}
+
+            {/* Quick-fix actions */}
+            <div className="ens-error-actions">
+              <div className="ens-error-actions-row">
+                <button className="ens-suggestion-btn" onClick={() => handleQuickFix("switch-source")}>
+                  <RefreshCw size={12} /> Switch to {source === "psu" ? "Iowa State" : "Penn State"}
+                </button>
+                {model !== "rap" && (
+                  <button className="ens-suggestion-btn" onClick={() => handleQuickFix("try-rap")}>
+                    Try RAP model
                   </button>
-                  {model !== "rap" && (
-                    <button className="ens-suggestion-btn" onClick={() => handleQuickFix("try-rap")}>
-                      Try RAP model
-                    </button>
-                  )}
-                  {model !== "hrrr" && (
-                    <button className="ens-suggestion-btn" onClick={() => handleQuickFix("try-hrrr")}>
-                      Try HRRR model
-                    </button>
-                  )}
-                </div>
-                <ul className="ens-suggestion-list">
-                  {suggestions.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
+                )}
+                {model !== "hrrr" && (
+                  <button className="ens-suggestion-btn" onClick={() => handleQuickFix("try-hrrr")}>
+                    Try HRRR model
+                  </button>
+                )}
               </div>
+            </div>
+
+            {/* Quick combos — known working */}
+            <div className="ens-quick-combos">
+              <div className="ens-quick-combos-label"><Zap size={11} /> Try a station that's available now:</div>
+              <div className="ens-quick-combos-grid">
+                {QUICK_COMBOS.map((c) => (
+                  <button key={c.station} className="ens-combo-chip" onClick={() => handleQuickCombo(c)}>
+                    <span className="ens-combo-station">{c.label}</span>
+                    <span className="ens-combo-region">{c.region}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {suggestions.length > 0 && (
+              <ul className="ens-suggestion-list">
+                {suggestions.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
             )}
           </div>
         )}
