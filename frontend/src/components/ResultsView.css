@@ -502,10 +502,10 @@
   letter-spacing: 0.04em;
 }
 
-/* Severity alert borders on composite cards — same top accent as param-cards */
-.composite-value.param-alert-mod { color: #eab308 !important; }
-.composite-value.param-alert-high { color: #f97316 !important; }
-.composite-value.param-alert-extreme { color: #ef4444 !important; }
+/* Severity alert colors on composite values — strip inherited border/bg from generic .param-alert-* */
+.composite-value.param-alert-mod { color: #eab308 !important; border: none !important; background: none !important; }
+.composite-value.param-alert-high { color: #f97316 !important; border: none !important; background: none !important; }
+.composite-value.param-alert-extreme { color: #ef4444 !important; border: none !important; background: none !important; box-shadow: none !important; }
 
 .composite-card:has(.param-alert-mod) {
   border-top: 2px solid #eab308;
