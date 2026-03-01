@@ -1812,6 +1812,31 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
             params["ml_lcl_m"] = ml_lcl_h_msl - h[0].magnitude
         except:
             params["ml_lcl_m"] = None
+        # ML LFC and EL
+        try:
+            params["ml_lfc_p"], params["ml_lfc_t"] = mpcalc.lfc(p, T, Td, ml_prof)
+            _ml_lfc_idx = np.argmin(np.abs(p.magnitude - params["ml_lfc_p"].magnitude))
+            _ml_lfc_h_msl = h.magnitude[_ml_lfc_idx]
+            if _ml_lfc_idx > 0:
+                _frac = (p.magnitude[_ml_lfc_idx-1] - params["ml_lfc_p"].magnitude) / \
+                        (p.magnitude[_ml_lfc_idx-1] - p.magnitude[_ml_lfc_idx])
+                _ml_lfc_h_msl = h.magnitude[_ml_lfc_idx-1] + _frac * (h.magnitude[_ml_lfc_idx] - h.magnitude[_ml_lfc_idx-1])
+            params["ml_lfc_m"] = _ml_lfc_h_msl - h[0].magnitude
+        except:
+            params["ml_lfc_p"] = None
+            params["ml_lfc_m"] = None
+        try:
+            params["ml_el_p"], params["ml_el_t"] = mpcalc.el(p, T, Td, ml_prof)
+            _ml_el_idx = np.argmin(np.abs(p.magnitude - params["ml_el_p"].magnitude))
+            _ml_el_h_msl = h.magnitude[_ml_el_idx]
+            if _ml_el_idx > 0:
+                _frac = (p.magnitude[_ml_el_idx-1] - params["ml_el_p"].magnitude) / \
+                        (p.magnitude[_ml_el_idx-1] - p.magnitude[_ml_el_idx])
+                _ml_el_h_msl = h.magnitude[_ml_el_idx-1] + _frac * (h.magnitude[_ml_el_idx] - h.magnitude[_ml_el_idx-1])
+            params["ml_el_m"] = _ml_el_h_msl - h[0].magnitude
+        except:
+            params["ml_el_p"] = None
+            params["ml_el_m"] = None
     except Exception as e:
         print(f"  Warning: ML parcel calc failed: {e}")
         params["ml_cape"] = 0 * units("J/kg")
@@ -1963,7 +1988,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         params["bwd_3km"] = 0 * units.knot
         params["bwd_6km"] = 0 * units.knot
     
-    # STP (now that we have SRH and BWD)
+    # STP — fixed-layer (SB CAPE, 0-1km SRH, 0-6km BWD, SB LCL)
     # MetPy's significant_tornado expects LCL HEIGHT in meters, not pressure
     try:
         _stp_lcl_h = params.get("sb_lcl_m")
@@ -1981,7 +2006,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         print(f"  Warning: STP calc failed: {e}")
         params["stp"] = 0
     
-    # (SCP moved after effective layer computations below)
+    # (SCP and STP-Eff moved after effective layer computations below)
     
     # ── Significant Hail Parameter (SHIP) ──
     # SHIP = (muCAPE × mixRatio × LR_7-5 × (-T500) × BWD_6km) / 42_000_000
@@ -2149,6 +2174,57 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
     except Exception as e:
         print(f"  Warning: Effective BWD calc failed: {e}")
         params["ebwd"] = 0 * units.knot
+
+    # ── Effective-Layer STP (Thompson et al. 2012) ──────────────
+    # STP_eff = (mlCAPE/1500) × (ESRH/150) × (EBWD/20 m/s) × ((2000-mlLCL)/1000) × ((mlCIN+200)/150)
+    # Uses ML CAPE, effective SRH, effective BWD, ML LCL, ML CIN
+    try:
+        _ml_cape_v = float(params.get("ml_cape", 0 * units("J/kg")).magnitude)
+        _ml_cin_v = float(params.get("ml_cin", 0 * units("J/kg")).magnitude)
+        _ml_lcl_m = params.get("ml_lcl_m")
+        _esrh_v = float(params.get("esrh", 0 * units("m^2/s^2")).magnitude)
+        _ebwd_v = float(params.get("ebwd", 0 * units.knot).to("m/s").magnitude)
+
+        if _ml_lcl_m is not None and _ebwd_v >= 12.5 and _ml_cape_v > 0:
+            # CAPE term
+            _stp_cape = _ml_cape_v / 1500.0
+            # ESRH term
+            _stp_esrh = _esrh_v / 150.0
+            # EBWD term (capped at 1.5 for EBWD > 30 m/s, zeroed below 12.5 m/s)
+            _stp_ebwd = min(_ebwd_v / 20.0, 1.5)
+            # LCL term (capped at 1.0 for LCL < 1000m, zeroed for LCL > 2000m)
+            if _ml_lcl_m < 1000.0:
+                _stp_lcl = 1.0
+            elif _ml_lcl_m > 2000.0:
+                _stp_lcl = 0.0
+            else:
+                _stp_lcl = (2000.0 - _ml_lcl_m) / 1000.0
+            # CIN term (capped at 1.0 for CIN > -50, zeroed for CIN < -200)
+            if _ml_cin_v >= -50.0:
+                _stp_cin = 1.0
+            elif _ml_cin_v <= -200.0:
+                _stp_cin = 0.0
+            else:
+                _stp_cin = (_ml_cin_v + 200.0) / 150.0
+            params["stp_eff"] = round(_stp_cape * _stp_esrh * _stp_ebwd * _stp_lcl * _stp_cin, 2)
+        else:
+            params["stp_eff"] = 0
+    except Exception as e:
+        print(f"  Warning: STP-Eff calc failed: {e}")
+        params["stp_eff"] = 0
+
+    # ── Warm Cloud Depth (WCD) ─────────────────────────────────────
+    # WCD = Freezing Level (AGL) - SB LCL height (AGL)
+    # Critical for hail melting assessment and precipitation efficiency
+    try:
+        _frz = params.get("frz_level")
+        _sb_lcl = params.get("sb_lcl_m")
+        if _frz is not None and _sb_lcl is not None and _frz > _sb_lcl:
+            params["wcd"] = round(_frz - _sb_lcl)
+        else:
+            params["wcd"] = None
+    except Exception:
+        params["wcd"] = None
 
     # ── Supercell Composite Parameter (SCP) ── Thompson et al. 2004
     # Uses MetPy built-in: SCP = (muCAPE/1000) × (ESRH/50) × (EBW/20 m/s)
@@ -2892,6 +2968,29 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     except Exception:
         pass
     
+    # --- Effective Inflow Layer (EIL) shading on Skew-T ---
+    try:
+        _eil_bot_p_skew = params.get("eil_bot_p")
+        _eil_top_p_skew = params.get("eil_top_p")
+        if _eil_bot_p_skew is not None and _eil_top_p_skew is not None:
+            # Shade the effective inflow layer as a vertical band on the left edge
+            skew.ax.axhspan(_eil_top_p_skew, _eil_bot_p_skew,
+                           xmin=0, xmax=0.04,
+                           color="#44ddaa", alpha=0.45, zorder=5)
+            # Label
+            _eil_mid_p = (_eil_bot_p_skew + _eil_top_p_skew) / 2
+            _eil_bot_h_v = params.get("eil_bot_h", 0)
+            _eil_top_h_v = params.get("eil_top_h", 0)
+            skew.ax.text(
+                skew.ax.get_xlim()[0] + 1, _eil_mid_p,
+                f"EIL", color="#44ddaa",
+                fontsize=8, fontweight="bold", fontfamily="monospace",
+                alpha=0.9, va="center", ha="left",
+                path_effects=[path_effects.withStroke(linewidth=2, foreground=BG)]
+            )
+    except Exception:
+        pass
+
     # --- PBL (Planetary Boundary Layer) top marker ---
     # Estimate PBL using the ML (mixed-layer) LCL height as proxy
     try:
@@ -3149,9 +3248,18 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                           label='SM Vector', length_includes_head=True,
                           head_width=0.6)
 
-        # --- Effective inflow layer SRH fill (0-3 km, using RM) ---
-        eil_bot_idx = 0
-        eil_top_idx = min(30, n_full - 1)  # 3 km
+        # --- Effective inflow layer SRH fill (using actual EIL bounds) ---
+        _eil_bot_h = params.get("eil_bot_h")
+        _eil_top_h = params.get("eil_top_h")
+        if _eil_bot_h is not None and _eil_top_h is not None:
+            eil_bot_idx = max(0, min(int(round(_eil_bot_h / 100)), n_full - 1))
+            eil_top_idx = max(0, min(int(round(_eil_top_h / 100)), n_full - 1))
+        else:
+            # Fallback to 0-3 km if no effective layer
+            eil_bot_idx = 0
+            eil_top_idx = min(30, n_full - 1)
+        _eil_label = (f'EIL {int(_eil_bot_h)}-{int(_eil_top_h)}m SRH'
+                      if _eil_bot_h is not None else '0-3 SRH')
         hodo.ax.plot(
             (sm_u_kt, hodo_u[eil_bot_idx]),
             (sm_v_kt, hodo_v[eil_bot_idx]),
@@ -3165,7 +3273,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         hodo.ax.fill(
             np.append(hodo_u[eil_bot_idx:eil_top_idx + 1], sm_u_kt),
             np.append(hodo_v[eil_bot_idx:eil_top_idx + 1], sm_v_kt),
-            'lightblue', alpha=0.3, zorder=2, label='0-3 SRH')
+            'lightblue', alpha=0.3, zorder=2, label=_eil_label)
 
         # --- MCS motion markers (upshear / downshear) ---
         bwd_u = (hodo_u[min(60, n_full-1)] - hodo_u[0])
@@ -3670,27 +3778,33 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     pwat = fv(params.get("pwat"), "mm", 1) if params.get("pwat") else "---"
     frz = f"{params['frz_level']:.0f}m" if params.get("frz_level") else "---"
     wbo_v = f"{params['wbo']:.0f}m" if params.get('wbo') is not None else "---"
+    wcd_v = f"{params['wcd']:.0f}m" if params.get('wcd') is not None else "---"
     rh_01 = f"{params.get('rh_0_1km', 0):.0f}%" if params.get('rh_0_1km') else "---"
     rh_13 = f"{params.get('rh_1_3km', 0):.0f}%" if params.get('rh_1_3km') else "---"
     rh_36 = f"{params.get('rh_3_6km', 0):.0f}%" if params.get('rh_3_6km') else "---"
     stp_v = fv(params.get("stp"), "", 1)
+    stp_eff_v = fv(params.get("stp_eff"), "", 1)
+    ml_lfc_v = f"{params['ml_lfc_m']:.0f}m" if params.get('ml_lfc_m') is not None else "---"
+    ml_el_v = f"{params['ml_el_m']:.0f}m" if params.get('ml_el_m') is not None else "---"
     ecape_v = f"{params.get('ecape', 0)} J/kg" if params.get('ecape') else "0 J/kg"
     
     # Rows: (text, color, y_position) — tightly spaced
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.89),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.81),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.73),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.65),
-        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.57),
-        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.49),
+        (header, FG_FAINT, 0.90),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.83),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.76),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.69),
+        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.62),
+        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.55),
+        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.48),
         (f"   DCIN: {dcin_v}", FG_DIM, 0.41),
-        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.33),
-        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.25),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.17),
-        (f"   STP: {stp_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}  |  DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.08),
-        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.0),
+        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.34),
+        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.27),
+        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.20),
+        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.12),
+        (f"   DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.05),
+        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, -0.02),
     ]
     
     for text, color, y_pos in thermo_rows:
