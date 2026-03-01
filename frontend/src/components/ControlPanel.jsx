@@ -209,8 +209,7 @@ export default function ControlPanel({
   const [showGroupSave, setShowGroupSave] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
-  // Map zoom state
-  const [mapZoom, setMapZoom] = useState("1");
+
 
   // Sync source to parent
   const setSource = (src) => {
@@ -413,10 +412,6 @@ export default function ControlPanel({
       const deg = parseFloat(boundaryOrientation);
       if (!isNaN(deg)) params.boundaryOrientation = deg;
     }
-
-    // Map zoom
-    const mz = parseFloat(mapZoom);
-    if (mz > 1) params.mapZoom = mz;
 
     onSubmit(params);
   };
@@ -1067,25 +1062,6 @@ export default function ControlPanel({
           )}
         </div>
 
-        {/* Map Inset Zoom */}
-        <div className="cp-accordion-section">
-          <div style={{ padding: "6px 10px" }}>
-            <label className="cp-field-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 8 }}>
-              <Map size={13} />
-              <span style={{ minWidth: 70 }}>Map {mapZoom}x</span>
-              <input
-                type="range"
-                min="1"
-                max="8"
-                step="0.5"
-                value={mapZoom}
-                onChange={(e) => setMapZoom(e.target.value)}
-                style={{ flex: 1 }}
-                title="Zoom level for the CONUS mini-map inset on the sounding plot (1x = full CONUS)"
-              />
-            </label>
-          </div>
-        </div>
         </div>{/* end Modifications */}
 
         {/* Submit */}

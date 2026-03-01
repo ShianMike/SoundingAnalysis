@@ -60,16 +60,131 @@
   color: var(--text-secondary, #888);
 }
 
-.vwp-radar-input {
-  width: 70px;
-  padding: 4px 6px;
+/* ── Radar dropdown ────────────────────────── */
+.vwp-radar-dropdown {
+  position: relative;
+}
+
+.vwp-radar-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
   font-size: 0.8rem;
-  font-family: monospace;
-  text-transform: uppercase;
   background: var(--bg-input, #0d1b2a);
   border: 1px solid var(--border, #1a1a3e);
   border-radius: 4px;
-  color: var(--text-primary);
+  color: var(--text-primary, #e0e0e0);
+  cursor: pointer;
+  min-width: 180px;
+  white-space: nowrap;
+}
+
+.vwp-radar-trigger:hover {
+  border-color: var(--accent, #3b82f6);
+}
+
+.vwp-radar-trigger-text {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vwp-chevron-open {
+  transform: rotate(180deg);
+}
+
+.vwp-radar-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 300px;
+  max-height: 320px;
+  background: var(--bg-card, #16213e);
+  border: 1px solid var(--border, #1a1a3e);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vwp-radar-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #1a1a3e);
+  color: var(--text-secondary, #888);
+}
+
+.vwp-radar-search {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.8rem;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.vwp-radar-search::placeholder {
+  color: var(--text-secondary, #555);
+}
+
+.vwp-radar-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.vwp-radar-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vwp-radar-option:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.vwp-radar-option.active {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.vwp-radar-option-id {
+  font-family: monospace;
+  font-weight: 700;
+  min-width: 44px;
+  color: var(--accent, #3b82f6);
+}
+
+.vwp-radar-option-loc {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vwp-radar-option-dist {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #888);
+  white-space: nowrap;
+}
+
+.vwp-radar-no-match {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.8rem;
 }
 
 .vwp-hours-label {
