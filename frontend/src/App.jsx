@@ -4,6 +4,8 @@ import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
 import HistoryPanel from "./components/HistoryPanel";
 import CustomUpload from "./components/CustomUpload";
+import MesoPanel from "./components/MesoPanel";
+import EnsemblePlume from "./components/EnsemblePlume";
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
@@ -49,6 +51,7 @@ export default function App() {
   const [stations, setStations] = useState([]);
   const [sources, setSources] = useState([]);
   const [models, setModels] = useState([]);
+  const [psuModels, setPsuModels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -60,6 +63,8 @@ export default function App() {
   const [showTimeSeries, setShowTimeSeries] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showVwp, setShowVwp] = useState(false);
+  const [showMeso, setShowMeso] = useState(false);
+  const [showEnsemble, setShowEnsemble] = useState(false);
   const [compareHistoryData, setCompareHistoryData] = useState(null);
   const [lastParams, setLastParams] = useState(null);
   const [selectedStation, setSelectedStation] = useState("OUN");
@@ -97,6 +102,7 @@ export default function App() {
         setStations(stationsData);
         setSources(sourcesData.sources);
         setModels(sourcesData.models);
+        setPsuModels(sourcesData.psuModels || []);
       })
       .catch(() => setError("Failed to connect to API. Is the backend running?"))
       .finally(() => setInitialLoading(false));
@@ -228,6 +234,7 @@ export default function App() {
             stations={stations}
             sources={sources}
             models={models}
+            psuModels={psuModels}
             onSubmit={handleSubmit}
             loading={loading}
             initialLoading={initialLoading}
@@ -247,6 +254,10 @@ export default function App() {
             onToggleCompare={() => setShowCompare((v) => !v)}
             showVwp={showVwp}
             onToggleVwp={() => setShowVwp((v) => !v)}
+            showMeso={showMeso}
+            onToggleMeso={() => setShowMeso((v) => !v)}
+            showEnsemble={showEnsemble}
+            onToggleEnsemble={() => setShowEnsemble((v) => !v)}
             selectedStation={selectedStation}
             onStationChange={handleStationChange}
             onSourceChange={handleSourceChange}
@@ -265,6 +276,21 @@ export default function App() {
               onLoad={handleLoadHistory}
               onLoadCompare={handleLoadCompareHistory}
               onClose={() => setShowHistory(false)}
+            />
+          )}
+          {showMeso && (
+            <MesoPanel
+              riskData={riskData}
+              onStationSelect={handleMapStationSelect}
+              onClose={() => setShowMeso(false)}
+            />
+          )}
+          {showEnsemble && (
+            <EnsemblePlume
+              station={selectedStation}
+              onClose={() => setShowEnsemble(false)}
+              theme={theme}
+              colorblind={colorblind}
             />
           )}
           <ResultsView

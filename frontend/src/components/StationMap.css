@@ -312,3 +312,17 @@
     min-height: 300px;
   }
 }
+
+@media (max-width: 480px) {
+  .smap-container {
+    min-height: 220px;
+    border-radius: 8px;
+  }
+  .smap-leaflet {
+    min-height: 220px;
+  }
+  .smap-legend {
+    font-size: 9px;
+    padding: 4px 6px;
+  }
+}

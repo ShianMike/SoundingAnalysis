@@ -108,6 +108,10 @@ const SOURCE_META = {
     label: "BUFKIT Forecast",
     desc: "Station-based forecast soundings from HRRR, RAP, NAM, GFS, and other models via Iowa State archive.",
   },
+  psu: {
+    label: "PSU BUFKIT (Latest)",
+    desc: "Latest model run from Penn State's real-time BUFKIT feed. Supports RAP, HRRR, NAM, GFS, and more.",
+  },
   acars: {
     label: "ACARS Aircraft Obs",
     desc: "ACARS/AMDAR aircraft observation profiles at major airports from the IEM archive.",
@@ -118,6 +122,7 @@ export default function ControlPanel({
   stations,
   sources,
   models,
+  psuModels,
   onSubmit,
   loading,
   initialLoading,
@@ -137,6 +142,10 @@ export default function ControlPanel({
   onToggleCompare,
   showVwp,
   onToggleVwp,
+  showMeso,
+  onToggleMeso,
+  showEnsemble,
+  onToggleEnsemble,
   selectedStation,
   onStationChange,
   onSourceChange,
@@ -247,8 +256,8 @@ export default function ControlPanel({
   }, [stations]);
 
   const needsLatLon = source === "rap";
-  const needsStation = source === "obs" || source === "bufkit" || source === "acars";
-  const needsModel = source === "bufkit";
+  const needsStation = source === "obs" || source === "bufkit" || source === "acars" || source === "psu";
+  const needsModel = source === "bufkit" || source === "psu";
 
   // Station group filter
   const activeGroupStations = activeGroup
@@ -717,7 +726,7 @@ export default function ControlPanel({
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
               >
-                {models.map((m) => (
+                {(source === "psu" ? (psuModels || []) : models).map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.id.toUpperCase()} — {m.name}
                   </option>
@@ -1156,6 +1165,22 @@ export default function ControlPanel({
             >
               <History size={13} />
               History
+            </button>
+            <button
+              type="button"
+              className={`cp-tool-btn ${showMeso ? "active" : ""}`}
+              onClick={onToggleMeso}
+            >
+              <Layers size={13} />
+              Meso
+            </button>
+            <button
+              type="button"
+              className={`cp-tool-btn ${showEnsemble ? "active" : ""}`}
+              onClick={onToggleEnsemble}
+            >
+              <Layers size={13} />
+              Ensemble
             </button>
           </div>
         </div>

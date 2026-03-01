@@ -168,6 +168,50 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - **CM1** — `input_sounding` format for Cloud Model 1 numerical simulations
 - All exports available as one-click downloads from the results toolbar
 
+### WRF / CM1 Data Ingestion
+- Upload WRF netCDF output files (wrfout_d0x) directly from the Custom Upload page
+- Automatic grid point extraction — specify target lat/lon or use domain center
+- Supports WRF staggered grids: P/PB, PH/PHB, T (perturbation theta), QVAPOR, U/V
+- Also accepts text-based formats: CSV, SHARPpy, CM1 input_sounding
+
+### PSU BUFKIT Feed (Penn State)
+- Real-time BUFKIT profiles from Penn State's e-wall server
+- Latest model run (RAP, HRRR, NAM, NAM Nest, GFS, HiResW, SREF)
+- Complementary to age-indexed Iowa State archive
+- Separate "PSU" data source option in the control panel
+
+### Mesoscale Analysis Dashboard
+- Sortable multi-station parameter table after running a Risk Scan
+- Toggle highlight parameter (STP, SCP, CAPE, SRH, BWD, SHIP, DCAPE, PWAT)
+- Color-coded chips per threshold level
+- Click any station row to immediately select it
+- Available via "Meso" toolbar button
+
+### Climatology Percentile Comparison
+- Compares each parameter against SPC severe-weather proximity sounding climatology
+- Horizontal bar chart showing percentile rank (5th–99th)
+- Color-coded: grey <50th, green 50th–75th, orange 75th–90th, red >95th
+- Covers CAPE, CIN, BWD, SRH, STP, SCP, SHIP, DCP, DCAPE, lapse rates, PWAT
+
+### Ensemble Sounding Plume
+- Generates a spaghetti plume by fetching multiple BUFKIT forecast hours
+- T/Td traces at adjustable alpha for spread visualization
+- Hodograph spread panel showing low-level wind variability
+- Configurable hour presets: short (0–6h), medium (0–12h), long (0–24h), extended (0–48h)
+- Supports both Iowa State archive and Penn State real-time feeds
+
+### Multi-Panel Print Layout
+- Optimized `@media print` stylesheet
+- Hides sidebar, toolbar, and map — full-page plot + parameter grid + summary
+- 4-column compact parameter grid with forced color printing
+- Print button in the results toolbar
+
+### Mobile-Optimized Sounding View
+- Responsive breakpoints at 1024px, 768px, and 480px
+- Touch-friendly drag-to-pan on zoomed Skew-T plots
+- Compact parameter grid (2-column on phones)
+- Smaller font sizes and reduced padding for narrow screens
+
 ---
 
 ## Data Sources
@@ -178,6 +222,8 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 | **RAP Analysis** | `--source rap` | Rapid Refresh model analysis at any lat/lon (requires `siphon`) |
 | **BUFKIT Forecasts** | `--source bufkit` | HRRR, RAP, NAM, NAM-Nest, GFS, SREF forecasts from Iowa State |
 | **ACARS/AMDAR** | `--source acars` | Aircraft observations at airports (IEM) |
+| **PSU BUFKIT** | `--source psu` | Latest model run from Penn State's real-time feed (RAP, HRRR, NAM, GFS, etc.) |
+| **Custom Upload** | (UI only) | Paste CSV/SHARPpy/CM1 text or upload WRF netCDF files |
 
 ---
 
@@ -208,6 +254,8 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
     │       ├── TimeSeriesChart.jsx # Recharts time-series parameter charts
     │       ├── ComparisonView.jsx  # Multi-sounding comparison view
     │       ├── VwpDisplay.jsx     # VAD Wind Profile time-height display
+    │       ├── MesoPanel.jsx      # Mesoscale analysis station table
+    │       ├── EnsemblePlume.jsx   # Ensemble sounding plume viewer
     │       └── *.css              # Component styles (dark theme)
     ├── public/
     │   └── favicon.svg          # Custom skew-T favicon

@@ -1,0 +1,120 @@
+/* ── Ensemble Plume Panel ─────────────────────────────── */
+.ens-panel {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.ens-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ens-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ens-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.ens-close:hover {
+  color: var(--text-primary);
+}
+
+.ens-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ens-controls label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ens-controls select,
+.ens-controls input {
+  padding: 5px 8px;
+  font-size: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.ens-fetch-btn {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.ens-fetch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ens-fetch-btn:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+.ens-plot-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+  background: #0d0d0d;
+}
+.ens-plot-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.ens-info {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ens-error {
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius);
+  color: #f87171;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .ens-panel {
+    padding: 10px;
+  }
+  .ens-controls {
+    gap: 4px;
+  }
+}

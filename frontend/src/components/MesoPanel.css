@@ -1,0 +1,170 @@
+/* ── Mesoscale Analysis Dashboard ────────────────────────── */
+.meso-panel {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.meso-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.meso-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meso-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.meso-close:hover {
+  color: var(--text-primary);
+}
+
+/* Parameter selector */
+.meso-param-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.meso-param-btn {
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.meso-param-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.meso-param-btn.active {
+  background: var(--accent-muted);
+  color: var(--text-accent);
+  border-color: var(--accent);
+}
+
+/* Station table */
+.meso-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.meso-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.meso-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.meso-table th:hover {
+  color: var(--text-primary);
+}
+.meso-table th.sorted {
+  color: var(--text-accent);
+}
+
+.meso-table td {
+  padding: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.meso-table tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.meso-table tr.meso-row-high {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.meso-stn-cell {
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.meso-stn-cell:hover {
+  text-decoration: underline;
+  color: var(--text-accent);
+}
+
+.meso-val-cell {
+  color: var(--text-primary);
+}
+
+.meso-info {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.meso-no-data {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Color chips */
+.meso-chip {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+@media (max-width: 480px) {
+  .meso-panel {
+    padding: 10px;
+  }
+  .meso-table {
+    font-size: 10px;
+  }
+  .meso-table th {
+    padding: 6px 4px;
+    font-size: 8px;
+  }
+  .meso-table td {
+    padding: 4px;
+  }
+}

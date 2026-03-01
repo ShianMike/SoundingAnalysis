@@ -142,6 +142,19 @@ export async function fetchCustomSounding({ text, format = "auto", theme = "dark
 }
 
 /**
+ * Upload a binary file (WRF netCDF etc.) for analysis.
+ */
+export async function fetchUploadFile(formData) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/upload-file`, {
+    method: "POST",
+    body: formData,   // FormData — browser sets multipart boundary
+  }, 180000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "File upload analysis failed");
+  return data;
+}
+
+/**
  * Merge two soundings into a weighted-average blended profile.
  */
 export async function fetchMergeProfiles({ soundings, weight = 0.5, theme = "dark", colorblind = false }) {
@@ -152,5 +165,19 @@ export async function fetchMergeProfiles({ soundings, weight = 0.5, theme = "dar
   }, 300000);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Profile merge failed");
+  return data;
+}
+
+/**
+ * Fetch ensemble sounding plume (multiple BUFKIT forecast hours overlaid).
+ */
+export async function fetchEnsemblePlume(params) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/ensemble-plume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  }, 300000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Ensemble plume request failed");
   return data;
 }

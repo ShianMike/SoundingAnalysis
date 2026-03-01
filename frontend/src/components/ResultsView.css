@@ -674,3 +674,125 @@
 .rv-summary-body p:last-child {
   margin-bottom: 0;
 }
+
+/* ── Mobile Responsive ─────────────────────────────── */
+@media (max-width: 768px) {
+  .results-view {
+    padding: 12px 10px 24px;
+  }
+  .rv-plot-wrap {
+    border-radius: 8px;
+  }
+  .rv-toolbar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .rv-summary-body {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .results-view {
+    padding: 8px 4px 20px;
+  }
+  .param-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+  .param-card {
+    padding: 8px 6px;
+  }
+  .param-value {
+    font-size: 13px;
+  }
+  .param-label {
+    font-size: 8px;
+  }
+  .rv-plot-zoomed .rv-plot-img {
+    min-width: 1200px;
+  }
+  .rv-section-title {
+    font-size: 12px;
+  }
+  .rv-toolbar button, .rv-toolbar select {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+  .rv-summary-body {
+    font-size: 11px;
+    padding: 8px 10px;
+    line-height: 1.6;
+  }
+}
+
+/* ── Climatology Percentile Bars ────────────────────── */
+.rv-climo-body {
+  margin-top: 6px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.rv-climo-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.rv-climo-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rv-climo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rv-climo-label {
+  width: 70px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: right;
+  flex-shrink: 0;
+}
+.rv-climo-track {
+  flex: 1;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rv-climo-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+.rv-climo-pct {
+  width: 36px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .rv-climo-body {
+    padding: 8px 10px;
+  }
+  .rv-climo-label {
+    width: 50px;
+    font-size: 9px;
+  }
+  .rv-climo-track {
+    height: 10px;
+  }
+  .rv-climo-pct {
+    font-size: 10px;
+    width: 30px;
+  }
+}

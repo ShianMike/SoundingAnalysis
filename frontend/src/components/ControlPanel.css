@@ -1093,3 +1093,42 @@
   }
 }
 
+@media (max-width: 768px) {
+  .cp-source-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .cp-tools-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .control-panel {
+    padding: 0 8px 12px;
+  }
+  .cp-source-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px;
+  }
+  .cp-tools-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px;
+  }
+  .cp-station-list {
+    max-height: 140px;
+  }
+  .cp-label {
+    font-size: 10px;
+  }
+  .cp-input, .cp-select {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .cp-submit {
+    padding: 10px;
+    font-size: 12px;
+  }
+}
+
