@@ -20,6 +20,7 @@ import {
   Check,
   FileText,
   ChevronDown,
+  Printer,
 } from "lucide-react";
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -62,155 +63,279 @@ function getAlertClass(label, value) {
 function generateSoundingSummary(params, meta) {
   const lines = [];
   const n = (v) => (v != null && typeof v === "number" ? v : null);
+  const fmt = (v, d = 0) => v != null ? Number(v).toFixed(d) : "--";
 
-  // ── Instability ──
+  // ── Gather all values up front ──
   const sbCape = n(params.sbCape);
   const mlCape = n(params.mlCape);
   const muCape = n(params.muCape);
   const ecape  = n(params.ecape);
+  const cape3  = n(params.cape3km);
+  const mlCin  = n(params.mlCin);
+  const mlLcl  = n(params.mlLclM);
+  const dcape  = n(params.dcape);
+  const lr03   = n(params.lr03);
+  const lr36   = n(params.lr36);
+  const bwd5   = n(params.bwd500m);
+  const bwd1   = n(params.bwd1km);
+  const bwd6   = n(params.bwd6km);
+  const srh5   = n(params.srh500m);
+  const srh1   = n(params.srh1km);
+  const srh3   = n(params.srh3km);
+  const esrh   = n(params.esrh);
+  const ebwd   = n(params.ebwd);
+  const stp    = n(params.stp);
+  const scp    = n(params.scp);
+  const ship   = n(params.ship);
+  const dcp    = n(params.dcp);
+  const pwat   = n(params.pwat);
+  const rh01   = n(params.rh01);
+  const rh36   = n(params.rh36);
+  const frzLvl = n(params.frzLevel);
+  const wbo    = n(params.wbo);
   const bestCape = Math.max(sbCape ?? 0, mlCape ?? 0, muCape ?? 0);
 
-  if (bestCape < 100) {
-    lines.push("The atmosphere is currently stable with negligible buoyancy. No significant thunderstorm development is expected from this profile alone.");
-  } else if (bestCape < 500) {
-    lines.push(`Marginal instability is present (MUCAPE ${muCape ?? "--"} J/kg). Weak updrafts are possible if a lifting mechanism is available, but storm intensity would be limited.`);
-  } else if (bestCape < 1500) {
-    lines.push(`Moderate instability exists with MUCAPE of ${muCape ?? "--"} J/kg${ecape != null ? ` (ECAPE ${ecape} J/kg)` : ""}. This supports organized thunderstorm updrafts if convective initiation occurs.`);
-  } else if (bestCape < 3000) {
-    lines.push(`Large instability is present — MUCAPE ${muCape ?? "--"} J/kg${ecape != null ? `, ECAPE ${ecape} J/kg` : ""}. This provides substantial energy for strong to severe updrafts.`);
+  // ── Header / Opening ──
+  const stName = meta?.stationName || meta?.station || "this location";
+  const dateStr = meta?.date || "";
+  lines.push(`Analysis for ${stName}${dateStr ? ` valid ${dateStr}` : ""}:`);
+
+  // ── 1) Thermodynamic profile overview ──
+  if (bestCape < 50) {
+    lines.push("The thermodynamic profile is stable with virtually no buoyancy (CAPE < 50 J/kg). Thunderstorm development is not supported by this environment. Any convection would require significant mesoscale or synoptic forcing and would likely remain shallow and non-severe.");
+  } else if (bestCape < 250) {
+    lines.push(`Marginal instability is present with MUCAPE of ${fmt(muCape)} J/kg. Buoyancy is insufficient for robust updrafts, though isolated weak convection could occur along well-defined convergence zones or terrain-enhanced lifting. Severe weather is unlikely.`);
+  } else if (bestCape < 1000) {
+    lines.push(`Moderate instability exists (MUCAPE ${fmt(muCape)} J/kg, MLCAPE ${fmt(mlCape)} J/kg${ecape != null ? `, ECAPE ${fmt(ecape)}` : ""}). This level of buoyancy can support organized thunderstorms with modest updraft strength, particularly where mesoscale forcing provides reliable initiation.`);
+  } else if (bestCape < 2500) {
+    lines.push(`Substantial instability is present — MUCAPE ${fmt(muCape)} J/kg with MLCAPE ${fmt(mlCape)} J/kg${ecape != null ? ` and ECAPE of ${fmt(ecape)} J/kg` : ""}. This provides ample energy for vigorous updrafts, and severe weather is likely if storms develop within a supportive kinematic environment.`);
+  } else if (bestCape < 4000) {
+    lines.push(`Large instability is present with MUCAPE of ${fmt(muCape)} J/kg and MLCAPE of ${fmt(mlCape)} J/kg${ecape != null ? ` (ECAPE ${fmt(ecape)} J/kg)` : ""}. This is a high-end thermodynamic environment capable of producing strong to violent updrafts, very large hail, and extreme rainfall rates.`);
   } else {
-    lines.push(`Extreme instability is present with MUCAPE of ${muCape ?? "--"} J/kg${ecape != null ? ` (ECAPE ${ecape} J/kg)` : ""}. This is a high-end thermodynamic environment supporting violent updrafts and very large hail potential.`);
+    lines.push(`Extreme instability is evident — MUCAPE ${fmt(muCape)} J/kg, MLCAPE ${fmt(mlCape)} J/kg${ecape != null ? `, ECAPE ${fmt(ecape)} J/kg` : ""}. This is a rare, upper-tier thermodynamic environment where updrafts may exceed 50 m/s, supporting giant hail (≥4 in.), violent tornadoes if shear is sufficient, and flash-flood-producing rainfall.`);
   }
 
-  // ── CIN / Cap ──
-  const mlCin = n(params.mlCin);
+  // ── 2) Low-level CAPE / updraft acceleration ──
+  if (cape3 != null && bestCape >= 250) {
+    if (cape3 >= 100) {
+      lines.push(`The 0–3 km CAPE of ${fmt(cape3)} J/kg is notably high, indicating strong low-level updraft acceleration. This enhances stretching of low-level vertical vorticity and is a key ingredient for tornado intensity — dynamically stretching near-surface rotation into tighter, faster-spinning vortices.`);
+    } else if (cape3 >= 50) {
+      lines.push(`The 0–3 km CAPE of ${fmt(cape3)} J/kg is moderate, providing meaningful low-level updraft acceleration that supports efficient vortex stretching for tornado development.`);
+    }
+  }
+
+  // ── 3) Cap / CIN analysis ──
   if (mlCin != null) {
-    if (mlCin > -25) {
-      lines.push("The convective cap is weak or absent — storms could initiate easily with minimal forcing.");
-    } else if (mlCin > -100) {
-      lines.push(`A moderate cap is in place (MLCIN ${mlCin} J/kg). Mesoscale forcing (boundaries, terrain, or outflow) may be needed to initiate convection.`);
+    if (mlCin > -10) {
+      lines.push("Convective inhibition is negligible (MLCIN near zero). Storms could fire readily with minimal forcing — this is an uncapped environment where widespread initiation is possible, potentially resulting in a quick transition from clear skies to active convection.");
+    } else if (mlCin > -50) {
+      lines.push(`A weak cap is present (MLCIN ${fmt(mlCin)} J/kg). Convective initiation should occur fairly easily along boundaries, outflow, or modest terrain features. The weak inhibition may limit the explosive character of initial development but allows for broad storm coverage.`);
+    } else if (mlCin > -150) {
+      lines.push(`A moderate convective cap is in place (MLCIN ${fmt(mlCin)} J/kg). Initiation will require focused mesoscale forcing — synoptic fronts, drylines, outflow boundaries, or orographic lift. Storms that do breach the cap may be explosive due to the stored instability beneath, and discrete supercells become more likely than cluster modes.`);
     } else {
-      lines.push(`A strong cap is present (MLCIN ${mlCin} J/kg). Convective initiation is unlikely without strong synoptic-scale or mesoscale forcing, but storms that do break through may be explosive.`);
+      lines.push(`A strong cap exists (MLCIN ${fmt(mlCin)} J/kg) significantly inhibiting deep convection. Only intense forcing (vigorous frontal lift, strong dryline convergence, or elevated instability mechanisms) is likely to break through this inversion. If a storm does initiate, the sudden release of pent-up energy could produce a violently explosive updraft.`);
     }
   }
 
-  // ── LCL height ──
-  const mlLcl = n(params.mlLclM);
-  if (mlLcl != null) {
-    if (mlLcl < 1000) {
-      lines.push(`Cloud bases are very low (MLLCL ${mlLcl} m AGL), which is favorable for tornado development by reducing the sub-cloud dry layer that would otherwise disrupt low-level rotation.`);
-    } else if (mlLcl < 1500) {
-      lines.push(`Cloud bases are relatively low (MLLCL ${mlLcl} m AGL), marginally supportive of tornado potential.`);
+  // ── 4) Cloud base height / LCL ──
+  if (mlLcl != null && bestCape >= 250) {
+    if (mlLcl < 800) {
+      lines.push(`Cloud bases are very low (MLLCL ${fmt(mlLcl)} m AGL), which is strongly favorable for tornadogenesis. The short distance between the surface and cloud base minimizes the sub-cloud layer where rain-cooled downdraft air could disrupt the near-surface circulation, allowing tight low-level rotation to connect efficiently to the mesocyclone aloft.`);
+    } else if (mlLcl < 1200) {
+      lines.push(`Cloud bases are relatively low (MLLCL ${fmt(mlLcl)} m AGL), supporting tornado development. The sub-cloud layer is shallow enough to maintain coherent low-level rotation, though tornadoes may be somewhat less likely than with the very lowest LCL heights.`);
+    } else if (mlLcl < 1800) {
+      lines.push(`Cloud bases are moderately elevated (MLLCL ${fmt(mlLcl)} m AGL). While this reduces tornado potential, the deeper sub-cloud layer can enhance downdraft evaporation and outflow wind damage. Supercells in this regime tend to produce more hail and damaging straight-line winds than tornadoes.`);
     } else {
-      lines.push(`Cloud bases are elevated (MLLCL ${mlLcl} m AGL). This reduces tornado probability but may enhance downdraft wind potential and dry-slot entrainment.`);
+      lines.push(`Cloud bases are high (MLLCL ${fmt(mlLcl)} m AGL), which strongly limits tornado potential. However, the deep dry sub-cloud layer promotes vigorous downdraft development through evaporative cooling, increasing the risk of damaging outflow winds and microbursts. Hail size may also be enhanced due to reduced melting in the dry layer.`);
     }
   }
 
-  // ── Lapse rates ──
-  const lr03 = n(params.lr03);
-  const lr36 = n(params.lr36);
-  if (lr03 != null || lr36 != null) {
+  // ── 5) Lapse rates ──
+  if ((lr03 != null || lr36 != null) && bestCape >= 100) {
     const parts = [];
     if (lr03 != null) {
-      if (lr03 >= 8) parts.push(`very steep 0–3 km lapse rates (${lr03} °C/km) indicating near-adiabatic boundary layer conditions`);
-      else if (lr03 >= 7) parts.push(`moderately steep 0–3 km lapse rates (${lr03} °C/km)`);
+      if (lr03 >= 9) parts.push(`exceptionally steep 0–3 km lapse rates (${fmt(lr03, 1)} °C/km) approaching dry-adiabatic, indicating a superadiabatic or near-superadiabatic boundary layer with intense low-level buoyancy`);
+      else if (lr03 >= 8) parts.push(`very steep 0–3 km lapse rates (${fmt(lr03, 1)} °C/km) indicating a well-mixed, nearly adiabatic boundary layer favorable for strong low-level stretching`);
+      else if (lr03 >= 7) parts.push(`moderately steep 0–3 km lapse rates (${fmt(lr03, 1)} °C/km)`);
+      else if (lr03 < 5.5) parts.push(`relatively weak 0–3 km lapse rates (${fmt(lr03, 1)} °C/km) suggesting a stable boundary layer that may resist surface-based storm development`);
     }
     if (lr36 != null) {
-      if (lr36 >= 8) parts.push(`extreme mid-level lapse rates (${lr36} °C/km) enhancing CAPE depth`);
-      else if (lr36 >= 7) parts.push(`steep mid-level lapse rates (${lr36} °C/km)`);
+      if (lr36 >= 8.5) parts.push(`extreme mid-level lapse rates (${fmt(lr36, 1)} °C/km) contributing to exceptionally deep CAPE and explosive updraft growth through the troposphere`);
+      else if (lr36 >= 7.5) parts.push(`steep mid-level lapse rates (${fmt(lr36, 1)} °C/km) enhancing CAPE depth and supporting vigorous updraft acceleration`);
+      else if (lr36 >= 6.5) parts.push(`moderate mid-level lapse rates (${fmt(lr36, 1)} °C/km)`);
     }
     if (parts.length > 0) {
-      lines.push(`Lapse rates show ${parts.join(" and ")}.`);
+      lines.push(`The temperature profile shows ${parts.join(", and ")}.`);
     }
   }
 
-  // ── Deep shear ──
-  const bwd6 = n(params.bwd6km);
-  const bwd1 = n(params.bwd1km);
-  if (bwd6 != null) {
-    if (bwd6 >= 60) {
-      lines.push(`Deep-layer shear is extreme (0–6 km BWD ${bwd6} kt), strongly favoring discrete supercells with long-lived mesocyclones.`);
-    } else if (bwd6 >= 40) {
-      lines.push(`Strong deep-layer shear is present (0–6 km BWD ${bwd6} kt), largely supporting supercellular convective mode.`);
-    } else if (bwd6 >= 25) {
-      lines.push(`Moderate deep-layer shear (0–6 km BWD ${bwd6} kt) supports organized multicell to supercell storms.`);
+  // ── 6) Moisture profile ──
+  const moistParts = [];
+  if (rh01 != null && bestCape >= 100) {
+    if (rh01 >= 85) moistParts.push(`very moist low levels (0–1 km RH ${fmt(rh01)}%)`);
+    else if (rh01 < 60) moistParts.push(`relatively dry low levels (0–1 km RH ${fmt(rh01)}%)`);
+  }
+  if (rh36 != null && bestCape >= 100) {
+    if (rh36 < 30) moistParts.push(`a very dry mid-level layer (3–6 km RH ${fmt(rh36)}%) which enhances evaporative downdraft production and DCAPE`);
+    else if (rh36 < 50) moistParts.push(`moderately dry mid-levels (3–6 km RH ${fmt(rh36)}%)`);
+  }
+  if (pwat != null) {
+    if (pwat >= 50) moistParts.push(`extremely high precipitable water (${fmt(pwat)} mm) signaling a saturated column with major flash flood potential`);
+    else if (pwat >= 40) moistParts.push(`high precipitable water (${fmt(pwat)} mm) increasing flash flood risk from any training or slow-moving convection`);
+    else if (pwat >= 30) moistParts.push(`moderate precipitable water (${fmt(pwat)} mm)`);
+  }
+  if (moistParts.length > 0) {
+    lines.push(`The moisture profile features ${moistParts.join("; ")}.`);
+  }
+
+  // ── 7) Deep-layer shear ──
+  if (bwd6 != null && bestCape >= 100) {
+    if (bwd6 >= 70) {
+      lines.push(`Deep-layer shear is exceptionally strong (0–6 km BWD ${fmt(bwd6)} kt). This extreme kinematic environment overwhelmingly favors discrete, long-track supercells with persistent mesocyclones. Storm longevity and severity are maximized.`);
+    } else if (bwd6 >= 50) {
+      lines.push(`Deep-layer shear is very strong (0–6 km BWD ${fmt(bwd6)} kt), robustly supporting supercellular convection. Discrete supercells are the expected storm mode, with the shear vector promoting strong updraft-downdraft separation and long-lived mesocyclones.`);
+    } else if (bwd6 >= 35) {
+      lines.push(`Moderate-to-strong deep-layer shear exists (0–6 km BWD ${fmt(bwd6)} kt). This supports organized convection ranging from splitting supercells to organized multicellular systems, depending on storm-relative wind profiles.${ebwd != null ? ` Effective BWD of ${fmt(ebwd)} kt provides a physically-grounded shear estimate.` : ""}`);
+    } else if (bwd6 >= 20) {
+      lines.push(`Moderate deep-layer shear (0–6 km BWD ${fmt(bwd6)} kt) provides some storm organization. Multicell clusters with embedded supercell structures are possible, though discrete supercells are less likely. Convective mode may depend on mesoscale boundary interactions.`);
     } else {
-      lines.push(`Weak deep-layer shear (0–6 km BWD ${bwd6} kt) favors pulse or weakly organized multicellular storms.`);
+      lines.push(`Weak deep-layer shear (0–6 km BWD ${fmt(bwd6)} kt) favors disorganized convection — pulse storms or loosely organized multicells. Without significant shear, storms will struggle to maintain persistent updraft rotation.`);
     }
   }
 
-  // ── Low-level shear & SRH ──
-  const srh1 = n(params.srh1km);
-  const srh3 = n(params.srh3km);
-  if (srh1 != null) {
-    if (srh1 >= 300) {
-      lines.push(`Low-level storm-relative helicity is extreme (0–1 km SRH ${srh1} m²/s²), highly favorable for violent tornadoes.`);
-    } else if (srh1 >= 150) {
-      lines.push(`Significant low-level helicity (0–1 km SRH ${srh1} m²/s²) supports strong mesocyclones and significant tornado potential.`);
-    } else if (srh1 >= 100) {
-      lines.push(`Moderate low-level helicity (0–1 km SRH ${srh1} m²/s²) supports tornado development in supercells.`);
+  // ── 8) Low-level shear & SRH — convective mode / tornado assessment ──
+  if (bestCape >= 250 && (srh1 != null || bwd1 != null)) {
+    const llParts = [];
+    if (bwd1 != null) {
+      if (bwd1 >= 30) llParts.push(`extreme 0–1 km shear (${fmt(bwd1)} kt)`);
+      else if (bwd1 >= 20) llParts.push(`strong 0–1 km shear (${fmt(bwd1)} kt)`);
+      else if (bwd1 >= 15) llParts.push(`moderate 0–1 km shear (${fmt(bwd1)} kt)`);
+    }
+    if (srh1 != null) {
+      if (srh1 >= 400) llParts.push(`extreme 0–1 km SRH (${fmt(srh1)} m²/s²) — a rare value strongly correlated with violent (EF4-EF5) tornadoes`);
+      else if (srh1 >= 200) llParts.push(`very significant 0–1 km SRH (${fmt(srh1)} m²/s²) highly supportive of strong to violent tornadoes`);
+      else if (srh1 >= 100) llParts.push(`notable 0–1 km SRH (${fmt(srh1)} m²/s²) favoring mesocyclone development and tornado potential`);
+      else if (srh1 >= 50) llParts.push(`modest 0–1 km SRH (${fmt(srh1)} m²/s²)`);
+    }
+    if (esrh != null && esrh > (srh1 ?? 0) * 1.2) {
+      llParts.push(`effective SRH of ${fmt(esrh)} m²/s² (deeper effective inflow layer contributing additional helicity)`);
+    }
+    if (llParts.length > 0) {
+      lines.push(`Low-level kinematics show ${llParts.join(", with ")}.`);
     }
   }
 
-  // ── Composite indices ──
-  const stp = n(params.stp);
-  const scp = n(params.scp);
-  const ship = n(params.ship);
-  const dcp = n(params.dcp);
-  const composites = [];
+  // ── 9) Composite indices — detailed threat assessment ──
+  const compLines = [];
 
-  if (stp != null && stp >= 1) {
-    composites.push(stp >= 4
-      ? `STP of ${stp.toFixed(1)} signals a **high-end significant tornado environment**`
-      : `STP of ${stp.toFixed(1)} indicates a favorable environment for significant (EF2+) tornadoes`);
+  if (stp != null && bestCape >= 250) {
+    if (stp >= 8) {
+      compLines.push(`The STP of ${fmt(stp, 1)} is in the top percentile of significant tornado environments — this is a high-confidence setup for strong to violent (EF3+) tornadoes with any sustained supercell.`);
+    } else if (stp >= 4) {
+      compLines.push(`The STP of ${fmt(stp, 1)} is a high-end value, indicating a well-above-average environment for significant (EF2+) tornadoes. Multiple tornado-producing supercells are plausible.`);
+    } else if (stp >= 1) {
+      compLines.push(`The STP of ${fmt(stp, 1)} exceeds the significant tornado threshold, indicating the kinematic and thermodynamic ingredients are synergistically aligned for EF2+ tornadoes with sustained supercells.`);
+    } else if (stp >= 0.5) {
+      compLines.push(`The STP of ${fmt(stp, 1)} is below the canonical significant-tornado threshold of 1.0 but still suggests a non-trivial tornado risk, particularly for brief or weak (EF0-EF1) tornadoes.`);
+    }
   }
-  if (scp != null && scp >= 1) {
-    composites.push(scp >= 8
-      ? `SCP of ${scp.toFixed(1)} strongly favors long-lived discrete supercells`
-      : `SCP of ${scp.toFixed(1)} supports supercell development`);
+
+  if (scp != null && bestCape >= 250) {
+    if (scp >= 10) {
+      compLines.push(`The SCP of ${fmt(scp, 1)} is extreme, strongly supporting long-lived discrete supercells with persistent mesocyclones and a high probability of significant severe weather.`);
+    } else if (scp >= 4) {
+      compLines.push(`The SCP of ${fmt(scp, 1)} strongly favors supercellular convection, with persistent mesocyclones expected in any sustained storms.`);
+    } else if (scp >= 1) {
+      compLines.push(`The SCP of ${fmt(scp, 1)} supports supercell development with moderate mesocyclone potential.`);
+    }
   }
-  if (ship != null && ship >= 0.5) {
-    composites.push(ship >= 1.5
-      ? `SHIP of ${ship.toFixed(1)} suggests a significant hail (≥2 in.) environment`
-      : `SHIP of ${ship.toFixed(1)} indicates some potential for large hail`);
+
+  if (ship != null && bestCape >= 500) {
+    if (ship >= 2.5) {
+      compLines.push(`The SHIP of ${fmt(ship, 1)} is very high, indicating a robust environment for significant hail (≥2 inches). Supercell updrafts will be strong enough to support large-diameter ice growth through repeated recycling above the freezing level.`);
+    } else if (ship >= 1.0) {
+      compLines.push(`The SHIP of ${fmt(ship, 1)} exceeds the significant-hail threshold, suggesting an environment capable of producing large hail (≥1 inch) with supercellular storms.`);
+    } else if (ship >= 0.5) {
+      compLines.push(`The SHIP of ${fmt(ship, 1)} indicates marginal significant hail potential — large hail is possible but may be limited in size.`);
+    }
   }
+
   if (dcp != null && dcp >= 2) {
-    composites.push(dcp >= 6
-      ? `DCP of ${dcp.toFixed(1)} signals an extreme derecho/long-lived wind event risk`
-      : `DCP of ${dcp.toFixed(1)} suggests potential for organized damaging wind events`);
+    if (dcp >= 6) {
+      compLines.push(`The DCP of ${fmt(dcp, 1)} is extreme, strongly signaling a derecho or widespread damaging wind event. Bow echoes and book-end vortices are favored in this shear and instability regime.`);
+    } else if (dcp >= 4) {
+      compLines.push(`The DCP of ${fmt(dcp, 1)} is elevated, supporting organized long-lived wind events with potential for widespread wind damage.`);
+    } else {
+      compLines.push(`The DCP of ${fmt(dcp, 1)} indicates some potential for organized damaging wind events along squall lines.`);
+    }
   }
 
-  if (composites.length > 0) {
-    lines.push("Composite parameters: " + composites.join(". ") + ".");
-  } else if (bestCape >= 500) {
-    lines.push("Composite severe parameters (STP, SCP, SHIP) are below significant thresholds, suggesting isolated or sub-severe convection is most likely.");
+  if (compLines.length > 0) {
+    lines.push(compLines.join(" "));
+  } else if (bestCape >= 500 && bwd6 >= 20) {
+    lines.push("Composite severe parameters (STP, SCP, SHIP) remain below critical thresholds, suggesting that while organized convection is possible, the probability of significant severe weather (violent tornadoes, giant hail, or derecho-scale winds) is relatively low.");
   }
 
-  // ── DCAPE / downburst ──
-  const dcape = n(params.dcape);
-  if (dcape != null && dcape >= 800) {
-    lines.push(`DCAPE of ${dcape} J/kg${dcape >= 1500 ? " is extreme and" : ""} supports strong to damaging outflow winds at the surface.`);
+  // ── 10) DCAPE / Downdraft threat ──
+  if (dcape != null && dcape >= 600 && bestCape >= 100) {
+    if (dcape >= 1500) {
+      lines.push(`DCAPE of ${fmt(dcape)} J/kg is extreme, indicating very strong potential for damaging outflow winds at the surface. Microbursts and macrobursts are likely, and wet or dry downbursts could produce wind gusts exceeding 80 kt.`);
+    } else if (dcape >= 1000) {
+      lines.push(`DCAPE of ${fmt(dcape)} J/kg is strong, supporting damaging outflow winds. Isolated downbursts with gusts of 50–70 kt are probable with any organized convection.`);
+    } else {
+      lines.push(`DCAPE of ${fmt(dcape)} J/kg provides moderate downdraft energy, sufficient for gusty outflow winds (40–55 kt) particularly where mid-level dry air is entrained into storm downdrafts.`);
+    }
   }
 
-  // ── PWAT ──
-  const pwat = n(params.pwat);
-  if (pwat != null && pwat >= 40) {
-    lines.push(`Precipitable water of ${pwat} mm is anomalously high, elevating the risk of flash flooding from training or slow-moving convection.`);
+  // ── 11) Hail environment ──
+  if (bestCape >= 500 && frzLvl != null && wbo != null) {
+    if (frzLvl > 4000 && wbo > 3000 && ship >= 0.5) {
+      lines.push(`The freezing level (${fmt(frzLvl)} m AGL) and wet-bulb zero height (${fmt(wbo)} m AGL) are both elevated, allowing hailstones a long fall through warm air. Despite this partial melting, the strong updrafts indicated by the CAPE profile can still support large hail aloft — stones reaching the surface may be somewhat smaller but remain capable of damage.`);
+    } else if (frzLvl < 3000 && wbo < 2500 && ship >= 0.5) {
+      lines.push(`The low freezing level (${fmt(frzLvl)} m AGL) and wet-bulb zero (${fmt(wbo)} m AGL) mean hailstones have a shorter fall through above-freezing air, reducing melting. This favors larger hail reaching the surface relative to the updraft strength.`);
+    }
   }
 
-  // ── Overall threat assessment ──
+  // ── 12) Convective mode forecast ──
+  if (bestCape >= 250) {
+    let mode = "";
+    if (bwd6 >= 40 && (srh1 >= 100 || scp >= 1)) {
+      mode = "discrete supercells";
+    } else if (bwd6 >= 35 && dcp >= 3) {
+      mode = "supercells transitioning to a bowing line segment";
+    } else if (bwd6 >= 25 && dcp >= 2) {
+      mode = "organized multicells with embedded bow echoes";
+    } else if (bwd6 >= 25) {
+      mode = "multicells with possible supercell structures";
+    } else if (bestCape >= 1000) {
+      mode = "pulse and weakly organized multicellular storms";
+    } else {
+      mode = "isolated pulse convection";
+    }
+    lines.push(`Expected convective mode: ${mode}.`);
+  }
+
+  // ── 13) Overall threat summary ──
   const threats = [];
-  if (stp != null && stp >= 1) threats.push("tornadoes");
-  if (ship != null && ship >= 1) threats.push("significant hail");
-  else if (bestCape >= 2000 && bwd6 >= 30) threats.push("large hail");
-  if (dcp != null && dcp >= 2) threats.push("damaging straight-line winds");
-  else if (dcape != null && dcape >= 800 && bwd6 >= 25) threats.push("damaging outflow winds");
+  if (stp != null && stp >= 1) {
+    threats.push(stp >= 4 ? "strong to violent tornadoes (EF2+)" : "significant tornadoes");
+  } else if (stp != null && stp >= 0.3 && mlLcl < 1500) {
+    threats.push("brief/weak tornadoes");
+  }
+  if (ship != null && ship >= 1.5) threats.push("significant hail (≥2 inches)");
+  else if (ship != null && ship >= 0.5) threats.push("large hail");
+  else if (bestCape >= 2500 && bwd6 >= 30) threats.push("large hail");
+  if (dcp != null && dcp >= 4) threats.push("widespread damaging winds / derecho");
+  else if (dcp != null && dcp >= 2) threats.push("damaging straight-line winds");
+  else if (dcape != null && dcape >= 1000 && bwd6 >= 20) threats.push("damaging outflow gusts");
   if (pwat != null && pwat >= 40) threats.push("flash flooding");
 
   if (threats.length > 0) {
-    lines.push(`Primary threats from this profile: ${threats.join(", ")}.`);
+    lines.push(`Primary hazards: ${threats.join("; ")}.`);
   } else if (bestCape >= 500) {
-    lines.push("Overall, the environment supports convection but severe weather parameters remain below high-confidence thresholds for significant threats.");
+    lines.push("No parameters reach high-confidence thresholds for significant severe weather. General thunderstorm hazards (gusty winds, small hail, lightning, locally heavy rain) remain possible with any convection that develops.");
+  } else if (bestCape < 100) {
+    lines.push("No convective hazards are anticipated from this thermodynamic profile.");
   }
 
   return lines.join("\n\n");
@@ -396,6 +521,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   const [linkCopied, setLinkCopied] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showClimo, setShowClimo] = useState(false);
   const exportRef = useRef(null);
   const plotRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
@@ -665,6 +791,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <button className="rv-btn" onClick={handleFullscreen} title="Fullscreen">
             <Maximize2 size={14} />
           </button>
+          <button className="rv-btn" onClick={() => window.print()} title="Print multi-panel layout">
+            <Printer size={14} />
+          </button>
         </div>
       </div>
 
@@ -687,7 +816,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
       )}
 
-      {/* Plot */}
+      {/* Plot — supports drag-to-pan (desktop) and touch pan/pinch-zoom (mobile) */}
       <div
         ref={plotRef}
         className={`rv-plot-wrap ${zoomed ? "rv-plot-zoomed" : ""}`}
@@ -695,6 +824,31 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={(e) => {
+          if (e.touches.length === 1 && zoomed) {
+            const t = e.touches[0];
+            dragRef.current = {
+              dragging: true,
+              startX: t.clientX,
+              startY: t.clientY,
+              scrollLeft: plotRef.current?.scrollLeft || 0,
+              scrollTop: plotRef.current?.scrollTop || 0,
+            };
+          }
+        }}
+        onTouchMove={(e) => {
+          const d = dragRef.current;
+          if (d.dragging && e.touches.length === 1) {
+            const t = e.touches[0];
+            const el = plotRef.current;
+            if (el) {
+              el.scrollLeft = d.scrollLeft - (t.clientX - d.startX);
+              el.scrollTop = d.scrollTop - (t.clientY - d.startY);
+            }
+          }
+        }}
+        onTouchEnd={() => { dragRef.current.dragging = false; }}
+        style={{ touchAction: zoomed ? "none" : "auto" }}
       >
         <img
           src={`data:image/png;base64,${image}`}
@@ -777,6 +931,60 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           </div>
         )}
       </div>
+
+      {/* Climatology Percentiles */}
+      {params.percentiles && Object.keys(params.percentiles).length > 0 && (
+        <div className="rv-summary-section">
+          <button className="rv-summary-toggle" onClick={() => setShowClimo((s) => !s)}>
+            <BarChart3 size={14} />
+            <span>Climatology Percentiles</span>
+            <ChevronDown size={12} className={showClimo ? "rv-chev-open" : ""} />
+          </button>
+          {showClimo && (
+            <div className="rv-climo-body">
+              <p className="rv-climo-desc">
+                Percentile rank vs. severe-weather proximity sounding climatology (SPC studies).
+                Higher = more extreme environment.
+              </p>
+              <div className="rv-climo-bars">
+                {[
+                  ["SB CAPE", "sbCape"],
+                  ["ML CAPE", "mlCape"],
+                  ["MU CAPE", "muCape"],
+                  ["ECAPE", "ecape"],
+                  ["ML CIN", "mlCin"],
+                  ["0-6 BWD", "bwd6km"],
+                  ["0-1 BWD", "bwd1km"],
+                  ["0-1 SRH", "srh1km"],
+                  ["0-3 SRH", "srh3km"],
+                  ["Eff SRH", "esrh"],
+                  ["Eff BWD", "ebwd"],
+                  ["STP", "stp"],
+                  ["SCP", "scp"],
+                  ["SHIP", "ship"],
+                  ["DCP", "dcp"],
+                  ["DCAPE", "dcape"],
+                  ["LR 0-3", "lr03"],
+                  ["LR 3-6", "lr36"],
+                  ["PWAT", "pwat"],
+                ].filter(([, k]) => params.percentiles[k] != null).map(([label, key]) => {
+                  const pct = params.percentiles[key];
+                  const color = pct >= 95 ? "#ef4444" : pct >= 75 ? "#f59e0b" : pct >= 50 ? "#22c55e" : "#6b7280";
+                  return (
+                    <div key={key} className="rv-climo-item">
+                      <span className="rv-climo-label">{label}</span>
+                      <div className="rv-climo-track">
+                        <div className="rv-climo-fill" style={{ width: `${pct}%`, background: color }} />
+                      </div>
+                      <span className="rv-climo-pct">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

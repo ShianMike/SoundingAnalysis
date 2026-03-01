@@ -27,6 +27,7 @@ from sounding import (
     STATION_WMO,
     DATA_SOURCES,
     BUFKIT_MODELS,
+    PSU_MODELS,
     TORNADO_SCAN_STATIONS,
     fetch_sounding,
     fetch_vad_data,
@@ -96,7 +97,8 @@ def list_sources():
     """Return available data sources and BUFKIT models."""
     sources = [{"id": k, "name": v} for k, v in DATA_SOURCES.items()]
     models = [{"id": k, "name": v} for k, v in BUFKIT_MODELS.items()]
-    return jsonify({"sources": sources, "models": models})
+    psu_models = [{"id": k, "name": v} for k, v in PSU_MODELS.items()]
+    return jsonify({"sources": sources, "models": models, "psuModels": psu_models})
 
 
 @app.route("/api/sounding", methods=["POST", "OPTIONS"])
@@ -451,9 +453,314 @@ def custom_sounding():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── WRF / netCDF Sounding Upload ─────────────────────────────────
+@app.route("/api/upload-file", methods=["POST", "OPTIONS"])
+def upload_file():
+    """Accept binary file uploads (WRF netCDF, BUFKIT text, etc.) and return analysis.
+
+    Multipart form-data:
+      file: the uploaded file
+      format: "wrf" | "bufkit_file" | "auto"  (optional, default auto)
+      lat: latitude for WRF point extraction (optional)
+      lon: longitude for WRF point extraction (optional)
+      theme: "dark" | "light"
+      colorblind: "true" | "false"
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    import numpy as np
+    from metpy.units import units as mpu
+
+    uploaded = request.files.get("file")
+    if not uploaded:
+        return jsonify({"error": "No file uploaded."}), 400
+
+    fmt = request.form.get("format", "auto").lower()
+    theme = request.form.get("theme", "dark")
+    colorblind = request.form.get("colorblind", "false").lower() == "true"
+    req_lat = request.form.get("lat")
+    req_lon = request.form.get("lon")
+
+    filename = uploaded.filename or ""
+    file_bytes = uploaded.read()
+
+    # Auto-detect format
+    if fmt == "auto":
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext in ("nc", "nc4", "ncf", "netcdf") or filename.startswith("wrfout"):
+            fmt = "wrf"
+        elif ext in ("buf", "bufkit"):
+            fmt = "bufkit_file"
+        else:
+            # Check for netCDF4 magic bytes
+            if file_bytes[:4] in (b'\x89HDF', b'CDF\x01', b'CDF\x02'):
+                fmt = "wrf"
+            else:
+                return jsonify({"error": "Could not auto-detect file format. "
+                               "Please select WRF (.nc) or specify the format."}), 400
+
+    try:
+        if fmt == "wrf":
+            # Parse WRF netCDF output
+            try:
+                import netCDF4
+            except ImportError:
+                return jsonify({"error": "netCDF4 library is not installed on the server. "
+                               "WRF file upload requires netCDF4."}), 500
+
+            # Write temp file for netCDF4
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+
+            try:
+                ds = netCDF4.Dataset(tmp_path, "r")
+
+                # Find nearest grid point
+                lats = ds.variables.get("XLAT")
+                lons = ds.variables.get("XLONG")
+                if lats is None:
+                    lats = ds.variables.get("XLAT_M")
+                    lons = ds.variables.get("XLONG_M")
+
+                if lats is None or lons is None:
+                    ds.close()
+                    return jsonify({"error": "WRF file does not contain XLAT/XLONG variables."}), 400
+
+                lat_2d = np.array(lats[0])  # shape (south_north, west_east)
+                lon_2d = np.array(lons[0])
+
+                # Target point
+                if req_lat is not None and req_lon is not None:
+                    target_lat = float(req_lat)
+                    target_lon = float(req_lon)
+                else:
+                    # Use center of domain
+                    target_lat = float(lat_2d[lat_2d.shape[0] // 2, lat_2d.shape[1] // 2])
+                    target_lon = float(lon_2d[lon_2d.shape[0] // 2, lon_2d.shape[1] // 2])
+
+                # Find nearest grid point
+                dist = (lat_2d - target_lat)**2 + (lon_2d - target_lon)**2
+                j, i = np.unravel_index(dist.argmin(), dist.shape)
+
+                # Time index (use first time)
+                t_idx = 0
+
+                # Extract base-state + perturbation pressure
+                if "PB" in ds.variables and "P" in ds.variables:
+                    p_base = np.array(ds.variables["PB"][t_idx, :, j, i])
+                    p_pert = np.array(ds.variables["P"][t_idx, :, j, i])
+                    p_pa = p_base + p_pert  # Pa
+                elif "P" in ds.variables:
+                    p_pa = np.array(ds.variables["P"][t_idx, :, j, i])
+                else:
+                    ds.close()
+                    return jsonify({"error": "WRF file missing pressure variables (P, PB)."}), 400
+
+                p_hpa = p_pa / 100.0
+
+                # Height: PHB + PH (geopotential on stag levels), then destagger
+                if "PHB" in ds.variables and "PH" in ds.variables:
+                    ph_base = np.array(ds.variables["PHB"][t_idx, :, j, i])
+                    ph_pert = np.array(ds.variables["PH"][t_idx, :, j, i])
+                    geopot = (ph_base + ph_pert) / 9.81  # m
+                    # Destagger: average adjacent levels
+                    h_m = 0.5 * (geopot[:-1] + geopot[1:])
+                elif "Z" in ds.variables:
+                    h_m = np.array(ds.variables["Z"][t_idx, :, j, i])
+                else:
+                    # Estimate from pressure
+                    h_m = 44330.0 * (1.0 - (p_hpa / p_hpa[0])**0.19)
+
+                # Temperature: theta perturbation + 300K base
+                if "T" in ds.variables:
+                    theta_pert = np.array(ds.variables["T"][t_idx, :, j, i])
+                    theta_k = theta_pert + 300.0  # WRF T is perturbation theta
+                else:
+                    ds.close()
+                    return jsonify({"error": "WRF file missing temperature variable (T)."}), 400
+
+                t_k = theta_k * (p_hpa / 1000.0)**0.286
+                t_c = t_k - 273.15
+
+                # Moisture: QVAPOR (kg/kg)
+                if "QVAPOR" in ds.variables:
+                    qv = np.array(ds.variables["QVAPOR"][t_idx, :, j, i])
+                    # Compute dewpoint from mixing ratio
+                    e = qv * p_hpa / (0.622 + qv)
+                    e = np.maximum(e, 0.001)
+                    td_c = (243.5 * np.log(e / 6.112)) / (17.67 - np.log(e / 6.112))
+                else:
+                    td_c = t_c - 15.0  # fallback
+
+                # Winds: U, V (staggered), destagger
+                if "U" in ds.variables and "V" in ds.variables:
+                    u_stag = np.array(ds.variables["U"][t_idx, :, j, i:i+2])
+                    v_stag = np.array(ds.variables["V"][t_idx, :, j:j+2, i])
+                    u_ms = 0.5 * (u_stag[:, 0] + u_stag[:, 1]) if u_stag.shape[1] == 2 else u_stag[:, 0]
+                    v_ms = 0.5 * (v_stag[:, 0] + v_stag[:, 1]) if v_stag.shape[1] == 2 else v_stag[:, 0]
+                    ws_kt = np.sqrt(u_ms**2 + v_ms**2) * 1.94384
+                    wd_deg = (np.degrees(np.arctan2(-u_ms, -v_ms)) + 360) % 360
+                else:
+                    ws_kt = np.zeros_like(t_c)
+                    wd_deg = np.zeros_like(t_c)
+
+                # Trim to common length
+                nz = min(len(p_hpa), len(h_m), len(t_c), len(td_c), len(ws_kt))
+                p_hpa = p_hpa[:nz]
+                h_m = h_m[:nz]
+                t_c = t_c[:nz]
+                td_c = td_c[:nz]
+                ws_kt = ws_kt[:nz]
+                wd_deg = wd_deg[:nz]
+
+                # Get domain info
+                grid_lat = float(lat_2d[j, i])
+                grid_lon = float(lon_2d[j, i])
+                wrf_title = getattr(ds, "TITLE", "WRF Output")
+                ds.close()
+
+                p_arr = p_hpa.tolist()
+                h_arr = h_m.tolist()
+                t_arr = t_c.tolist()
+                td_arr = td_c.tolist()
+                wd_arr = wd_deg.tolist()
+                ws_arr = ws_kt.tolist()
+
+            finally:
+                import os as _os
+                try:
+                    _os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        else:
+            return jsonify({"error": f"Unsupported file format: '{fmt}'."}), 400
+
+        if len(p_arr) < 5:
+            return jsonify({"error": f"Only {len(p_arr)} levels extracted. Need at least 5."}), 400
+
+        # Build data dict for analysis
+        data = {
+            "pressure": np.array(p_arr) * mpu.hPa,
+            "height": np.array(h_arr) * mpu.meter,
+            "temperature": np.array(t_arr) * mpu.degC,
+            "dewpoint": np.array(td_arr) * mpu.degC,
+            "wind_direction": np.array(wd_arr) * mpu.degree,
+            "wind_speed": np.array(ws_arr) * mpu.knot,
+            "station_info": {
+                "name": f"WRF ({grid_lat:.2f}, {grid_lon:.2f})" if fmt == "wrf" else "File Upload",
+                "lat": grid_lat if fmt == "wrf" else 35.0,
+                "lon": grid_lon if fmt == "wrf" else -97.0,
+                "elev": h_arr[0],
+            },
+        }
+
+        params = compute_parameters(data)
+
+        label = f"WRF ({grid_lat:.1f}, {grid_lon:.1f})" if fmt == "wrf" else "FILE"
+        fig = plot_sounding(data, params, label,
+                            datetime.now(timezone.utc), theme=theme, colorblind=colorblind)
+
+        _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor=_facecolor)
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+        serialized = _serialize_params(params, data, "WRF" if fmt == "wrf" else "FILE",
+                                       datetime.now(timezone.utc), "custom")
+
+        # Build profile rows
+        n = len(p_arr)
+        profile_rows = []
+        for k in range(n):
+            profile_rows.append({
+                "p": round(p_arr[k], 1),
+                "h": round(h_arr[k], 1),
+                "t": round(t_arr[k], 1),
+                "td": round(td_arr[k], 1),
+                "wd": round(wd_arr[k], 1),
+                "ws": round(ws_arr[k], 1),
+            })
+
+        return jsonify({
+            "image": image_b64,
+            "params": serialized,
+            "profile": profile_rows,
+            "meta": {
+                "station": label,
+                "stationName": f"WRF Output ({grid_lat:.2f}°N, {grid_lon:.2f}°E)" if fmt == "wrf" else "File Upload",
+                "source": "wrf" if fmt == "wrf" else "custom",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %HZ"),
+                "levels": len(p_arr),
+                "sfcPressure": round(p_arr[0]),
+                "topPressure": round(p_arr[-1]),
+            },
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 def _serialize_params(params, data, station, dt, source):
     """Extract key computed parameters into a JSON-friendly dict."""
-    return {
+
+    # ── Climatology percentile lookup ──────────────────────────────
+    # Approximate percentile ranks based on SPC proximity sounding
+    # climatology for significant severe weather environments.
+    # Breakpoints: [10th, 25th, 50th, 75th, 90th, 95th, 99th]
+    CLIMO = {
+        "sbCape":  [50, 250, 700, 1500, 2800, 3800, 5500],
+        "mlCape":  [25, 150, 500, 1200, 2200, 3000, 4500],
+        "muCape":  [100, 400, 900, 1800, 3200, 4200, 6000],
+        "ecape":   [50, 200, 500, 1000, 1800, 2500, 3500],
+        "mlCin":   [-300, -150, -60, -25, -8, -3, 0],  # CIN is negative
+        "bwd6km":  [8, 15, 25, 38, 52, 62, 80],
+        "bwd1km":  [3, 6, 10, 16, 24, 30, 45],
+        "srh1km":  [20, 50, 100, 180, 300, 450, 700],
+        "srh3km":  [30, 80, 150, 250, 400, 550, 900],
+        "esrh":    [10, 40, 80, 150, 280, 400, 650],
+        "ebwd":    [5, 12, 22, 35, 50, 60, 78],
+        "stp":     [0, 0.1, 0.4, 1.0, 3.0, 6.0, 12.0],
+        "scp":     [0, 0.2, 1.0, 3.0, 8.0, 15.0, 30.0],
+        "ship":    [0, 0.1, 0.4, 1.0, 2.0, 3.0, 5.0],
+        "dcp":     [0, 0.3, 1.0, 2.5, 5.0, 8.0, 15.0],
+        "dcape":   [50, 200, 500, 850, 1200, 1500, 2000],
+        "lr03":    [4.5, 5.5, 6.2, 7.0, 7.8, 8.3, 9.2],
+        "lr36":    [4.0, 5.0, 5.8, 6.5, 7.3, 7.8, 8.8],
+        "pwat":    [8, 15, 25, 35, 48, 58, 72],
+    }
+
+    def _percentile(key, val):
+        if val is None or key not in CLIMO:
+            return None
+        bp = CLIMO[key]
+        # CIN is inverted (more negative = worse)
+        if key == "mlCin":
+            # For CIN, 0 is 99th, -300 is 10th
+            if val >= bp[6]: return 99
+            if val <= bp[0]: return 10
+            for i in range(len(bp) - 1):
+                if bp[i] <= val <= bp[i + 1]:
+                    pcts = [10, 25, 50, 75, 90, 95, 99]
+                    frac = (val - bp[i]) / (bp[i + 1] - bp[i]) if bp[i + 1] != bp[i] else 0
+                    return round(pcts[i] + frac * (pcts[i + 1] - pcts[i]))
+            return 50
+        if val <= bp[0]: return 5
+        if val >= bp[6]: return 99
+        pcts = [10, 25, 50, 75, 90, 95, 99]
+        for i in range(len(bp) - 1):
+            if bp[i] <= val <= bp[i + 1]:
+                frac = (val - bp[i]) / (bp[i + 1] - bp[i]) if bp[i + 1] != bp[i] else 0
+                return round(pcts[i] + frac * (pcts[i + 1] - pcts[i]))
+        return 50
+
+    base = {
         # Thermodynamic
         "sbCape": _fmt(params.get("sb_cape")),
         "sbCin": _fmt(params.get("sb_cin")),
@@ -500,6 +807,190 @@ def _serialize_params(params, data, station, dt, source):
         "eilBot": round(params["eil_bot_h"]) if params.get("eil_bot_h") is not None else None,
         "eilTop": round(params["eil_top_h"]) if params.get("eil_top_h") is not None else None,
     }
+
+    # ── Percentiles vs severe-weather climatology ─────────────────
+    base["percentiles"] = {}
+    for key in CLIMO:
+        val = base.get(key)
+        if val is not None:
+            base["percentiles"][key] = _percentile(key, float(val))
+
+    return base
+
+
+# ─── Ensemble Sounding Plume ────────────────────────────────────────
+@app.route("/api/ensemble-plume", methods=["POST", "OPTIONS"])
+def ensemble_plume():
+    """
+    Generate an ensemble sounding plume by fetching multiple forecast hours
+    from a BUFKIT model (or SREF members) and overlaying them as transparent
+    traces on a single Skew-T.
+
+    JSON body:
+      station: "OUN"
+      model: "sref" (or any bufkit model)
+      source: "bufkit" | "psu" (optional, default "bufkit")
+      date: "2024061200" (optional, for Iowa State archive)
+      hours: [0, 1, 2, 3, 6, 9, 12]  (forecast hours to include)
+      theme: "dark" | "light"
+      colorblind: true | false
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True) if request.data else {}
+    station =  body.get("station", "OUN")
+    model   = body.get("model", "sref")
+    src     = body.get("source", "bufkit")
+    date_str = body.get("date")
+    hours   = body.get("hours", [0, 1, 2, 3, 6, 9, 12])
+    theme   = body.get("theme", "dark")
+    cb      = body.get("colorblind", False)
+
+    import numpy as np
+    from metpy.units import units as mpu
+
+    # Parse date
+    if date_str:
+        try:
+            dt = datetime.strptime(str(date_str), "%Y%m%d%H").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return jsonify({"error": f"Invalid date '{date_str}'."}), 400
+    else:
+        dt = get_latest_sounding_time()
+
+    # Fetch profiles across forecast hours
+    profiles = []
+    errors = []
+    for fh in hours:
+        try:
+            if src == "psu":
+                from sounding import fetch_psu_bufkit
+                data = fetch_psu_bufkit(station, model=model, fhour=int(fh))
+            else:
+                from sounding import fetch_bufkit_sounding
+                data = fetch_bufkit_sounding(station, dt, model=model, fhour=int(fh))
+            profiles.append({"fhour": fh, "data": data})
+        except Exception as e:
+            errors.append(f"f{fh:03d}: {e}")
+
+    if len(profiles) < 2:
+        return jsonify({
+            "error": f"Need ≥2 ensemble members, got {len(profiles)}. "
+                     + ("; ".join(errors) if errors else "")
+        }), 400
+
+    # Compute parameters for the analysis profile (first member)
+    base_data = profiles[0]["data"]
+    base_params = compute_parameters(base_data)
+
+    # Generate plume plot
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.gridspec import GridSpec
+        import metpy.calc as mpcalc
+        from metpy.plots import SkewT
+        from metpy.units import units as u
+
+        bg = "#f5f5f5" if theme == "light" else "#0d0d0d"
+        fg = "#333333" if theme == "light" else "#e2e8f0"
+        grid_c = "#cccccc" if theme == "light" else "#2a2a2a"
+
+        fig = plt.figure(figsize=(12, 10), facecolor=bg)
+        gs = GridSpec(1, 2, width_ratios=[3, 1], figure=fig)
+
+        # Skew-T panel
+        ax_skew = fig.add_subplot(gs[0, 0])
+        skew = SkewT(fig, rotation=45, subplot=ax_skew)
+        skew.ax.set_facecolor(bg)
+        skew.ax.tick_params(colors=fg, labelsize=8)
+        for spine in skew.ax.spines.values():
+            spine.set_color(grid_c)
+
+        skew.ax.set_ylim(1050, 100)
+        skew.ax.set_xlim(-40, 50)
+
+        # Color palette for members
+        n = len(profiles)
+        if cb:
+            colors = plt.cm.viridis(np.linspace(0.2, 0.9, n))
+        else:
+            colors = plt.cm.plasma(np.linspace(0.15, 0.85, n))
+
+        for i, pf in enumerate(profiles):
+            d = pf["data"]
+            p = d["pressure"].m
+            t = d["temperature"].m
+            td = d["dewpoint"].m
+            c = colors[i]
+            alpha = 0.3 if n > 5 else 0.5
+            skew.plot(p, t, c, linewidth=1.0, alpha=alpha)
+            skew.plot(p, td, c, linewidth=0.8, alpha=alpha * 0.7, linestyle="--")
+
+        # Overlay the analysis (first member) more prominently
+        d0 = profiles[0]["data"]
+        skew.plot(d0["pressure"].m, d0["temperature"].m, "r", linewidth=2, alpha=0.9, label="Analysis (f000)")
+        skew.plot(d0["dewpoint"].m, d0["dewpoint"].m, "g", linewidth=1.5, alpha=0.8)
+
+        skew.ax.set_title(
+            f"Ensemble Plume: {station.upper()} {model.upper()}\n"
+            f"{n} members (f{min(hours):03d} – f{max(hours):03d})",
+            fontsize=12, color=fg, pad=10
+        )
+
+        # Hodograph panel (spread)
+        ax_hodo = fig.add_subplot(gs[0, 1])
+        ax_hodo.set_facecolor(bg)
+        ax_hodo.set_aspect("equal")
+        ax_hodo.tick_params(colors=fg, labelsize=7)
+        ax_hodo.set_title("Hodograph Spread", fontsize=10, color=fg)
+
+        for i, pf in enumerate(profiles):
+            d = pf["data"]
+            try:
+                u_w = d["wind_speed"].m * np.sin(np.radians(d["wind_direction"].m)) * 0.514444
+                v_w = d["wind_speed"].m * np.cos(np.radians(d["wind_direction"].m)) * 0.514444
+                h = d["height"].m
+                mask = h <= h[0] + 10000
+                ax_hodo.plot(u_w[mask], v_w[mask], color=colors[i], alpha=0.3, linewidth=0.8)
+            except Exception:
+                pass
+
+        ax_hodo.axhline(0, color=grid_c, linewidth=0.5)
+        ax_hodo.axvline(0, color=grid_c, linewidth=0.5)
+        ax_hodo.set_xlabel("u (m/s)", fontsize=8, color=fg)
+        ax_hodo.set_ylabel("v (m/s)", fontsize=8, color=fg)
+
+        fig.tight_layout()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor=bg)
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Plume plot failed: {e}"}), 500
+
+    serialized = _serialize_params(base_params, base_data, station, dt, "bufkit")
+
+    return jsonify({
+        "image": image_b64,
+        "params": serialized,
+        "members": len(profiles),
+        "hours": [p["fhour"] for p in profiles],
+        "errors": errors if errors else None,
+        "meta": {
+            "station": station.upper(),
+            "model": model.upper(),
+            "source": src,
+            "date": dt.strftime("%Y-%m-%d %HZ") if dt else "latest",
+        },
+    })
 
 
 @app.route("/api/vad", methods=["GET"])

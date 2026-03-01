@@ -1119,6 +1119,87 @@ def plot_vwp(vwp_data):
     return fig
 
 
+# ─── PSU BUFKIT FEED ────────────────────────────────────────────────
+PSU_MODELS = {
+    "rap":     "Rapid Refresh (RAP)",
+    "nam":     "NAM 12 km",
+    "namnest": "NAM Nest 3 km",
+    "gfs":     "GFS global",
+    "hrrr":    "HRRR 3 km",
+    "nam4km":  "NAM 4-km CONUS",
+    "hiresw":  "HiResW NMMB / ARW",
+    "sref":    "SREF ensemble mean",
+}
+
+
+def fetch_psu_bufkit(station_id, model="rap", fhour=0):
+    """
+    Fetch latest-run BUFKIT sounding from Penn State's e-wall server.
+
+    PSU provides real-time (latest model cycle) BUFKIT profiles for many
+    NWS models.  Unlike the Iowa State archive, only the most recent
+    model run is available — no date-based archive.
+
+    URL pattern:
+        https://www.meteo.psu.edu/bufkit/data/{MODEL}/{MODEL}_{station}.buf
+
+    Parameters
+    ----------
+    station_id : str   3-letter station (e.g. 'OUN') or 4-letter ICAO
+    model      : str   One of: rap, nam, namnest, gfs, hrrr, nam4km, hiresw, sref
+    fhour      : int   Forecast hour offset within the file (0 = analysis)
+    """
+    model = model.lower()
+    if model not in PSU_MODELS:
+        raise ValueError(
+            f"Unknown PSU model '{model}'. Options: {list(PSU_MODELS.keys())}"
+        )
+
+    stn = station_id.upper()
+    stn_lower = station_id.lower()
+    stn_k = f"k{stn_lower}" if len(stn_lower) == 3 else stn_lower
+
+    # Model name mapping for PSU URL
+    model_url = model.upper()
+
+    # PSU uses uppercase model dir and MODEL_station.buf naming
+    url = (
+        f"https://www.meteo.psu.edu/bufkit/data/"
+        f"{model_url}/{model_url}_{stn_k}.buf"
+    )
+
+    print(f"  Fetching PSU BUFKIT {model.upper()} f{fhour:03d} for {station_id}...")
+    print(f"  URL: {url}")
+
+    resp = requests.get(url, timeout=45)
+    if resp.status_code == 404:
+        # Try alternate naming — 3-letter without K prefix
+        url2 = url.replace(f"_{stn_k}.buf", f"_{stn_lower}.buf")
+        resp = requests.get(url2, timeout=45)
+        if resp.status_code == 404:
+            raise ValueError(
+                f"PSU BUFKIT data not found for {station_id} ({model.upper()}). "
+                f"The station may not be available in Penn State's feed."
+            )
+    resp.raise_for_status()
+
+    data = _parse_bufkit(resp.text, fhour=fhour)
+
+    # Enrich station_info
+    if stn in STATIONS:
+        name, lat, lon = STATIONS[stn]
+        data["station_info"]["name"] = (
+            f"{name} (PSU {model.upper()} f{fhour:03d})"
+        )
+        data["station_info"]["lat"] = lat
+        data["station_info"]["lon"] = lon
+    else:
+        sinfo = data["station_info"]
+        sinfo["name"] = f"{sinfo.get('name', station_id)} (PSU {model.upper()} f{fhour:03d})"
+
+    return data
+
+
 # ─────────────────────────────────────────────────────────────────────
 # UNIFIED FETCH DISPATCHER
 # ─────────────────────────────────────────────────────────────────────
@@ -1127,6 +1208,7 @@ DATA_SOURCES = {
     "obs":    "Observed radiosonde (IEM / UWyo)",
     "rap":    "RAP model analysis - any lat/lon, CONUS (NCEI THREDDS)",
     "bufkit": "BUFKIT forecast models - station-based (Iowa State)",
+    "psu":    "PSU BUFKIT feed - latest run, station-based (Penn State)",
     "acars":  "ACARS/AMDAR aircraft obs - airport-based (IEM)",
 }
 
@@ -1188,6 +1270,11 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
             raise ValueError("BUFKIT source requires --station.")
         return fetch_bufkit_sounding(station_id, dt, model=model, fhour=fhour)
 
+    # ── PSU BUFKIT (latest run) ─────────────────────────────────────
+    if source == "psu":
+        if station_id is None:
+            raise ValueError("PSU source requires --station.")
+        return fetch_psu_bufkit(station_id, model=model, fhour=fhour)
 
     # ── ACARS ───────────────────────────────────────────────────────
     if source == "acars":
