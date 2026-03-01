@@ -2230,14 +2230,19 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
 # ─────────────────────────────────────────────────────────────────────
 # PLOTTING
 # ─────────────────────────────────────────────────────────────────────
-def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False):
-    """Create a comprehensive sounding analysis figure (dark theme).
+def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False,
+                  theme="dark", colorblind=False):
+    """Create a comprehensive sounding analysis figure.
 
     Parameters
     ----------
     sr_hodograph : bool
         If True, plot the hodograph in storm-relative frame (subtract storm
         motion from all winds so SM is at the origin).
+    theme : str
+        'dark' (default) or 'light'.
+    colorblind : bool
+        If True, use color-blind safe palette.
     """
     p = data["pressure"]
     T = data["temperature"]
@@ -2252,15 +2257,56 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     lat = info.get("lat", STATIONS.get(station_id, ("", 0, 0))[1])
     lon = info.get("lon", STATIONS.get(station_id, ("", 0, 0))[2])
     
-    # ── Theme colors (dark) ──────────────────────────────────────────
-    BG        = "#0d0d0d"
-    BG_PANEL  = "#141414"
-    FG        = "#e8e8e8"
-    FG_DIM    = "#b0b0b0"
-    FG_FAINT  = "#707070"
-    GRID_CLR  = "#333333"
-    BORDER    = "#444444"
-    ACCENT    = "#55bbee"
+    # ── Theme colors ─────────────────────────────────────────────────
+    if theme == "light":
+        BG        = "#f5f5f5"
+        BG_PANEL  = "#e8e8e8"
+        FG        = "#1a1a1a"
+        FG_DIM    = "#444444"
+        FG_FAINT  = "#888888"
+        GRID_CLR  = "#cccccc"
+        BORDER    = "#aaaaaa"
+        ACCENT    = "#2563eb"
+    else:
+        BG        = "#0d0d0d"
+        BG_PANEL  = "#141414"
+        FG        = "#e8e8e8"
+        FG_DIM    = "#b0b0b0"
+        FG_FAINT  = "#707070"
+        GRID_CLR  = "#333333"
+        BORDER    = "#444444"
+        ACCENT    = "#55bbee"
+
+    # ── Trace colors (standard vs color-blind safe) ──────────────────
+    if colorblind:
+        # Wong 2011 / Okabe-Ito palette
+        CLR_TEMP      = "#D55E00"   # vermillion (temperature)
+        CLR_DEW       = "#0072B2"   # blue (dewpoint)
+        CLR_WETBULB   = "#009E73"   # bluish green (wetbulb)
+        CLR_VTEMP     = "#E69F00"   # orange (virtual temp)
+        CLR_SB_PARCEL = "#CC79A7"   # reddish purple (SB parcel)
+        CLR_MU_PARCEL = "#F0E442"   # yellow (MU parcel)
+        CLR_ML_PARCEL = "#56B4E9"   # sky blue (ML parcel)
+        CLR_CAPE_FILL = "#D55E00"   # vermillion
+        CLR_CIN_FILL  = "#0072B2"   # blue
+        CLR_LCL       = "#009E73"   # bluish green
+        CLR_LFC       = "#E69F00"   # orange
+        CLR_EL        = "#56B4E9"   # sky blue
+        CLR_VAD       = "#009E73"   # green
+    else:
+        CLR_TEMP      = "red"
+        CLR_DEW       = "blue"
+        CLR_WETBULB   = "cyan"
+        CLR_VTEMP     = "red"
+        CLR_SB_PARCEL = "#ff8800"
+        CLR_MU_PARCEL = FG
+        CLR_ML_PARCEL = "#dd44dd"
+        CLR_CAPE_FILL = "#ff3333"
+        CLR_CIN_FILL  = "#4488ff"
+        CLR_LCL       = "#44cc44"
+        CLR_LFC       = "#ddaa22"
+        CLR_EL        = "#4499ee"
+        CLR_VAD       = "#00ff88"
     
     # Helper
     def fv(val, unit_str="", decimals=0):
@@ -2337,12 +2383,12 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     
     # Wet-bulb temperature (cyan, solid thin)
     if params.get("wetbulb") is not None:
-        skew.plot(p, params["wetbulb"], color="cyan", linewidth=1.5,
+        skew.plot(p, params["wetbulb"], color=CLR_WETBULB, linewidth=1.5,
                   linestyle="-", alpha=0.85, zorder=5, label="WETBULB TEMP")
     
     # Virtual temperature (red, dotted)
     if params.get("virtual_temp") is not None:
-        skew.plot(p, params["virtual_temp"], color="red", linewidth=1.5,
+        skew.plot(p, params["virtual_temp"], color=CLR_VTEMP, linewidth=1.5,
                   linestyle=":", alpha=0.7, zorder=4, label="VIRTUAL TEMP")
     
     # Downdraft parcel trace (gray, dashed)
@@ -2354,7 +2400,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     # SB parcel trace (orange, dashed) + CAPE/CIN shading
     if params.get("sb_profile") is not None:
         sb_prof = params["sb_profile"]
-        skew.plot(p, sb_prof, color="#ff8800", linewidth=2.0,
+        skew.plot(p, sb_prof, color=CLR_SB_PARCEL, linewidth=2.0,
                   linestyle="--", alpha=0.85, zorder=5, label="SB PARCEL")
         # --- CAPE shading (red) — parcel warmer than environment ---
         try:
@@ -2363,14 +2409,14 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             cape_mask = sb_T > env_T
             skew.ax.fill_betweenx(
                 p.magnitude, sb_T, env_T,
-                where=cape_mask, facecolor="#ff3333", alpha=0.18,
+                where=cape_mask, facecolor=CLR_CAPE_FILL, alpha=0.18,
                 interpolate=True, zorder=3
             )
             # --- CIN shading (blue) — parcel cooler than environment ---
             cin_mask = sb_T < env_T
             skew.ax.fill_betweenx(
                 p.magnitude, sb_T, env_T,
-                where=cin_mask, facecolor="#4488ff", alpha=0.12,
+                where=cin_mask, facecolor=CLR_CIN_FILL, alpha=0.12,
                 interpolate=True, zorder=3
             )
         except Exception:
@@ -2379,12 +2425,12 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     # MU parcel trace (white/light, dashed)
     if params.get("mu_profile") is not None and params.get("mu_start_idx") is not None:
         mu_si = params["mu_start_idx"]
-        skew.plot(p[mu_si:], params["mu_profile"], color=FG, linewidth=2.0,
+        skew.plot(p[mu_si:], params["mu_profile"], color=CLR_MU_PARCEL, linewidth=2.0,
                   linestyle="--", alpha=0.75, zorder=5, label="MU PARCEL")
     
     # ML parcel trace (magenta, dashed)
     if params.get("ml_profile") is not None:
-        skew.plot(p, params["ml_profile"], color="#dd44dd", linewidth=2.0,
+        skew.plot(p, params["ml_profile"], color=CLR_ML_PARCEL, linewidth=2.0,
                   linestyle="--", alpha=0.75, zorder=5, label="ML PARCEL")
     
     # --- Highlighted isotherms: 0°C and -20°C ---
@@ -2400,14 +2446,14 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         skew.ax.annotate(
             f"{sfc_T_F:.0f}°F", xy=(T[0].magnitude, p[0].magnitude),
             xytext=(8, -15), textcoords="offset points",
-            fontsize=11, color="red", fontweight="bold",
+            fontsize=11, color=CLR_TEMP, fontweight="bold",
             fontfamily="monospace", zorder=10,
             path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
         )
         skew.ax.annotate(
             f"{sfc_Td_F:.0f}°F", xy=(Td[0].magnitude, p[0].magnitude),
             xytext=(-30, -15), textcoords="offset points",
-            fontsize=11, color="blue", fontweight="bold",
+            fontsize=11, color=CLR_DEW, fontweight="bold",
             fontfamily="monospace", zorder=10,
             path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
         )
@@ -2426,12 +2472,12 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                     wbz_p = p.magnitude[i] + frac * (p.magnitude[i+1] - p.magnitude[i])
                     wbz_h_msl = h.magnitude[i] + frac * (h.magnitude[i+1] - h.magnitude[i])
                     wbz_h_agl = wbz_h_msl - h[0].magnitude
-                    skew.ax.axhline(y=wbz_p, color="cyan", linestyle=":",
+                    skew.ax.axhline(y=wbz_p, color=CLR_WETBULB, linestyle=":",
                                     alpha=0.4, linewidth=0.8)
                     skew.ax.text(
                         skew.ax.get_xlim()[0] + 5, wbz_p,
                         f"WBZ ({wbz_h_agl:.0f}m)",
-                        color="cyan", fontsize=10, va="center",
+                        color=CLR_WETBULB, fontsize=10, va="center",
                         fontfamily="monospace", fontweight="bold",
                         path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
                     )
@@ -2477,7 +2523,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                 vad_v_list.append(w["v_kt"])
 
             if vad_p_list:
-                VAD_COLOR = "#00ff88"
+                VAD_COLOR = CLR_VAD
                 vad_p_arr = np.array(vad_p_list) * units.hPa
                 vad_u_arr = np.array(vad_u_list) * units.knot
                 vad_v_arr = np.array(vad_v_list) * units.knot
@@ -2496,30 +2542,30 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     pe = path_effects.withStroke(linewidth=3, foreground=BG)
     
     if params.get("sb_lcl_p") is not None:
-        skew.ax.axhline(y=params["sb_lcl_p"].magnitude, color="#44cc44",
+        skew.ax.axhline(y=params["sb_lcl_p"].magnitude, color=CLR_LCL,
                         linestyle="--", alpha=0.6, linewidth=1.0)
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_lcl_p"].magnitude,
             f"←SBLCL ({fv(params['sb_lcl_p'],'hPa')})",
-            color="#44cc44", fontsize=12, va="center",
+            color=CLR_LCL, fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
     if params.get("sb_lfc_p") is not None:
-        skew.ax.axhline(y=params["sb_lfc_p"].magnitude, color="#ddaa22",
+        skew.ax.axhline(y=params["sb_lfc_p"].magnitude, color=CLR_LFC,
                         linestyle="--", alpha=0.5, linewidth=1.0)
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_lfc_p"].magnitude,
-            f"←LFC", color="#ddaa22", fontsize=12, va="center",
+            f"←LFC", color=CLR_LFC, fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
     if params.get("sb_el_p") is not None:
-        skew.ax.axhline(y=params["sb_el_p"].magnitude, color="#4499ee",
+        skew.ax.axhline(y=params["sb_el_p"].magnitude, color=CLR_EL,
                         linestyle="--", alpha=0.5, linewidth=1.0)
         skew.ax.text(
             skew.ax.get_xlim()[1] - 2, params["sb_el_p"].magnitude,
-            f"←EL", color="#4499ee", fontsize=12, va="center",
+            f"←EL", color=CLR_EL, fontsize=12, va="center",
             fontfamily="monospace", fontweight="bold", path_effects=[pe]
         )
     
@@ -2712,7 +2758,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         extra_handles.append(Line2D([], [], color=FG, marker=r'$\rightarrow$',
                                     markersize=8, linestyle='None'))
         extra_labels.append('OBS BARBS')
-        extra_handles.append(Line2D([], [], color='#00ff88', marker=r'$\rightarrow$',
+        extra_handles.append(Line2D([], [], color=CLR_VAD, marker=r'$\rightarrow$',
                                     markersize=8, linestyle='None'))
         extra_labels.append('VAD BARBS')
     existing_handles, existing_labels = skew.ax.get_legend_handles_labels()
@@ -2734,7 +2780,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             if t.get_text() == 'OBS BARBS':
                 t.set_color(FG)
             elif t.get_text() == 'VAD BARBS':
-                t.set_color('#00ff88')
+                t.set_color(CLR_VAD)
     
     # ════════════════════════════════════════════════════════════════
     # HODOGRAPH
@@ -3054,7 +3100,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         vad_alt_m = np.array([w["alt_m"] for w in vad_winds])
         vad_alt_agl = vad_alt_m  # VWP altitudes are already AGL (above radar level ≈ AGL)
 
-        VAD_COLOR = "#00ff88"  # bright green for contrast
+        VAD_COLOR = CLR_VAD
         # Draw VAD hodograph line
         hodo.ax.plot(vad_u, vad_v, color=VAD_COLOR, linewidth=2.5,
                      linestyle='-', alpha=0.85, zorder=8, clip_on=True)
@@ -3399,9 +3445,9 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
         (header, FG_FAINT, 0.89),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", "#ff8800", 0.81),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", FG, 0.73),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", "#dd44dd", 0.65),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.81),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.73),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.65),
         (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.57),
         (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.49),
         (f"   DCIN: {dcin_v}", FG_DIM, 0.41),

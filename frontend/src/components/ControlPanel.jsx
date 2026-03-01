@@ -24,6 +24,10 @@ import {
   Crosshair,
   Waves,
   Radio,
+  Sun,
+  Moon,
+  Eye,
+  Upload,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -138,6 +142,11 @@ export default function ControlPanel({
   onFeedbackClick,
   showFeedback: feedbackActive,
   urlParams,
+  theme,
+  onToggleTheme,
+  colorblind,
+  onToggleColorblind,
+  onNavigateUpload,
 }) {
   const [source, setSourceLocal] = useState(urlParams?.source || "obs");
   const [station, setStationLocal] = useState(urlParams?.station || "OUN");
@@ -989,6 +998,37 @@ export default function ControlPanel({
           </button>
         </div>
       </form>
+
+      {/* Settings row: theme / colorblind / upload */}
+      <div className="cp-settings-row">
+        <button
+          type="button"
+          className="cp-settings-btn"
+          onClick={onToggleTheme}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        >
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          <span>{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
+        <button
+          type="button"
+          className={`cp-settings-btn ${colorblind ? "active" : ""}`}
+          onClick={onToggleColorblind}
+          title="Toggle color-blind safe palette"
+        >
+          <Eye size={14} />
+          <span>CB Mode</span>
+        </button>
+        <button
+          type="button"
+          className="cp-settings-btn"
+          onClick={onNavigateUpload}
+          title="Upload custom sounding data"
+        >
+          <Upload size={14} />
+          <span>Upload</span>
+        </button>
+      </div>
 
       {/* Footer actions */}
       <div className="cp-footer">

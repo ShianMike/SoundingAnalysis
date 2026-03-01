@@ -137,6 +137,8 @@ def get_sounding():
     vad_radar = body.get("vad")                # NEXRAD radar ID (e.g. "KTLX") or null
     smoothing = body.get("smoothing")          # Gaussian sigma (float) or null
     sr_hodograph = body.get("srHodograph", False)  # Storm-relative hodograph mode
+    theme = body.get("theme", "dark")              # "dark" or "light"
+    colorblind = body.get("colorblind", False)     # color-blind safe palette
 
     # Parse date
     if date_str:
@@ -191,10 +193,13 @@ def get_sounding():
 
         # 3) Plot → base64 PNG
         plot_id = station or source.upper()
-        fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result, sr_hodograph=sr_hodograph)
+        fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result,
+                            sr_hodograph=sr_hodograph, theme=theme,
+                            colorblind=colorblind)
 
+        _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=180, facecolor="#0d0d0d")
+        fig.savefig(buf, format="png", dpi=180, facecolor=_facecolor)
         plt.close(fig)
         buf.seek(0)
         image_b64 = base64.b64encode(buf.read()).decode("utf-8")
@@ -245,6 +250,197 @@ def get_sounding():
     except ValueError as e:
         # Data not found / invalid input — not a server error
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ─── Custom Sounding Upload ───────────────────────────────────────
+@app.route("/api/custom-sounding", methods=["POST", "OPTIONS"])
+def custom_sounding():
+    """Accept raw sounding profile data (text) and return analysis.
+
+    Expected JSON body:
+      {
+        "text": "...raw sounding data lines...",
+        "format": "auto" | "csv" | "sharppy" | "cm1",
+        "theme": "dark" | "light",
+        "colorblind": false
+      }
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    import numpy as np
+    from metpy.units import units as mpu
+
+    body = request.get_json(force=True)
+    raw_text = body.get("text", "").strip()
+    fmt = body.get("format", "auto").lower()
+    theme = body.get("theme", "dark")
+    colorblind = body.get("colorblind", False)
+
+    if not raw_text:
+        return jsonify({"error": "No sounding data provided."}), 400
+
+    try:
+        lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+
+        # ── Auto-detect format ───────────────────────────────────
+        if fmt == "auto":
+            first_data = [l for l in lines if not l.startswith("%") and not l.startswith("#")]
+            if first_data and len(first_data[0].split()) == 3 and first_data[0].replace(".", "").replace("-", "").replace(" ", "").isdigit():
+                fmt = "cm1"
+            elif any("," in l for l in first_data[:5]):
+                fmt = "csv"
+            else:
+                fmt = "sharppy"
+
+        p_arr, h_arr, t_arr, td_arr, wd_arr, ws_arr = [], [], [], [], [], []
+
+        if fmt == "csv":
+            # Expected CSV: P(hPa), H(m), T(C), Td(C), WD(deg), WS(kt)
+            for line in lines:
+                if line.startswith("#") or line.startswith("P") or line.startswith("p"):
+                    continue
+                parts = [x.strip() for x in line.split(",")]
+                if len(parts) < 6:
+                    continue
+                try:
+                    p_arr.append(float(parts[0]))
+                    h_arr.append(float(parts[1]))
+                    t_arr.append(float(parts[2]))
+                    td_arr.append(float(parts[3]))
+                    wd_arr.append(float(parts[4]))
+                    ws_arr.append(float(parts[5]))
+                except ValueError:
+                    continue
+
+        elif fmt == "cm1":
+            # CM1 input_sounding format:
+            # Line 1: sfc_pressure(hPa) theta(K) qv(g/kg)
+            # Subsequent: z(m) theta(K) qv(g/kg) u(m/s) v(m/s)
+            header_parts = lines[0].split()
+            sfc_p = float(header_parts[0]) * 100  # hPa -> Pa for later? No, keep hPa
+            sfc_p_hPa = float(header_parts[0])
+            sfc_theta = float(header_parts[1])
+            sfc_qv = float(header_parts[2]) / 1000.0  # g/kg -> kg/kg
+
+            # Compute sfc T from theta: T = theta * (P/1000)^(R/cp)
+            sfc_T_K = sfc_theta * (sfc_p_hPa / 1000.0) ** 0.286
+            sfc_T_C = sfc_T_K - 273.15
+            # Compute sfc Td from qv: Td ≈ (243.5 * ln(e/6.112))/(17.67 - ln(e/6.112))
+            e_sfc = sfc_qv * sfc_p_hPa / (0.622 + sfc_qv)  # hPa
+            if e_sfc > 0:
+                sfc_Td_C = (243.5 * math.log(e_sfc / 6.112)) / (17.67 - math.log(e_sfc / 6.112))
+            else:
+                sfc_Td_C = sfc_T_C - 20
+
+            p_arr.append(sfc_p_hPa)
+            h_arr.append(0)
+            t_arr.append(sfc_T_C)
+            td_arr.append(sfc_Td_C)
+            wd_arr.append(0)
+            ws_arr.append(0)
+
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                try:
+                    z_m = float(parts[0])
+                    theta_K = float(parts[1])
+                    qv_kgkg = float(parts[2]) / 1000.0
+                    u_ms = float(parts[3])
+                    v_ms = float(parts[4])
+                    # Estimate pressure using hypsometric
+                    p_est = sfc_p_hPa * math.exp(-z_m / 8500.0)
+                    T_K = theta_K * (p_est / 1000.0) ** 0.286
+                    T_C = T_K - 273.15
+                    e = qv_kgkg * p_est / (0.622 + qv_kgkg)
+                    if e > 0:
+                        Td_C = (243.5 * math.log(e / 6.112)) / (17.67 - math.log(e / 6.112))
+                    else:
+                        Td_C = T_C - 20
+                    spd = math.sqrt(u_ms**2 + v_ms**2) * 1.94384  # m/s -> kt
+                    dirn = (math.degrees(math.atan2(-u_ms, -v_ms)) + 360) % 360
+                    p_arr.append(p_est)
+                    h_arr.append(z_m)
+                    t_arr.append(T_C)
+                    td_arr.append(Td_C)
+                    wd_arr.append(dirn)
+                    ws_arr.append(spd)
+                except ValueError:
+                    continue
+
+        else:
+            # SHARPpy format: P(hPa)  H(m)  T(C)  Td(C)  WD(deg)  WS(kt)
+            # Skip header lines starting with % or non-numeric
+            for line in lines:
+                if line.startswith("%") or line.startswith("#") or line.startswith("SNPARM"):
+                    continue
+                parts = line.split()
+                if len(parts) < 6:
+                    continue
+                try:
+                    vals = [float(x) for x in parts[:6]]
+                    # Skip missing data (SHARPpy uses -9999)
+                    if any(v <= -9998 for v in vals):
+                        continue
+                    p_arr.append(vals[0])
+                    h_arr.append(vals[1])
+                    t_arr.append(vals[2])
+                    td_arr.append(vals[3])
+                    wd_arr.append(vals[4])
+                    ws_arr.append(vals[5])
+                except ValueError:
+                    continue
+
+        if len(p_arr) < 5:
+            return jsonify({"error": f"Could not parse enough levels ({len(p_arr)} found). "
+                           "Need at least 5.  Check format: P(hPa), H(m), T(°C), Td(°C), "
+                           "WD(°), WS(kt)."}), 400
+
+        # Build data dict compatible with compute_parameters / plot_sounding
+        data = {
+            "pressure": np.array(p_arr) * mpu.hPa,
+            "height": np.array(h_arr) * mpu.meter,
+            "temperature": np.array(t_arr) * mpu.degC,
+            "dewpoint": np.array(td_arr) * mpu.degC,
+            "wind_direction": np.array(wd_arr) * mpu.degree,
+            "wind_speed": np.array(ws_arr) * mpu.knot,
+            "station_info": {"name": "Custom Upload", "lat": 35.0, "lon": -97.0, "elev": h_arr[0]},
+        }
+
+        params = compute_parameters(data)
+
+        fig = plot_sounding(data, params, "CUSTOM", datetime.now(timezone.utc),
+                            theme=theme, colorblind=colorblind)
+
+        _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=180, facecolor=_facecolor)
+        plt.close(fig)
+        buf.seek(0)
+        image_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+        serialized = _serialize_params(params, data, "CUSTOM",
+                                       datetime.now(timezone.utc), "custom")
+
+        return jsonify({
+            "image": image_b64,
+            "params": serialized,
+            "meta": {
+                "station": "CUSTOM",
+                "stationName": "Custom Upload",
+                "source": "custom",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %HZ"),
+                "levels": len(p_arr),
+                "sfcPressure": round(p_arr[0]),
+                "topPressure": round(p_arr[-1]),
+            },
+        })
+
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

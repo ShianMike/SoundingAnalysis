@@ -3,6 +3,7 @@ import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
 import HistoryPanel from "./components/HistoryPanel";
+import CustomUpload from "./components/CustomUpload";
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
@@ -36,6 +37,14 @@ function updateUrl(params) {
   window.history.replaceState(null, "", newUrl);
 }
 
+/* ── Persisted preferences (theme / colorblind) ──────────── */
+function loadPref(key, fallback) {
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
+}
+function savePref(key, val) {
+  try { localStorage.setItem(key, val); } catch { /* noop */ }
+}
+
 export default function App() {
   const [stations, setStations] = useState([]);
   const [sources, setSources] = useState([]);
@@ -56,6 +65,26 @@ export default function App() {
   const [selectedStation, setSelectedStation] = useState("OUN");
   const [source, setSource] = useState("obs");
   const [showFeedback, setShowFeedback] = useState(false);
+
+  // ── Page routing (main / upload) ──────────────────────────
+  const [page, setPage] = useState("main");
+
+  // ── Theme & accessibility prefs ───────────────────────────
+  const [theme, setThemeState] = useState(() => loadPref("sa_theme", "dark"));
+  const [colorblind, setColorblindState] = useState(() => loadPref("sa_cb", "false") === "true");
+
+  // Apply to <html> on mount & change
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    savePref("sa_theme", theme);
+  }, [theme]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-cb", String(colorblind));
+    savePref("sa_cb", String(colorblind));
+  }, [colorblind]);
+
+  const toggleTheme = () => setThemeState((t) => (t === "dark" ? "light" : "dark"));
+  const toggleColorblind = () => setColorblindState((v) => !v);
 
   // URL-based initial params (parsed once on mount)
   const urlParamsRef = useRef(parseUrlParams());
@@ -98,7 +127,7 @@ export default function App() {
     setLastParams(params);
     updateUrl(params);
     try {
-      const data = await fetchSounding(params);
+      const data = await fetchSounding({ ...params, theme, colorblind });
       setResult(data);
       saveToHistory(params, data);
     } catch (e) {
@@ -143,75 +172,88 @@ export default function App() {
   return (
     <div className="app">
       <Header showFeedback={showFeedback} onCloseFeedback={() => setShowFeedback(false)} />
-      <main className="app-main">
-        <ControlPanel
-          stations={stations}
-          sources={sources}
-          models={models}
-          onSubmit={handleSubmit}
-          loading={loading}
-          initialLoading={initialLoading}
-          onRetry={loadInitialData}
-          connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
-          riskData={riskData}
-          onRiskDataChange={(data) => { setRiskData(data); if (data) setShowRisk(true); }}
-          showRisk={showRisk}
-          onToggleRisk={() => setShowRisk((v) => !v)}
-          showHistory={showHistory}
-          onToggleHistory={() => setShowHistory((v) => !v)}
-          showMap={showMap}
-          onToggleMap={() => setShowMap((v) => !v)}
-          showTimeSeries={showTimeSeries}
-          onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
-          showCompare={showCompare}
-          onToggleCompare={() => setShowCompare((v) => !v)}
-          showVwp={showVwp}
-          onToggleVwp={() => setShowVwp((v) => !v)}
-          selectedStation={selectedStation}
-          onStationChange={handleStationChange}
-          onSourceChange={handleSourceChange}
-          mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
-          onFeedbackClick={() => setShowFeedback((v) => !v)}
-          showFeedback={showFeedback}
-          urlParams={urlParamsRef.current}
+      {page === "upload" ? (
+        <CustomUpload
+          onBack={() => setPage("main")}
+          theme={theme}
+          colorblind={colorblind}
         />
-        {showHistory && (
-          <HistoryPanel
-            onLoad={handleLoadHistory}
-            onLoadCompare={handleLoadCompareHistory}
-            onClose={() => setShowHistory(false)}
+      ) : (
+        <main className="app-main">
+          <ControlPanel
+            stations={stations}
+            sources={sources}
+            models={models}
+            onSubmit={handleSubmit}
+            loading={loading}
+            initialLoading={initialLoading}
+            onRetry={loadInitialData}
+            connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
+            riskData={riskData}
+            onRiskDataChange={(data) => { setRiskData(data); if (data) setShowRisk(true); }}
+            showRisk={showRisk}
+            onToggleRisk={() => setShowRisk((v) => !v)}
+            showHistory={showHistory}
+            onToggleHistory={() => setShowHistory((v) => !v)}
+            showMap={showMap}
+            onToggleMap={() => setShowMap((v) => !v)}
+            showTimeSeries={showTimeSeries}
+            onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
+            showCompare={showCompare}
+            onToggleCompare={() => setShowCompare((v) => !v)}
+            showVwp={showVwp}
+            onToggleVwp={() => setShowVwp((v) => !v)}
+            selectedStation={selectedStation}
+            onStationChange={handleStationChange}
+            onSourceChange={handleSourceChange}
+            mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
+            onFeedbackClick={() => setShowFeedback((v) => !v)}
+            showFeedback={showFeedback}
+            urlParams={urlParamsRef.current}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            colorblind={colorblind}
+            onToggleColorblind={toggleColorblind}
+            onNavigateUpload={() => setPage("upload")}
           />
-        )}
-        <ResultsView
-          result={result}
-          loading={loading}
-          error={error}
-          riskData={riskData}
-          showRisk={showRisk}
-          showMap={showMap}
-          showTimeSeries={showTimeSeries}
-          onCloseTimeSeries={() => setShowTimeSeries(false)}
-          showCompare={showCompare}
-          onCloseCompare={() => setShowCompare(false)}
-          showVwp={showVwp}
-          onCloseVwp={() => setShowVwp(false)}
-          compareHistoryData={compareHistoryData}
-          onCompareHistoryConsumed={() => setCompareHistoryData(null)}
-          stations={stations}
-          selectedStation={selectedStation}
-          source={source}
-          lastParams={lastParams}
-          mapProps={{
-            stations,
-            riskData,
-            selectedStation,
-            onStationSelect: handleMapStationSelect,
-            onLatLonSelect: handleMapLatLonSelect,
-            latLonMode: source === "rap",
-            onClose: () => setShowMap(false),
-          }}
-        />
-      </main>
+          {showHistory && (
+            <HistoryPanel
+              onLoad={handleLoadHistory}
+              onLoadCompare={handleLoadCompareHistory}
+              onClose={() => setShowHistory(false)}
+            />
+          )}
+          <ResultsView
+            result={result}
+            loading={loading}
+            error={error}
+            riskData={riskData}
+            showRisk={showRisk}
+            showMap={showMap}
+            showTimeSeries={showTimeSeries}
+            onCloseTimeSeries={() => setShowTimeSeries(false)}
+            showCompare={showCompare}
+            onCloseCompare={() => setShowCompare(false)}
+            showVwp={showVwp}
+            onCloseVwp={() => setShowVwp(false)}
+            compareHistoryData={compareHistoryData}
+            onCompareHistoryConsumed={() => setCompareHistoryData(null)}
+            stations={stations}
+            selectedStation={selectedStation}
+            source={source}
+            lastParams={lastParams}
+            mapProps={{
+              stations,
+              riskData,
+              selectedStation,
+              onStationSelect: handleMapStationSelect,
+              onLatLonSelect: handleMapLatLonSelect,
+              latLonMode: source === "rap",
+              onClose: () => setShowMap(false),
+            }}
+          />
+        </main>
+      )}
     </div>
   );
 }
