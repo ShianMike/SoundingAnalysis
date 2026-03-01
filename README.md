@@ -106,8 +106,11 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - Sort stations by favorites
 
 ### Dashboard Sidebar Layout
-- Fixed left sidebar with branding, controls, and footer
+- Fixed left sidebar with branding, controls, and grouped sections
 - Sidebar includes data source selection, station picker, date/time controls
+- **Modifications** group: Surface Mod, Custom Storm Motion, VAD Wind Profile, SR Hodograph, Profile Smoothing
+- **Tools** group: Map, Risk, Trends, Compare, VWP, History in a compact 3-column grid
+- Settings row: Light/Dark theme toggle, Color-Blind Mode, Custom Upload
 - Footer with Feedback and GitHub links
 - History panel slides in beside the sidebar without overlapping content
 - Responsive: collapses to stacked layout on mobile (≤1024px)
@@ -330,8 +333,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Skew-T Log-P diagram | ✅ | ✅ |
 | Hodograph (color-coded by height) | ✅ | ✅ |
 | Dark mode | ✅ (default) | ✅ (optional) |
-| Light mode | ❌ | ✅ (default) |
-| Color-blind mode | ❌ | ✅ |
+| Light mode | ✅ (toggle) | ✅ (default) |
+| Color-blind mode | ✅ (toggle) | ✅ |
 | Wet-bulb temperature trace | ✅ | ✅ |
 | Virtual temperature trace | ✅ | ✅ |
 | Downdraft (DCAPE) parcel trace | ✅ | ❌ |
@@ -407,6 +410,9 @@ These are features that exist in our web app but have **no equivalent in Sounder
 | **VWP time-height display** | Standalone panel showing wind barbs across time and height from NEXRAD VAD data |
 | **Shareable sounding links** | URL-encoded sounding parameters for direct sharing; auto-fetches on link open |
 | **SHARPpy / CM1 export** | One-click download of raw profile data in SHARPpy and CM1 input_sounding formats |
+| **Light / Dark theme** | Toggle between dark and light themes with localStorage persistence |
+| **Color-blind mode** | Okabe-Ito/Wong 2011 color-safe palette for all plot traces |
+| **Custom data upload** | Upload CSV, SHARPpy, or CM1 sounding data for full analysis |
 
 ---
 
@@ -442,15 +448,15 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [x] **VWP Time-Height Display** — Standalone panel showing NEXRAD VAD wind barbs across time and height ✅
 - [x] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames; SM at origin with crosshair marker ✅
 - [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
-- [ ] **Color-Blind Mode** — Swap dewpoint trace from green/blue and adjust color palettes for accessibility
-- [ ] **Light Theme Toggle** — Add a light-mode theme option alongside the current dark theme
+- [x] **Color-Blind Mode** — Okabe-Ito/Wong 2011 color-safe palette for all plot traces; toggle in sidebar ✅
+- [x] **Light Theme Toggle** — Toggle between dark and light themes with localStorage persistence ✅
 - [x] **Theta / Theta-e Profile Panel** — Potential temperature (θ) and equivalent potential temperature (θe) profiles plotted vs height with moisture gap fill ✅
 
 ### Lower Priority — Quality of Life
 
 - [ ] **Custom Station Groups** — Create and save named groups of stations for quick batch analysis
 - [ ] **WRF / CM1 Data Ingestion** — Allow uploading WRF output or CM1 input_sounding files for analysis
-- [ ] **Custom Data Upload** — Let users paste or upload raw sounding data (CSV/text) for plotting
+- [x] **Custom Data Upload** — Upload CSV, SHARPpy, or CM1 sounding data for full analysis with auto-format detection ✅
 - [ ] **PSU BUFKIT Feed** — Add Penn State's real-time BUFKIT feed as a secondary forecast model source
 - [ ] **Map Inset Zoom Control** — Adjustable zoom level for the CONUS mini-map on sounding plots
 - [ ] **Animated Time-Series Playback** — Step through time-series soundings as an animation

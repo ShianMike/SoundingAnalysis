@@ -51,7 +51,59 @@
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+/* ── Section groups (Modifications / Tools) ──────── */
+.cp-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cp-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+/* ── Tools grid (3-col compact buttons) ──────── */
+.cp-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.cp-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cp-tool-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.cp-tool-btn.active {
+  background: var(--accent-muted);
+  color: var(--text-accent);
+  border-color: var(--accent);
 }
 
 /* Settings row: theme / CB / upload */
@@ -942,43 +994,7 @@
   cursor: not-allowed;
 }
 
-/* Toggle row (Map / Trends / Compare / History) */
-.cp-toggle-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.cp-toggle-btn {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 8px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.cp-toggle-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--border-focus);
-}
-
-.cp-toggle-btn.active {
-  background: var(--accent-muted);
-  color: var(--text-accent);
-  border-color: var(--accent);
-}
+/* (toggle-row replaced by cp-tools-grid above) */
 
 @media (max-width: 1024px) {
   .control-panel {

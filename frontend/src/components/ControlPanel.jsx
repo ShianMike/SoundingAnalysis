@@ -746,6 +746,10 @@ export default function ControlPanel({
           )}
         </div>
 
+        {/* ── Modifications ── */}
+        <div className="cp-section-group">
+        <span className="cp-group-label">Modifications</span>
+
         {/* Surface Modification */}
         <div className={`cp-accordion ${sfcModEnabled ? "cp-accordion--active" : ""}`}>
           <button
@@ -924,6 +928,7 @@ export default function ControlPanel({
             </div>
           )}
         </div>
+        </div>{/* end Modifications */}
 
         {/* Submit */}
         <button
@@ -947,57 +952,60 @@ export default function ControlPanel({
 
       {/* ── Bottom group: toggles + settings + footer ── */}
       <div className="cp-bottom">
-        <div className="cp-toggle-row">
-          <button
-            type="button"
-            className={`cp-toggle-btn ${showMap ? "active" : ""}`}
-            onClick={onToggleMap}
-          >
-            <Map size={14} />
-            {showMap ? "Hide Map" : "Map"}
-          </button>
-          {riskData && (
+        <div className="cp-section-group">
+          <span className="cp-group-label">Tools</span>
+          <div className="cp-tools-grid">
             <button
               type="button"
-              className={`cp-toggle-btn ${showRisk ? "active" : ""}`}
-              onClick={onToggleRisk}
+              className={`cp-tool-btn ${showMap ? "active" : ""}`}
+              onClick={onToggleMap}
             >
-              <Zap size={14} />
-              {showRisk ? "Hide Risk" : "Risk"}
+              <Map size={13} />
+              {showMap ? "Hide" : "Map"}
             </button>
-          )}
-          <button
-            type="button"
-            className={`cp-toggle-btn ${showTimeSeries ? "active" : ""}`}
-            onClick={onToggleTimeSeries}
-          >
-            <TrendingUp size={14} />
-            {showTimeSeries ? "Hide" : "Trends"}
-          </button>
-          <button
-            type="button"
-            className={`cp-toggle-btn ${showCompare ? "active" : ""}`}
-            onClick={onToggleCompare}
-          >
-            <GitCompareArrows size={14} />
-            {showCompare ? "Hide" : "Compare"}
-          </button>
-          <button
-            type="button"
-            className={`cp-toggle-btn ${showVwp ? "active" : ""}`}
-            onClick={onToggleVwp}
-          >
-            <Radio size={14} />
-            {showVwp ? "Hide VWP" : "VWP"}
-          </button>
-          <button
-            type="button"
-            className={`cp-toggle-btn ${showHistory ? "active" : ""}`}
-            onClick={onToggleHistory}
-          >
-            <History size={14} />
-            {showHistory ? "Hide" : "History"}
-          </button>
+            {riskData && (
+              <button
+                type="button"
+                className={`cp-tool-btn ${showRisk ? "active" : ""}`}
+                onClick={onToggleRisk}
+              >
+                <Zap size={13} />
+                {showRisk ? "Hide" : "Risk"}
+              </button>
+            )}
+            <button
+              type="button"
+              className={`cp-tool-btn ${showTimeSeries ? "active" : ""}`}
+              onClick={onToggleTimeSeries}
+            >
+              <TrendingUp size={13} />
+              Trends
+            </button>
+            <button
+              type="button"
+              className={`cp-tool-btn ${showCompare ? "active" : ""}`}
+              onClick={onToggleCompare}
+            >
+              <GitCompareArrows size={13} />
+              Compare
+            </button>
+            <button
+              type="button"
+              className={`cp-tool-btn ${showVwp ? "active" : ""}`}
+              onClick={onToggleVwp}
+            >
+              <Radio size={13} />
+              VWP
+            </button>
+            <button
+              type="button"
+              className={`cp-tool-btn ${showHistory ? "active" : ""}`}
+              onClick={onToggleHistory}
+            >
+              <History size={13} />
+              History
+            </button>
+          </div>
         </div>
 
         <div className="cp-settings-row">
