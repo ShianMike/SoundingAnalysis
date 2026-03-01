@@ -137,14 +137,22 @@ export default function ControlPanel({
   mapLatLon,
   onFeedbackClick,
   showFeedback: feedbackActive,
+  urlParams,
 }) {
-  const [source, setSourceLocal] = useState("obs");
-  const [station, setStationLocal] = useState("OUN");
-  const [date, setDate] = useState("");
-  const [lat, setLat] = useState("");
-  const [lon, setLon] = useState("");
-  const [model, setModel] = useState("hrrr");
-  const [fhour, setFhour] = useState("0");
+  const [source, setSourceLocal] = useState(urlParams?.source || "obs");
+  const [station, setStationLocal] = useState(urlParams?.station || "OUN");
+  const [date, setDate] = useState(() => {
+    // Convert YYYYMMDDHH back to datetime-local value for the input
+    if (urlParams?.date && /^\d{10}$/.test(urlParams.date)) {
+      const d = urlParams.date;
+      return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${d.slice(8,10)}:00`;
+    }
+    return "";
+  });
+  const [lat, setLat] = useState(urlParams?.lat != null ? String(urlParams.lat) : "");
+  const [lon, setLon] = useState(urlParams?.lon != null ? String(urlParams.lon) : "");
+  const [model, setModel] = useState(urlParams?.model || "hrrr");
+  const [fhour, setFhour] = useState(urlParams?.fhour != null ? String(urlParams.fhour) : "0");
   const [stationSearch, setStationSearch] = useState("");
   const [hoveredSource, setHoveredSource] = useState(null);
   const [scanning, setScanning] = useState(false);

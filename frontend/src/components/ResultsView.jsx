@@ -16,6 +16,9 @@ import {
   Gauge,
   Zap,
   FileSpreadsheet,
+  Link2,
+  Check,
+  FileText,
 } from "lucide-react";
 import StationMap from "./StationMap";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -113,7 +116,7 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source }) {
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams }) {
   if (error) {
     return (
       <div className="results-view">
@@ -199,6 +202,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
 
   const { image, params, meta } = result;
   const [zoomed, setZoomed] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const plotRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
 
@@ -297,6 +301,97 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
+  // ── SHARPpy format export ──────────────────────────────────
+  const handleSharppy = () => {
+    const profile = result.profile;
+    if (!profile || profile.length === 0) return;
+    const lines = [];
+    lines.push(`%TITLE%`);
+    lines.push(` ${meta.station || "XXXX"}   ${meta.date.replace(/\s/g, "").replace("-", "").replace("Z", "")}`);
+    lines.push(``);
+    lines.push(`   LEVEL       HGHT       TEMP       DWPT       WDIR       WSPD`);
+    lines.push(`-------------------------------------------------------------------`);
+    lines.push(`%RAW%`);
+    for (const lv of profile) {
+      const p = lv.p != null ? lv.p.toFixed(2) : "9999.00";
+      const h = lv.h != null ? lv.h.toFixed(2) : "9999.00";
+      const t = lv.t != null ? lv.t.toFixed(2) : "9999.00";
+      const td = lv.td != null ? lv.td.toFixed(2) : "9999.00";
+      const wd = lv.wd != null ? lv.wd.toFixed(2) : "9999.00";
+      const ws = lv.ws != null ? lv.ws.toFixed(2) : "9999.00";
+      lines.push(`${p},${h},${t},${td},${wd},${ws}`);
+    }
+    lines.push(`%END%`);
+    const text = lines.join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${meta.station || "sounding"}_${meta.date.replace(/\s/g, "_")}.sharppy`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── CM1 input_sounding export ──────────────────────────────
+  const handleCm1 = () => {
+    const profile = result.profile;
+    if (!profile || profile.length === 0) return;
+    const lines = [];
+    // First line: sfc pressure (mb), sfc theta (K), sfc mixing ratio (g/kg)
+    const sfcP = profile[0].p;
+    const sfcT = profile[0].t + 273.15; // K
+    const sfcTd = profile[0].td;
+    // Compute sfc potential temperature: theta = T * (1000/p)^0.286
+    const sfcTheta = sfcT * Math.pow(1000.0 / sfcP, 0.286);
+    // Compute sfc mixing ratio from dewpoint and pressure (Bolton 1980)
+    const es = 6.112 * Math.exp((17.67 * sfcTd) / (sfcTd + 243.5));
+    const sfcQv = (621.97 * es) / (sfcP - es); // g/kg
+    lines.push(`${sfcP.toFixed(2)}  ${sfcTheta.toFixed(2)}  ${sfcQv.toFixed(2)}`);
+    // Subsequent lines: height AGL (m), theta (K), qv (g/kg), u (m/s), v (m/s)
+    const sfcH = profile[0].h;
+    for (const lv of profile) {
+      const hAgl = lv.h - sfcH;
+      const tk = lv.t + 273.15;
+      const theta = tk * Math.pow(1000.0 / lv.p, 0.286);
+      const e = 6.112 * Math.exp((17.67 * lv.td) / (lv.td + 243.5));
+      const qv = (621.97 * e) / (lv.p - e);
+      let u = 0, v = 0;
+      if (lv.wd != null && lv.ws != null) {
+        const wsMs = lv.ws * 0.51444; // kt → m/s
+        const wdRad = (lv.wd * Math.PI) / 180;
+        u = -wsMs * Math.sin(wdRad);
+        v = -wsMs * Math.cos(wdRad);
+      }
+      lines.push(`${hAgl.toFixed(1)}  ${theta.toFixed(2)}  ${qv.toFixed(2)}  ${u.toFixed(2)}  ${v.toFixed(2)}`);
+    }
+    const text = lines.join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `input_sounding_${meta.station || "sounding"}_${meta.date.replace(/\s/g, "_")}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Fallback for non-HTTPS
+      const ta = document.createElement("textarea");
+      ta.value = window.location.href;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="results-view">
       {/* Meta bar */}
@@ -330,6 +425,17 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           </button>
           <button className="rv-btn" onClick={handleCsvExport} title="Export CSV">
             <FileSpreadsheet size={14} />
+          </button>
+          <button className="rv-btn" onClick={handleSharppy} title="Export SHARPpy format">
+            <FileText size={14} />
+            <span className="rv-btn-label">SHARPpy</span>
+          </button>
+          <button className="rv-btn" onClick={handleCm1} title="Export CM1 input_sounding">
+            <FileText size={14} />
+            <span className="rv-btn-label">CM1</span>
+          </button>
+          <button className={`rv-btn ${linkCopied ? "rv-btn-active" : ""}`} onClick={handleCopyLink} title={linkCopied ? "Link copied!" : "Copy shareable link"}>
+            {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
           </button>
           <button className="rv-btn" onClick={handleFullscreen} title="Fullscreen">
             <Maximize2 size={14} />

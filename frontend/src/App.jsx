@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
@@ -6,6 +6,35 @@ import HistoryPanel from "./components/HistoryPanel";
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
+
+/* ── URL ↔ params helpers ────────────────────────────────── */
+function parseUrlParams() {
+  const sp = new URLSearchParams(window.location.search);
+  if (sp.size === 0) return null;
+  const p = {};
+  if (sp.has("source")) p.source = sp.get("source");
+  if (sp.has("station")) p.station = sp.get("station").toUpperCase();
+  if (sp.has("date")) p.date = sp.get("date");
+  if (sp.has("lat")) p.lat = parseFloat(sp.get("lat"));
+  if (sp.has("lon")) p.lon = parseFloat(sp.get("lon"));
+  if (sp.has("model")) p.model = sp.get("model");
+  if (sp.has("fhour")) p.fhour = parseInt(sp.get("fhour"), 10);
+  return Object.keys(p).length ? p : null;
+}
+
+function updateUrl(params) {
+  const sp = new URLSearchParams();
+  if (params.source) sp.set("source", params.source);
+  if (params.station) sp.set("station", params.station);
+  if (params.date) sp.set("date", params.date);
+  if (params.lat != null) sp.set("lat", String(params.lat));
+  if (params.lon != null) sp.set("lon", String(params.lon));
+  if (params.model) sp.set("model", params.model);
+  if (params.fhour != null) sp.set("fhour", String(params.fhour));
+  const qs = sp.toString();
+  const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+  window.history.replaceState(null, "", newUrl);
+}
 
 export default function App() {
   const [stations, setStations] = useState([]);
@@ -28,6 +57,9 @@ export default function App() {
   const [source, setSource] = useState("obs");
   const [showFeedback, setShowFeedback] = useState(false);
 
+  // URL-based initial params (parsed once on mount)
+  const urlParamsRef = useRef(parseUrlParams());
+
   const loadInitialData = useCallback(() => {
     setInitialLoading(true);
     setError(null);
@@ -45,10 +77,26 @@ export default function App() {
     loadInitialData();
   }, [loadInitialData]);
 
+  // Auto-fetch from URL params once stations are loaded
+  const autoFetchedRef = useRef(false);
+  useEffect(() => {
+    if (autoFetchedRef.current || initialLoading || stations.length === 0) return;
+    const up = urlParamsRef.current;
+    if (!up) return;
+    autoFetchedRef.current = true;
+    // Sync parent state
+    if (up.source) setSource(up.source);
+    if (up.station) setSelectedStation(up.station);
+    // Fire the sounding fetch
+    handleSubmit(up);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLoading, stations]);
+
   const handleSubmit = async (params) => {
     setLoading(true);
     setError(null);
     setLastParams(params);
+    updateUrl(params);
     try {
       const data = await fetchSounding(params);
       setResult(data);
@@ -125,6 +173,7 @@ export default function App() {
           mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
           onFeedbackClick={() => setShowFeedback((v) => !v)}
           showFeedback={showFeedback}
+          urlParams={urlParamsRef.current}
         />
         {showHistory && (
           <HistoryPanel
@@ -151,6 +200,7 @@ export default function App() {
           stations={stations}
           selectedStation={selectedStation}
           source={source}
+          lastParams={lastParams}
           mapProps={{
             stations,
             riskData,

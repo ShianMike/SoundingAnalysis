@@ -57,6 +57,7 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 
 ### Additional Panels
 - Storm-relative wind & streamwise vorticity profiles
+- **Theta (θ) / Theta-e (θe) profile** — potential temperature and equivalent potential temperature vs height, with moisture gap fill and key height markers
 - Comprehensive parameter text readout (thermodynamic + kinematic indices)
 
 ### VAD Wind Profile (VWP) Time-Height Display
@@ -132,6 +133,18 @@ A full-stack atmospheric sounding analysis application that fetches real upper-a
 - 00Z/12Z toggle for observed/ACARS sources
 - **Download comparison** — Tiles all sounding plots into a single composite PNG
 - **Comparison history** — Automatically saved to localStorage; reload previous comparisons from the History panel's "Comparisons" tab
+
+### Shareable Sounding Links
+- Sounding parameters encoded in the URL query string
+- Opening a link auto-fetches the sounding (station, source, date, model, etc.)
+- "Copy Link" button in the results toolbar
+- Great for sharing specific soundings with colleagues
+
+### Export Formats
+- **CSV** — All computed parameters in spreadsheet-ready format
+- **SHARPpy** — Raw profile data in SHARPpy-compatible format for further analysis
+- **CM1** — `input_sounding` format for Cloud Model 1 numerical simulations
+- All exports available as one-click downloads from the results toolbar
 
 ---
 
@@ -332,7 +345,7 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Storm-relative wind profile panel | ✅ | ✅ |
 | Streamwise vorticity / streamwiseness panel | ✅ | ✅ |
 | Piecewise CAPE / stepwise CAPE-CIN plot | ❌ | ✅ |
-| Theta / Theta-e profile toggle | ❌ | ✅ |
+| Theta / Theta-e profile panel | ✅ | ✅ |
 | Hodograph boundary lines | ❌ | ✅ |
 | Composite sounding (overlay multiple profiles) | ❌ | ✅ |
 | VAD (radar wind profiler) hodograph | ✅ | ✅ |
@@ -364,8 +377,8 @@ A side-by-side look at what our Sounding Analysis Tool offers compared to [Sound
 | Capability | Ours | SounderPy |
 |---|:---:|:---:|
 | Export to CSV | ✅ | ✅ |
-| Export to CM1 format | ❌ | ✅ |
-| Export to SHARPpy format | ❌ | ✅ |
+| Export to CM1 format | ✅ | ✅ |
+| Export to SHARPpy format | ✅ | ✅ |
 | Profile merging (weighted average) | ❌ | ✅ |
 | Profile smoothing (Gaussian) | ✅ | ✅ |
 | Vertical interpolation utility | ✅ (internal, 100 m) | ✅ (exposed API) |
@@ -392,6 +405,8 @@ These are features that exist in our web app but have **no equivalent in Sounder
 | **Feedback system** | In-app bug report / feature request modal |
 | **Download comparison PNG** | Tiles all compared sounding plots into a single image |
 | **VWP time-height display** | Standalone panel showing wind barbs across time and height from NEXRAD VAD data |
+| **Shareable sounding links** | URL-encoded sounding parameters for direct sharing; auto-fetches on link open |
+| **SHARPpy / CM1 export** | One-click download of raw profile data in SHARPpy and CM1 input_sounding formats |
 
 ---
 
@@ -419,7 +434,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 ### Medium Priority — New Capabilities
 
 - [x] **Export Parameters to CSV** — One-click CSV download of all computed thermodynamic, kinematic, and moisture parameters ✅
-- [ ] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1
+- [x] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1 ✅
 - [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
 - [x] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS); adjustable sigma parameter ✅
 - [x] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph ✅
@@ -429,7 +444,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
 - [ ] **Color-Blind Mode** — Swap dewpoint trace from green/blue and adjust color palettes for accessibility
 - [ ] **Light Theme Toggle** — Add a light-mode theme option alongside the current dark theme
-- [ ] **Theta / Theta-e Profile Panel** — Add an optional panel showing potential temperature and equivalent potential temperature profiles
+- [x] **Theta / Theta-e Profile Panel** — Potential temperature (θ) and equivalent potential temperature (θe) profiles plotted vs height with moisture gap fill ✅
 
 ### Lower Priority — Quality of Life
 
@@ -440,7 +455,7 @@ These are features that exist in our web app but have **no equivalent in Sounder
 - [ ] **Map Inset Zoom Control** — Adjustable zoom level for the CONUS mini-map on sounding plots
 - [ ] **Animated Time-Series Playback** — Step through time-series soundings as an animation
 - [ ] **Mobile-Optimized Sounding View** — Pinch-zoom and swipe-friendly sounding plot rendering on mobile
-- [ ] **Shareable Sounding Links** — Encode station/source/date in URL for direct sharing
+- [x] **Shareable Sounding Links** — Encode station/source/date in URL for direct sharing; auto-fetch on link open; copy-link button ✅
 
 ---
 
