@@ -92,6 +92,24 @@ function getAlertClass(label, value) {
   return "";
 }
 
+/* return short severity label for badge */
+function getSeverityLabel(alertClass) {
+  if (!alertClass) return null;
+  if (alertClass.includes("extreme")) return "EXT";
+  if (alertClass.includes("high")) return "HIGH";
+  if (alertClass.includes("mod")) return "MOD";
+  return null;
+}
+
+/* badge CSS class from alert class */
+function getBadgeClass(alertClass) {
+  if (!alertClass) return "";
+  if (alertClass.includes("extreme")) return "param-severity-badge--extreme";
+  if (alertClass.includes("high")) return "param-severity-badge--high";
+  if (alertClass.includes("mod")) return "param-severity-badge--mod";
+  return "";
+}
+
 /* ── Sounding text summary generator ───────────────────────── */
 function generateSoundingSummary(params, meta) {
   const sections = [];
@@ -416,10 +434,13 @@ function generateSoundingSummary(params, meta) {
 
 function ParamCard({ label, value, unit, color, desc }) {
   const alertCls = getAlertClass(label, value);
+  const badge = getSeverityLabel(alertCls);
+  const badgeCls = getBadgeClass(alertCls);
   return (
     <div className={`param-card ${alertCls}`} title="">
+      {badge && <span className={`param-severity-badge ${badgeCls}`}>{badge}</span>}
       <span className="param-label">{label}</span>
-      <span className="param-value" style={color ? { color } : {}}>
+      <span className="param-value" style={!alertCls && color ? { color } : {}}>
         {value ?? "---"}
       </span>
       {unit && value != null && <span className="param-unit">{unit}</span>}
@@ -436,6 +457,23 @@ function ParamSection({ title, icon, children }) {
         <h3>{title}</h3>
       </div>
       <div className="param-grid">{children}</div>
+    </div>
+  );
+}
+
+function CompositeCard({ label, thresholdKey, value, unit, color, highlight, desc }) {
+  const alertCls = getAlertClass(thresholdKey || label, value);
+  const badge = getSeverityLabel(alertCls);
+  const badgeCls = getBadgeClass(alertCls);
+  return (
+    <div className={`composite-card${highlight ? " composite-card--highlight" : ""}`}>
+      {badge && <span className={`param-severity-badge ${badgeCls}`}>{badge}</span>}
+      <span className="composite-label">{label}</span>
+      <span className={`composite-value ${alertCls}`} style={!alertCls && color ? { color } : {}}>
+        {value ?? "---"}
+      </span>
+      <span className="composite-unit">{unit}</span>
+      {desc && <span className="param-tooltip">{desc}</span>}
     </div>
   );
 }
@@ -1001,72 +1039,17 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
             <h3>Composite Indices & Derived Parameters</h3>
           </div>
           <div className="param-grid param-grid--composites">
-            <div className="composite-card">
-              <span className="composite-label">DCAPE</span>
-              <span className={`composite-value ${getAlertClass("DCAPE", params.dcape)}`}>{params.dcape ?? "---"}</span>
-              <span className="composite-unit">J/kg</span>
-              <span className="param-tooltip">Downdraft CAPE — energy available for downdrafts. Higher values (&gt;800) indicate strong outflow winds and potential for damaging gusts.</span>
-            </div>
-            <div className="composite-card">
-              <span className="composite-label">ECAPE</span>
-              <span className={`composite-value ${getAlertClass("ECAPE", params.ecape)}`} style={{color: "#06b6d4"}}>{params.ecape ?? "---"}</span>
-              <span className="composite-unit">J/kg</span>
-              <span className="param-tooltip">Entraining CAPE (Peters et al. 2023) — CAPE adjusted for entrainment. More physically realistic than standard CAPE.</span>
-            </div>
-            <div className="composite-card">
-              <span className="composite-label">3CAPE</span>
-              <span className={`composite-value ${getAlertClass("3CAPE", params.cape3km)}`} style={{color: "#fb923c"}}>{params.cape3km ?? "---"}</span>
-              <span className="composite-unit">J/kg</span>
-              <span className="param-tooltip">0–3 km CAPE — buoyant energy in the lowest 3 km. Key for tornado intensity.</span>
-            </div>
-            <div className="composite-card">
-              <span className="composite-label">6CAPE</span>
-              <span className="composite-value" style={{color: "#facc15"}}>{params.cape6km ?? "---"}</span>
-              <span className="composite-unit">J/kg</span>
-              <span className="param-tooltip">0–6 km CAPE — indicates how quickly an updraft develops in the mid-levels.</span>
-            </div>
-            <div className="composite-card">
-              <span className="composite-label">DCIN</span>
-              <span className="composite-value" style={{color: "#818cf8"}}>{params.dcin ?? "---"}</span>
-              <span className="composite-unit">J/kg</span>
-              <span className="param-tooltip">Downdraft CIN — inhibition of downdrafts reaching the surface. Near 0 means downdrafts easily penetrate.</span>
-            </div>
-            <div className="composite-card">
-              <span className="composite-label">NCAPE</span>
-              <span className="composite-value" style={{color: "#38bdf8"}}>{params.ncape ?? "---"}</span>
-              <span className="composite-unit">J/kg/m</span>
-              <span className="param-tooltip">Normalized CAPE — buoyancy intensity per unit depth. &gt;0.3 is very buoyant.</span>
-            </div>
-            <div className="composite-card composite-card--highlight">
-              <span className="composite-label">STP</span>
-              <span className={`composite-value ${getAlertClass("STP", params.stp)}`} style={{color: "#60a5fa"}}>{params.stp ?? "---"}</span>
-              <span className="composite-unit">Sig Tornado</span>
-              <span className="param-tooltip">Significant Tornado Parameter (fixed-layer) — values ≥1 suggest significant (EF2+) tornado environment.</span>
-            </div>
-            <div className="composite-card composite-card--highlight">
-              <span className="composite-label">STP-Eff</span>
-              <span className={`composite-value ${getAlertClass("STP", params.stpEff)}`} style={{color: "#818cf8"}}>{params.stpEff ?? "---"}</span>
-              <span className="composite-unit">Eff Tornado</span>
-              <span className="param-tooltip">Effective-Layer STP (Thompson et al. 2012) — SPC's operational version. Values ≥1 favor significant tornadoes.</span>
-            </div>
-            <div className="composite-card composite-card--highlight">
-              <span className="composite-label">SCP</span>
-              <span className={`composite-value ${getAlertClass("SCP", params.scp)}`} style={{color: "#f59e0b"}}>{params.scp ?? "---"}</span>
-              <span className="composite-unit">Supercell</span>
-              <span className="param-tooltip">Supercell Composite Parameter — values ≥1 support supercells; &gt;4 strongly favors discrete supercells.</span>
-            </div>
-            <div className="composite-card composite-card--highlight">
-              <span className="composite-label">SHIP</span>
-              <span className={`composite-value ${getAlertClass("SHIP", params.ship)}`} style={{color: "#10b981"}}>{params.ship ?? "---"}</span>
-              <span className="composite-unit">Sig Hail</span>
-              <span className="param-tooltip">Significant Hail Parameter — values ≥1 indicate potential; &gt;1.5 strongly favors significant hail.</span>
-            </div>
-            <div className="composite-card composite-card--highlight">
-              <span className="composite-label">DCP</span>
-              <span className={`composite-value ${getAlertClass("DCP", params.dcp)}`} style={{color: "#a78bfa"}}>{params.dcp ?? "---"}</span>
-              <span className="composite-unit">Derecho</span>
-              <span className="param-tooltip">Derecho Composite Parameter — values ≥2 suggest potential for long-lived wind events.</span>
-            </div>
+            <CompositeCard label="DCAPE" thresholdKey="DCAPE" value={params.dcape} unit="J/kg" desc="Downdraft CAPE — energy available for downdrafts. Higher values (>800) indicate strong outflow winds and potential for damaging gusts." />
+            <CompositeCard label="ECAPE" thresholdKey="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" desc="Entraining CAPE (Peters et al. 2023) — CAPE adjusted for entrainment. More physically realistic than standard CAPE." />
+            <CompositeCard label="3CAPE" thresholdKey="3CAPE" value={params.cape3km} unit="J/kg" color="#fb923c" desc="0–3 km CAPE — buoyant energy in the lowest 3 km. Key for tornado intensity." />
+            <CompositeCard label="6CAPE" value={params.cape6km} unit="J/kg" color="#facc15" desc="0–6 km CAPE — indicates how quickly an updraft develops in the mid-levels." />
+            <CompositeCard label="DCIN" value={params.dcin} unit="J/kg" color="#818cf8" desc="Downdraft CIN — inhibition of downdrafts reaching the surface. Near 0 means downdrafts easily penetrate." />
+            <CompositeCard label="NCAPE" value={params.ncape} unit="J/kg/m" color="#38bdf8" desc="Normalized CAPE — buoyancy intensity per unit depth. >0.3 is very buoyant." />
+            <CompositeCard label="STP" thresholdKey="STP" value={params.stp} unit="Sig Tornado" color="#60a5fa" highlight desc="Significant Tornado Parameter (fixed-layer) — values ≥1 suggest significant (EF2+) tornado environment." />
+            <CompositeCard label="STP-Eff" thresholdKey="STP" value={params.stpEff} unit="Eff Tornado" color="#818cf8" highlight desc="Effective-Layer STP (Thompson et al. 2012) — SPC's operational version. Values ≥1 favor significant tornadoes." />
+            <CompositeCard label="SCP" thresholdKey="SCP" value={params.scp} unit="Supercell" color="#f59e0b" highlight desc="Supercell Composite Parameter — values ≥1 support supercells; >4 strongly favors discrete supercells." />
+            <CompositeCard label="SHIP" thresholdKey="SHIP" value={params.ship} unit="Sig Hail" color="#10b981" highlight desc="Significant Hail Parameter — values ≥1 indicate potential; >1.5 strongly favors significant hail." />
+            <CompositeCard label="DCP" thresholdKey="DCP" value={params.dcp} unit="Derecho" color="#a78bfa" highlight desc="Derecho Composite Parameter — values ≥2 suggest potential for long-lived wind events." />
           </div>
         </div>
 
