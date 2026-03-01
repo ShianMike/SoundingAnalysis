@@ -107,8 +107,7 @@
   .risk-table,
   .rv-summary-toggle,
   .shortcuts-overlay,
-  .history-panel,
-  .meso-page {
+  .history-panel {
     display: none !important;
   }
 
