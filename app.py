@@ -7,6 +7,7 @@ Exposes endpoints to fetch sounding data and return analysis results
 import base64
 import io
 import json
+import math
 import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -201,9 +202,32 @@ def get_sounding():
         # 4) Serialize params
         serialized = _serialize_params(params, data, station, dt, source)
 
+        # 5) Build raw profile array for client-side export
+        n = len(data["pressure"])
+        profile_rows = []
+        for i in range(n):
+            row = {
+                "p": round(float(data["pressure"][i].magnitude), 1),
+                "h": round(float(data["height"][i].magnitude), 1),
+                "t": round(float(data["temperature"][i].magnitude), 1),
+                "td": round(float(data["dewpoint"][i].magnitude), 1),
+            }
+            wd_val = data["wind_direction"][i]
+            ws_val = data["wind_speed"][i]
+            wd_mag = float(wd_val.magnitude) if hasattr(wd_val, "magnitude") else float(wd_val)
+            ws_mag = float(ws_val.magnitude) if hasattr(ws_val, "magnitude") else float(ws_val)
+            row["wd"] = round(wd_mag, 1) if not math.isnan(wd_mag) else None
+            row["ws"] = round(ws_mag, 1) if not math.isnan(ws_mag) else None
+            profile_rows.append(row)
+
+        # Station elevation (metres MSL) — used by CM1 input_sounding format
+        stn_info = data.get("station_info", {})
+        sfc_elev = stn_info.get("elev", data["height"][0].magnitude if n > 0 else 0)
+
         return jsonify({
             "image": image_b64,
             "params": serialized,
+            "profile": profile_rows,
             "meta": {
                 "station": station,
                 "stationName": STATIONS.get(station, (station or source.upper(),))[0],
@@ -212,6 +236,7 @@ def get_sounding():
                 "levels": len(data["pressure"]),
                 "sfcPressure": round(float(data["pressure"][0].magnitude)),
                 "topPressure": round(float(data["pressure"][-1].magnitude)),
+                "sfcElevation": round(float(sfc_elev)) if sfc_elev is not None else 0,
                 "vadRadar": vad_result.get("radar") if vad_result and isinstance(vad_result, dict) else None,
                 "vadTime": vad_result.get("meta", {}).get("time") if vad_result and isinstance(vad_result, dict) else None,
             },

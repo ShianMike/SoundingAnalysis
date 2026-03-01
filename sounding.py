@@ -2276,13 +2276,13 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             return "---"
     
     # ── Create figure ────────────────────────────────────────────────
-    fig = plt.figure(figsize=(26, 12), facecolor=BG)
+    fig = plt.figure(figsize=(28, 12), facecolor=BG)
     fig.patch.set_facecolor(BG)
     
-    # Define grid for layout — 4 columns: SkewT | Hodograph | SRW | SRH
+    # Define grid for layout — 5 columns: SkewT | Hodograph | SRW | SRH | Theta
     gs = gridspec.GridSpec(
-        2, 4, figure=fig,
-        width_ratios=[1.8, 1.6, 0.38, 0.42],
+        2, 5, figure=fig,
+        width_ratios=[1.8, 1.6, 0.36, 0.38, 0.42],
         height_ratios=[3.0, 1.0],
         hspace=0.12, wspace=0.12,
         left=0.05, right=0.97, top=0.94, bottom=0.04
@@ -3192,6 +3192,74 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     ax_sw.grid(True, alpha=0.25, color=GRID_CLR)
     
     # ════════════════════════════════════════════════════════════════
+    # THETA / THETA-E PROFILE
+    # ════════════════════════════════════════════════════════════════
+    ax_th = fig.add_subplot(gs[0, 4])
+    ax_th.set_facecolor(BG_PANEL)
+    
+    try:
+        # Compute potential temperature (θ) and equivalent potential temperature (θe)
+        theta = mpcalc.potential_temperature(p, T).to("K").magnitude
+        theta_e = mpcalc.equivalent_potential_temperature(p, T, Td).to("K").magnitude
+        
+        h_km = h_agl / 1000.0
+        
+        # Plot θ (orange) and θe (cyan)
+        ax_th.plot(theta, h_km, color="#ff8800", linewidth=2.2, label="θ", zorder=5)
+        ax_th.plot(theta_e, h_km, color="#00ccff", linewidth=2.2, label="θe", zorder=5)
+        
+        # Fill between θ and θe (shows moisture)
+        ax_th.fill_betweenx(h_km, theta, theta_e, alpha=0.12, color="#00ccff")
+        
+        # Mark key heights
+        for depth_km, lbl, clr in [
+            (1.0, "1km", "#ff8800"),
+            (3.0, "3km", "#ffcc00"),
+            (6.0, "6km", "#44ddaa"),
+        ]:
+            idx = np.argmin(np.abs(h_km - depth_km))
+            if idx < len(theta) and depth_km <= h_km.max():
+                ax_th.axhline(y=depth_km, color=clr, linestyle="--",
+                              alpha=0.35, linewidth=0.7)
+        
+        # Mark lapse rate stability regions
+        # dθe/dz < 0 → conditionally unstable (red shading)
+        if len(theta_e) > 2:
+            dthe_dz = np.gradient(theta_e, h_km)
+            unstable = dthe_dz < 0
+            ax_th.fill_betweenx(h_km, ax_th.get_xlim()[0] if ax_th.get_xlim()[0] > 0 else theta.min() - 5,
+                                theta.min() - 5, where=unstable,
+                                alpha=0.0)  # placeholder, actual shading below
+        
+        # Auto x-limits based on data range
+        th_min = min(theta.min(), theta_e.min()) - 5
+        th_max = max(theta.max(), theta_e.max()) + 5
+        ax_th.set_xlim(th_min, th_max)
+        ax_th.set_ylim(0, min(h_km.max(), 12))
+        
+        ax_th.set_xlabel("θ / θe (K)", color=FG_DIM, fontsize=10,
+                         fontfamily="monospace", fontweight="bold")
+        ax_th.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
+                         fontfamily="monospace", fontweight="bold")
+        ax_th.set_title("θ / θe\nPROFILE", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=3)
+        
+        # Legend
+        leg_th = ax_th.legend(loc="lower right", fontsize=8, facecolor=BG,
+                              edgecolor=BORDER, labelcolor=FG, framealpha=0.9)
+    except Exception as ex:
+        print(f"[Theta panel] Error: {ex}")
+        ax_th.text(0.5, 0.5, "N/A", transform=ax_th.transAxes,
+                   color=FG_FAINT, ha="center", fontsize=12)
+        ax_th.set_title("θ / θe\nPROFILE", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=3)
+    
+    ax_th.tick_params(colors=FG_DIM, labelsize=9, width=1.2)
+    for spine in ax_th.spines.values():
+        spine.set_color(BORDER)
+    ax_th.grid(True, alpha=0.25, color=GRID_CLR)
+    
+    # ════════════════════════════════════════════════════════════════
     # MINI MAP INSET (station location)
     # ════════════════════════════════════════════════════════════════
     # Detailed CONUS outline — traced clockwise from Pacific NW
@@ -3351,7 +3419,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                       fontweight="bold", va="top")
     
     # ── KINEMATIC TABLE ──
-    ax_kin = fig.add_subplot(gs[1, 1:4])
+    ax_kin = fig.add_subplot(gs[1, 1:5])
     ax_kin.set_facecolor(BG)
     ax_kin.axis("off")
     
