@@ -1,6 +1,15 @@
-/* ── Mesoscale Analysis Dashboard ────────────────────────── */
-.meso-panel {
-  margin: 16px 16px 0 0;
+/* ── Mesoscale Dashboard — Full Page ─────────────────────── */
+.meso-page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 24px 32px;
+  background: var(--bg-primary);
+  overflow-y: auto;
+}
+
+.meso-page-inner {
+  max-width: 1200px;
+  margin: 0 auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -21,6 +30,24 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.meso-back {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.meso-back:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.06);
+  border-color: var(--text-muted);
 }
 
 .meso-header-icon {
@@ -44,20 +71,7 @@
 }
 
 .meso-close {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 6px;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.meso-close:hover {
-  color: var(--text-primary);
-  background: rgba(255,255,255,0.06);
+  display: none;
 }
 
 /* ── Parameter selector ── */
@@ -153,7 +167,7 @@
 
 /* ── Station table ── */
 .meso-table-wrap {
-  max-height: 380px;
+  max-height: calc(100vh - 280px);
   overflow: auto;
 }
 
@@ -282,14 +296,34 @@
 .meso-no-data svg { opacity: 0.5; }
 .meso-no-data p { margin: 0; }
 
+.meso-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent, #60a5fa);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.meso-back-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
 /* ── Responsive ── */
 @media (max-width: 1024px) {
-  .meso-panel { margin-right: 8px; }
+  .meso-page { padding: 16px; }
 }
 
 @media (max-width: 480px) {
-  .meso-panel {
-    margin: 8px 4px 0 0;
+  .meso-page {
+    padding: 8px;
   }
   .meso-param-row { padding: 8px 10px; }
   .meso-summary-bar { padding: 6px 10px; }

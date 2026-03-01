@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Layers, X, ChevronUp, ChevronDown, AlertTriangle, TrendingUp, Search } from "lucide-react";
+import { Layers, ArrowLeft, ChevronUp, ChevronDown, AlertTriangle, TrendingUp, Search } from "lucide-react";
 import "./MesoPanel.css";
 
 const PARAMS = [
@@ -29,9 +29,9 @@ function riskLevel(val, thresholds) {
 }
 
 /**
- * Mesoscale Analysis Dashboard — shows a sortable station table from risk scan data.
+ * Mesoscale Analysis Dashboard — full-page view showing a sortable station table from risk scan data.
  */
-export default function MesoPanel({ riskData, onStationSelect, onClose }) {
+export default function MesoPanel({ riskData, onStationSelect, onBack }) {
   const [activeParam, setActiveParam] = useState("stp");
   const [sortCol, setSortCol] = useState("stp");
   const [sortDir, setSortDir] = useState("desc");
@@ -91,17 +91,22 @@ export default function MesoPanel({ riskData, onStationSelect, onClose }) {
 
   if (!riskData) {
     return (
-      <div className="meso-panel">
-        <div className="meso-header">
-          <div className="meso-header-left">
-            <Layers size={15} className="meso-header-icon" />
-            <span className="meso-title">Mesoscale Dashboard</span>
+      <div className="meso-page">
+        <div className="meso-page-inner">
+          <div className="meso-header">
+            <div className="meso-header-left">
+              <button className="meso-back" onClick={onBack}><ArrowLeft size={16} /></button>
+              <Layers size={15} className="meso-header-icon" />
+              <span className="meso-title">Mesoscale Dashboard</span>
+            </div>
           </div>
-          <button className="meso-close" onClick={onClose}><X size={14} /></button>
-        </div>
-        <div className="meso-no-data">
-          <AlertTriangle size={16} />
-          <p>Run a <strong>Risk Scan</strong> first to populate the mesoscale dashboard.</p>
+          <div className="meso-no-data">
+            <AlertTriangle size={20} />
+            <p>Run a <strong>Risk Scan</strong> first to populate the mesoscale dashboard.</p>
+            <button className="meso-back-btn" onClick={onBack}>
+              <ArrowLeft size={13} /> Go Back
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -110,20 +115,21 @@ export default function MesoPanel({ riskData, onStationSelect, onClose }) {
   const fmt = (v, digits = 1) => (v != null ? Number(v).toFixed(digits) : "—");
 
   return (
-    <div className="meso-panel">
-      {/* ── Header ── */}
-      <div className="meso-header">
-        <div className="meso-header-left">
-          <Layers size={15} className="meso-header-icon" />
-          <div>
-            <span className="meso-title">Mesoscale Dashboard</span>
-            <span className="meso-header-meta">
-              {rows.length} stations &middot; {riskData.date || "latest"}
-            </span>
+    <div className="meso-page">
+      <div className="meso-page-inner">
+        {/* ── Header ── */}
+        <div className="meso-header">
+          <div className="meso-header-left">
+            <button className="meso-back" onClick={onBack} title="Back to main"><ArrowLeft size={16} /></button>
+            <Layers size={15} className="meso-header-icon" />
+            <div>
+              <span className="meso-title">Mesoscale Dashboard</span>
+              <span className="meso-header-meta">
+                {rows.length} stations &middot; {riskData.date || "latest"}
+              </span>
+            </div>
           </div>
         </div>
-        <button className="meso-close" onClick={onClose} title="Close"><X size={14} /></button>
-      </div>
 
       {/* ── Parameter selector ── */}
       <div className="meso-param-row">
@@ -222,6 +228,7 @@ export default function MesoPanel({ riskData, onStationSelect, onClose }) {
 
       <div className="meso-info">
         Showing {sorted.length} of {rows.length} stations &middot; Click station ID to load sounding
+      </div>
       </div>
     </div>
   );

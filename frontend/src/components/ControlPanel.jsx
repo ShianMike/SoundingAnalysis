@@ -142,10 +142,8 @@ export default function ControlPanel({
   onToggleCompare,
   showVwp,
   onToggleVwp,
-  showMeso,
-  onToggleMeso,
-  showEnsemble,
-  onToggleEnsemble,
+  onNavigateMeso,
+  onNavigateEnsemble,
   selectedStation,
   onStationChange,
   onSourceChange,
@@ -1168,16 +1166,16 @@ export default function ControlPanel({
             </button>
             <button
               type="button"
-              className={`cp-tool-btn ${showMeso ? "active" : ""}`}
-              onClick={onToggleMeso}
+              className="cp-tool-btn"
+              onClick={onNavigateMeso}
             >
               <Layers size={13} />
               Meso
             </button>
             <button
               type="button"
-              className={`cp-tool-btn ${showEnsemble ? "active" : ""}`}
-              onClick={onToggleEnsemble}
+              className="cp-tool-btn"
+              onClick={onNavigateEnsemble}
             >
               <Layers size={13} />
               Ensemble
