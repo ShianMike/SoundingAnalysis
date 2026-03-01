@@ -38,6 +38,48 @@
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
 }
 
+/* ── Light theme overrides ───────────────────────────────── */
+[data-theme="light"] {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f1f3;
+  --bg-card: #ffffff;
+  --bg-hover: #e9ecef;
+  --bg-input: #ffffff;
+
+  --border: #d1d5db;
+  --border-focus: #9ca3af;
+  --border-accent: #2563eb;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --text-accent: #2563eb;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-muted: rgba(37, 99, 235, 0.08);
+
+  --red: #dc2626;
+  --orange: #ea580c;
+  --yellow: #ca8a04;
+  --green: #16a34a;
+  --cyan: #0891b2;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+/* ── Color-blind mode overrides ──────────────────────────── */
+[data-cb="true"] {
+  --red: #D55E00;
+  --orange: #E69F00;
+  --yellow: #F0E442;
+  --green: #009E73;
+  --cyan: #56B4E9;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -67,7 +109,7 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #444; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
 
 ::selection {
   background: rgba(59, 130, 246, 0.3);

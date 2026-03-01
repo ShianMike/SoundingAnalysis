@@ -126,3 +126,17 @@ export async function fetchVwpDisplay(radar, hours = 12) {
   if (!res.ok) throw new Error(data.error || "Failed to fetch VWP display");
   return data;
 }
+
+/**
+ * Upload custom sounding text and receive analysis.
+ */
+export async function fetchCustomSounding({ text, format = "auto", theme = "dark", colorblind = false }) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/custom-sounding`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, format, theme, colorblind }),
+  }, 120000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Custom sounding analysis failed");
+  return data;
+}

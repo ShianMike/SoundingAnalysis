@@ -53,6 +53,44 @@
   border-top: 1px solid var(--border);
 }
 
+/* Settings row: theme / CB / upload */
+.cp-settings-row {
+  display: flex;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.cp-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  padding: 6px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.cp-settings-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.cp-settings-btn.active {
+  background: var(--accent-muted);
+  color: var(--text-accent);
+  border-color: var(--accent);
+}
+
 .cp-footer-btn {
   display: flex;
   align-items: center;
