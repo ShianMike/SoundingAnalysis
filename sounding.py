@@ -1431,6 +1431,101 @@ def find_highest_tornado_risk(dt, stations=None):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# PROFILE MERGING
+# ─────────────────────────────────────────────────────────────────────
+
+def merge_profiles(data_a, data_b, weight_a=0.5):
+    """Merge two sounding profiles into a single blended profile.
+
+    Both profiles are interpolated onto a common pressure grid, then T, Td,
+    u, and v are combined via weighted average.
+
+    Parameters
+    ----------
+    data_a, data_b : dict
+        Sounding dicts as returned by ``fetch_sounding``.
+    weight_a : float
+        Weight for profile A (0–1).  Profile B gets ``1 - weight_a``.
+
+    Returns
+    -------
+    dict
+        A merged sounding dict with the same keys, ready for
+        ``compute_parameters`` / ``plot_sounding``.
+    """
+    weight_b = 1.0 - weight_a
+
+    # Build common pressure grid: surface = max of the two, top = min
+    p_a = data_a["pressure"].to("hPa").magnitude
+    p_b = data_b["pressure"].to("hPa").magnitude
+
+    p_top = max(p_a.min(), p_b.min())
+    p_bot = min(p_a.max(), p_b.max())
+
+    # 5-hPa spacing, descending (surface → top)
+    common_p = np.arange(p_bot, p_top - 1, -5.0)
+    common_p = common_p[common_p >= p_top]
+
+    def _interp(p_orig, vals):
+        """Log-pressure linear interpolation (p decreasing)."""
+        lp_orig = np.log(p_orig)
+        lp_target = np.log(common_p)
+        return np.interp(lp_target, lp_orig[::-1], vals[::-1])
+
+    # Interpolate thermodynamic fields
+    T_a  = _interp(p_a, data_a["temperature"].to("degC").magnitude)
+    T_b  = _interp(p_b, data_b["temperature"].to("degC").magnitude)
+    Td_a = _interp(p_a, data_a["dewpoint"].to("degC").magnitude)
+    Td_b = _interp(p_b, data_b["dewpoint"].to("degC").magnitude)
+
+    u_a, v_a = mpcalc.wind_components(data_a["wind_speed"], data_a["wind_direction"])
+    u_b, v_b = mpcalc.wind_components(data_b["wind_speed"], data_b["wind_direction"])
+
+    u_a_i = _interp(p_a, u_a.to("knot").magnitude)
+    u_b_i = _interp(p_b, u_b.to("knot").magnitude)
+    v_a_i = _interp(p_a, v_a.to("knot").magnitude)
+    v_b_i = _interp(p_b, v_b.to("knot").magnitude)
+
+    # Height (use hypsometric from merged temperature)
+    h_a = _interp(p_a, data_a["height"].to("meter").magnitude)
+    h_b = _interp(p_b, data_b["height"].to("meter").magnitude)
+
+    # Weighted blend
+    T_m  = weight_a * T_a  + weight_b * T_b
+    Td_m = weight_a * Td_a + weight_b * Td_b
+    u_m  = weight_a * u_a_i + weight_b * u_b_i
+    v_m  = weight_a * v_a_i + weight_b * v_b_i
+    h_m  = weight_a * h_a   + weight_b * h_b
+
+    # Ensure Td <= T
+    Td_m = np.minimum(Td_m, T_m)
+
+    # Convert wind components back to direction / speed
+    wspd_m = np.sqrt(u_m**2 + v_m**2) * units.knot
+    wdir_m = (np.degrees(np.arctan2(-u_m, -v_m)) % 360) * units.degree
+
+    # Build station_info from profile A
+    info_a = data_a.get("station_info", {})
+    info_b = data_b.get("station_info", {})
+
+    merged = {
+        "pressure":       common_p * units.hPa,
+        "temperature":    T_m * units("degC"),
+        "dewpoint":       Td_m * units("degC"),
+        "height":         h_m * units.meter,
+        "wind_direction": wdir_m,
+        "wind_speed":     wspd_m,
+        "station_info": {
+            "lat":  info_a.get("lat", info_b.get("lat")),
+            "lon":  info_a.get("lon", info_b.get("lon")),
+            "elev": (weight_a * info_a.get("elev", h_a[0])
+                     + weight_b * info_b.get("elev", h_b[0])),
+        },
+    }
+    return merged
+
+
+# ─────────────────────────────────────────────────────────────────────
 # CALCULATIONS
 # ─────────────────────────────────────────────────────────────────────
 
@@ -2231,7 +2326,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
 # PLOTTING
 # ─────────────────────────────────────────────────────────────────────
 def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False,
-                  theme="dark", colorblind=False):
+                  theme="dark", colorblind=False, boundary_orientation=None):
     """Create a comprehensive sounding analysis figure.
 
     Parameters
@@ -2243,6 +2338,12 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         'dark' (default) or 'light'.
     colorblind : bool
         If True, use color-blind safe palette.
+    boundary_orientation : float or None
+        Meteorological orientation of a surface boundary in degrees (0-360).
+        This draws a dashed line across the hodograph at the given angle,
+        representing the boundary orientation (e.g. an outflow boundary,
+        front, or dryline).  The line is drawn perpendicular to the
+        boundary-normal vector.
     """
     p = data["pressure"]
     T = data["temperature"]
@@ -3135,6 +3236,48 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             bbox=dict(boxstyle="round,pad=0.2", facecolor=BG,
                      edgecolor=VAD_COLOR, alpha=0.8, linewidth=0.8)
         )
+
+    # --- Boundary orientation line ---
+    if boundary_orientation is not None:
+        try:
+            bdry_deg = float(boundary_orientation) % 360
+            # The orientation defines the direction the boundary *runs* along
+            # (like a front oriented NE-SW = 045°).  We draw a line in that
+            # direction through the origin (or center of hodograph).
+            bdry_rad = np.radians(bdry_deg)
+            # Meteorological convention: 0° = N, 90° = E
+            # Convert to math coordinates: x = sin(θ), y = cos(θ)
+            dx = np.sin(bdry_rad)
+            dy = np.cos(bdry_rad)
+            # Line length: use current axis limits
+            xlim = hodo.ax.get_xlim()
+            ylim = hodo.ax.get_ylim()
+            span = max(abs(xlim[1] - xlim[0]), abs(ylim[1] - ylim[0]))
+            L = span * 0.8
+
+            # Center the line on the surface wind
+            cx, cy = hodo_u[0], hodo_v[0]
+
+            bdry_color = "#ff44ff" if not colorblind else "#ff8800"
+            hodo.ax.plot(
+                [cx - L * dx, cx + L * dx],
+                [cy - L * dy, cy + L * dy],
+                color=bdry_color, linewidth=2.5, linestyle="--",
+                alpha=0.85, zorder=10, clip_on=True,
+            )
+            # Small label at one end
+            label_x = cx + L * 0.65 * dx
+            label_y = cy + L * 0.65 * dy
+            hodo.ax.text(
+                label_x, label_y,
+                f"BDRY {int(bdry_deg)}°",
+                color=bdry_color, fontsize=10, fontweight="bold",
+                fontfamily="monospace", ha="center", va="bottom",
+                alpha=0.9, zorder=11, clip_on=True,
+                path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)],
+            )
+        except Exception:
+            pass
     
     # ════════════════════════════════════════════════════════════════
     # STORM-RELATIVE WIND PROFILE (right side panel)

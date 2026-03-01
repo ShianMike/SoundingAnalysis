@@ -460,13 +460,13 @@ These are features that exist in our web app but have **no equivalent in Sounder
 
 - [x] **Export Parameters to CSV** — One-click CSV download of all computed thermodynamic, kinematic, and moisture parameters ✅
 - [x] **Export to SHARPpy / CM1 Format** — Save sounding data in formats compatible with SHARPpy and CM1 ✅
-- [ ] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
+- [x] **Profile Merging** — Weighted-average two soundings together to create a blended analysis profile
 - [x] **Profile Smoothing** — Apply Gaussian smoothing to noisy profiles (especially ACARS); adjustable sigma parameter ✅
 - [x] **VAD Wind Profiler Hodograph** — Fetch and plot NEXRAD VAD (Velocity Azimuth Display) wind data on the hodograph ✅
 - [x] **VAD Barbs on Skew-T** — Dual OBS/VAD barb columns on the Skew-T for direct wind comparison ✅
 - [x] **VWP Time-Height Display** — Standalone panel showing NEXRAD VAD wind barbs across time and height ✅
 - [x] **Storm-Relative Hodograph Mode** — Toggle the hodograph between ground-relative and storm-relative frames; SM at origin with crosshair marker ✅
-- [ ] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
+- [x] **Hodograph Boundary Lines** — Draw user-defined boundary lines on the hodograph at custom angles
 - [x] **Color-Blind Mode** — Okabe-Ito/Wong 2011 color-safe palette for all plot traces; toggle in sidebar ✅
 - [x] **Light Theme Toggle** — Toggle between dark and light themes with localStorage persistence ✅
 - [x] **Theta / Theta-e Profile Panel** — Potential temperature (θ) and equivalent potential temperature (θe) profiles plotted vs height with moisture gap fill ✅
