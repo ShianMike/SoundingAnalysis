@@ -2481,7 +2481,316 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
                 params[layer_name] = None
     except:
         params["rh"] = None
-    
+
+    # ── Winter Weather / Precip Type (Bourgouin Method) ──────────────
+    # Uses warm-nose and cold-layer energy areas above/below 0°C to
+    # classify precipitation type: Rain / Snow / Ice Pellets / Freezing Rain
+    try:
+        _T_c_pt = T.to("degC").magnitude
+        _h_m_pt = h.magnitude
+        _sfc_T_pt = _T_c_pt[0]
+
+        # Find all freezing level crossings (sign changes)
+        _sign_pt = np.sign(_T_c_pt)
+        _crossings_pt = np.where(np.diff(_sign_pt))[0]
+
+        _warm_area = 0.0  # J/kg (warm nose positive area)
+        _cold_area = 0.0  # J/kg (cold layer negative area)
+        _precip_type = "N/A"
+
+        if len(_crossings_pt) >= 2:
+            # Warm nose: integrate positive T between 1st and 2nd crossing
+            _wn_bot = _crossings_pt[0]
+            _wn_top = _crossings_pt[1]
+            for _k in range(_wn_bot, _wn_top):
+                _dz = _h_m_pt[_k + 1] - _h_m_pt[_k]
+                _T_avg = (_T_c_pt[_k] + _T_c_pt[_k + 1]) / 2.0
+                if _T_avg > 0:
+                    _warm_area += 9.81 * _T_avg / 273.15 * _dz
+
+            # Cold layer: from surface to 1st crossing
+            for _k in range(0, _crossings_pt[0]):
+                _dz = _h_m_pt[_k + 1] - _h_m_pt[_k]
+                _T_avg = (_T_c_pt[_k] + _T_c_pt[_k + 1]) / 2.0
+                if _T_avg < 0:
+                    _cold_area += 9.81 * abs(_T_avg) / 273.15 * _dz
+
+            # Bourgouin (2000) classification thresholds
+            if _warm_area < 5.6:
+                _precip_type = "Snow"
+            elif _warm_area >= 13.2:
+                if _cold_area < 5.6:
+                    _precip_type = "Rain"
+                elif _cold_area >= 13.2:
+                    _precip_type = "Ice Pellets"
+                else:
+                    _precip_type = "Freezing Rain"
+            else:
+                if _cold_area < 5.6:
+                    _precip_type = "Freezing Rain"
+                elif _cold_area >= 66:
+                    _precip_type = "Ice Pellets"
+                else:
+                    _precip_type = "Frzg Rain/Sleet"
+        elif len(_crossings_pt) == 1:
+            _precip_type = "Rain" if _sfc_T_pt > 0 else "Snow"
+        else:
+            _precip_type = "Rain" if _sfc_T_pt > 0 else "Snow"
+
+        params["precip_type"] = _precip_type
+        params["warm_layer_energy"] = round(_warm_area, 1)
+        params["cold_layer_energy"] = round(_cold_area, 1)
+    except Exception as e:
+        print(f"  Warning: Precip type calc failed: {e}")
+        params["precip_type"] = "N/A"
+        params["warm_layer_energy"] = 0
+        params["cold_layer_energy"] = 0
+
+    # ── Microburst / Downburst Composites ────────────────────────────
+    # WMSI: Wet Microburst Severity Index ≈ CAPE × Γ0-3 / 1000
+    # MDPI: Microburst Day Potential Index = (θe_sfc − θe_min_0-6km) / 20
+    # Max Gust Potential: V = √(2 × DCAPE) converted to knots
+    try:
+        _mu_cape_mb = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _dcape_mb = float(params.get("dcape", 0 * units("J/kg")).magnitude) if params.get("dcape") is not None else 0
+
+        # WMSI
+        _lr03_mb = params.get("lr_03", 0)
+        if _lr03_mb is None:
+            _lr03_mb = 0
+        _wmsi = (_mu_cape_mb * max(float(_lr03_mb), 0) / 1000.0) if _mu_cape_mb > 0 else 0
+        params["wmsi"] = round(_wmsi, 1)
+
+        # MDPI: θe deficit surface to min in 0-6 km
+        _sfc_h_mb = h[0].magnitude
+        _mask_06_mb = (h.magnitude >= _sfc_h_mb) & (h.magnitude <= _sfc_h_mb + 6000)
+        if np.sum(_mask_06_mb) >= 2:
+            _theta_e_all = mpcalc.equivalent_potential_temperature(p, T, Td)
+            _theta_e_06 = _theta_e_all[_mask_06_mb].magnitude
+            _theta_e_sfc = _theta_e_all[0].magnitude
+            _theta_e_min = np.min(_theta_e_06)
+            _mdpi = (_theta_e_sfc - _theta_e_min) / 20.0
+            params["mdpi"] = round(max(float(_mdpi), 0), 2)
+        else:
+            params["mdpi"] = 0
+
+        # Max downburst gust potential
+        if _dcape_mb > 0:
+            _max_gust_ms = np.sqrt(2.0 * _dcape_mb)
+            params["max_gust"] = round(float(_max_gust_ms * 1.94384), 1)
+        else:
+            params["max_gust"] = 0
+    except Exception as e:
+        print(f"  Warning: Microburst composites calc failed: {e}")
+        params["wmsi"] = 0
+        params["mdpi"] = 0
+        params["max_gust"] = 0
+
+    # ── Corfidi Vectors (Corfidi 2003) ───────────────────────────────
+    # V_CL  = mean wind 850-300 hPa (cloud-layer mean)
+    # V_LLJ = max wind in 0-1.5 km AGL (low-level jet)
+    # Corfidi Upwind  = V_CL − V_LLJ  (back-building / upwind propagation)
+    # Corfidi Downwind = 2·V_CL − V_LLJ (forward / downwind propagation)
+    try:
+        # Cloud-layer mean wind (850-300 hPa)
+        _cl_mask = (p_interp.magnitude >= 300) & (p_interp.magnitude <= 850)
+        if np.sum(_cl_mask) >= 2:
+            _cl_u = float(np.mean(u_interp[_cl_mask].to("knot").magnitude))
+            _cl_v = float(np.mean(v_interp[_cl_mask].to("knot").magnitude))
+        else:
+            _cl_u = float(params["mw_u"].to("knot").magnitude)
+            _cl_v = float(params["mw_v"].to("knot").magnitude)
+
+        # LLJ: max wind speed in 0-1.5 km AGL
+        _llj_mask = h_interp.magnitude <= 1500
+        if np.sum(_llj_mask) >= 2:
+            _u_llj_all = u_interp[_llj_mask].to("knot").magnitude
+            _v_llj_all = v_interp[_llj_mask].to("knot").magnitude
+            _spd_llj = np.sqrt(_u_llj_all**2 + _v_llj_all**2)
+            _max_idx = int(np.argmax(_spd_llj))
+            _llj_u = float(_u_llj_all[_max_idx])
+            _llj_v = float(_v_llj_all[_max_idx])
+        else:
+            _llj_u = float(u_interp[0].to("knot").magnitude)
+            _llj_v = float(v_interp[0].to("knot").magnitude)
+
+        params["corfidi_up_u"] = round(_cl_u - _llj_u, 1)
+        params["corfidi_up_v"] = round(_cl_v - _llj_v, 1)
+        params["corfidi_dn_u"] = round(2 * _cl_u - _llj_u, 1)
+        params["corfidi_dn_v"] = round(2 * _cl_v - _llj_v, 1)
+        params["corfidi_up_spd"] = round(np.sqrt(params["corfidi_up_u"]**2 + params["corfidi_up_v"]**2), 1)
+        params["corfidi_dn_spd"] = round(np.sqrt(params["corfidi_dn_u"]**2 + params["corfidi_dn_v"]**2), 1)
+    except Exception as e:
+        print(f"  Warning: Corfidi vectors calc failed: {e}")
+        params["corfidi_up_u"] = None
+        params["corfidi_up_v"] = None
+        params["corfidi_dn_u"] = None
+        params["corfidi_dn_v"] = None
+        params["corfidi_up_spd"] = None
+        params["corfidi_dn_spd"] = None
+
+    # ── Fire Weather Indices ─────────────────────────────────────────
+    # Fosberg FWI: surface T, RH, and wind speed
+    # Haines Index: mid-level stability + moisture (850-700 hPa)
+    # Hot-Dry-Windy (HDW): max(VPD × wind) in lowest 500 m
+    try:
+        _sfc_T_fw = float(T[0].to("degC").magnitude)
+        _sfc_rh_fw = float(mpcalc.relative_humidity_from_dewpoint(T[0], Td[0]).magnitude * 100)
+        _sfc_wspd_mph = float(np.sqrt(u[0]**2 + v[0]**2).to("mph").magnitude)
+
+        # Fosberg FWI — equilibrium moisture content
+        if _sfc_rh_fw <= 10:
+            _m_fw = 0.03229 + 0.281073 * _sfc_rh_fw - 0.000578 * _sfc_rh_fw * _sfc_T_fw
+        elif _sfc_rh_fw <= 50:
+            _m_fw = 2.22749 + 0.160107 * _sfc_rh_fw - 0.01478 * _sfc_T_fw
+        else:
+            _m_fw = 21.0606 + 0.005565 * _sfc_rh_fw**2 - 0.00035 * _sfc_rh_fw * _sfc_T_fw - 0.483199 * _sfc_rh_fw
+        _m_fw = max(_m_fw, 0.1)
+        _eta_fw = 1.0 - 2.0 * (_m_fw / 30.0) + 1.5 * (_m_fw / 30.0)**2 - 0.5 * (_m_fw / 30.0)**3
+        _fwi_val = _eta_fw * np.sqrt(1 + _sfc_wspd_mph**2) / 0.3002
+        params["fosberg_fwi"] = round(float(min(max(_fwi_val, 0), 100)), 1)
+
+        # Haines Index (mid-level variant: 850-700 hPa)
+        _p850i = int(np.argmin(np.abs(p.magnitude - 850)))
+        _p700i = int(np.argmin(np.abs(p.magnitude - 700)))
+        _T850_fw = float(T[_p850i].to("degC").magnitude)
+        _T700_fw = float(T[_p700i].to("degC").magnitude)
+        _Td850_fw = float(Td[_p850i].to("degC").magnitude)
+        _stab_fw = _T850_fw - _T700_fw
+        _A_fw = 1 if _stab_fw < 6 else (2 if _stab_fw <= 10 else 3)
+        _depr_fw = _T850_fw - _Td850_fw
+        _B_fw = 1 if _depr_fw < 6 else (2 if _depr_fw <= 12 else 3)
+        params["haines"] = _A_fw + _B_fw  # Range: 2-6
+
+        # Hot-Dry-Windy Index (Srock et al. 2018)
+        _sfc_h_fw = h[0].magnitude
+        _mask_500m_fw = h.magnitude <= _sfc_h_fw + 500
+        if np.sum(_mask_500m_fw) >= 2:
+            _T_fw500 = T[_mask_500m_fw].to("degC").magnitude
+            _Td_fw500 = Td[_mask_500m_fw].to("degC").magnitude
+            _wspd_fw500 = np.sqrt(u[_mask_500m_fw]**2 + v[_mask_500m_fw]**2).to("m/s").magnitude
+            _es_T_fw = 6.112 * np.exp(17.67 * _T_fw500 / (_T_fw500 + 243.5))
+            _es_Td_fw = 6.112 * np.exp(17.67 * _Td_fw500 / (_Td_fw500 + 243.5))
+            _vpd_fw = _es_T_fw - _es_Td_fw
+            params["hdw"] = round(float(np.max(_vpd_fw * _wspd_fw500)), 1)
+        else:
+            params["hdw"] = 0
+    except Exception as e:
+        print(f"  Warning: Fire weather calc failed: {e}")
+        params["fosberg_fwi"] = None
+        params["haines"] = None
+        params["hdw"] = None
+
+    # ── Sounding-Derived Hazard Classification ───────────────────────
+    # Auto-scores: TORNADO, HAIL, WIND, FLOOD with LOW / MOD / HIGH
+    try:
+        _hazards = []
+        _mu_cape_hz = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _stp_hz = params.get("stp", 0)
+        _stp_eff_hz = params.get("stp_eff", 0)
+        _scp_hz = params.get("scp", 0)
+        _ship_hz = params.get("ship", 0)
+        _dcp_hz = params.get("dcp", 0)
+        _dcape_hz = float(params.get("dcape", 0 * units("J/kg")).magnitude) if params.get("dcape") is not None else 0
+        _bwd6_hz = float(params.get("bwd_6km", 0 * units.knot).magnitude)
+        _srh1_hz = float(params.get("srh_1km", 0 * units("m^2/s^2")).magnitude)
+        _ml_lcl_hz = params.get("ml_lcl_m", 9999)
+        if _ml_lcl_hz is None:
+            _ml_lcl_hz = 9999
+        _pw_hz = float(params.get("pwat", 0 * units.mm).magnitude) if params.get("pwat") is not None else 0
+
+        # Tornado
+        _tor = 0
+        if _stp_eff_hz >= 4:
+            _tor = 3
+        elif _stp_eff_hz >= 1:
+            _tor = 2
+        elif _stp_hz >= 1 or (_srh1_hz >= 150 and _ml_lcl_hz < 1500 and _mu_cape_hz >= 500):
+            _tor = 1
+        if _tor > 0:
+            _hazards.append({"type": "TORNADO", "level": ["LOW", "MOD", "HIGH"][_tor - 1]})
+
+        # Hail
+        _hal = 0
+        if _ship_hz >= 3:
+            _hal = 3
+        elif _ship_hz >= 1.5:
+            _hal = 2
+        elif _ship_hz >= 0.5 or (_scp_hz >= 2 and _mu_cape_hz >= 1500):
+            _hal = 1
+        if _hal > 0:
+            _hazards.append({"type": "HAIL", "level": ["LOW", "MOD", "HIGH"][_hal - 1]})
+
+        # Wind
+        _wnd = 0
+        if _dcp_hz >= 6 or (_dcape_hz >= 1200 and _bwd6_hz >= 40):
+            _wnd = 3
+        elif _dcp_hz >= 3 or _dcape_hz >= 800:
+            _wnd = 2
+        elif _dcp_hz >= 1 or _dcape_hz >= 400:
+            _wnd = 1
+        if _wnd > 0:
+            _hazards.append({"type": "WIND", "level": ["LOW", "MOD", "HIGH"][_wnd - 1]})
+
+        # Flood
+        _fld = 0
+        if _pw_hz >= 50 and _mu_cape_hz >= 1000:
+            _fld = 3
+        elif _pw_hz >= 40 and _mu_cape_hz >= 500:
+            _fld = 2
+        elif _pw_hz >= 30:
+            _fld = 1
+        if _fld > 0:
+            _hazards.append({"type": "FLOOD", "level": ["LOW", "MOD", "HIGH"][_fld - 1]})
+
+        params["hazards"] = _hazards
+    except Exception as e:
+        print(f"  Warning: Hazard classification failed: {e}")
+        params["hazards"] = []
+
+    # ── Temperature Advection Profile ────────────────────────────────
+    # Wind veering with height = warm-air advection (WAA)
+    # Wind backing with height = cold-air advection (CAA)
+    # Assessed in 1 km layers from 0-6 km AGL
+    try:
+        _adv_layers = []
+        _u_ms_adv = u_interp.to("m/s").magnitude
+        _v_ms_adv = v_interp.to("m/s").magnitude
+        _h_agl_adv = h_interp.magnitude
+
+        for _bot_km in range(0, 6):
+            _top_km = _bot_km + 1
+            _bot_m = _bot_km * 1000
+            _top_m = _top_km * 1000
+            _bot_idx = int(np.argmin(np.abs(_h_agl_adv - _bot_m)))
+            _top_idx = int(np.argmin(np.abs(_h_agl_adv - _top_m)))
+
+            if _bot_idx == _top_idx:
+                continue
+
+            _dir_bot = float(np.degrees(np.arctan2(-_u_ms_adv[_bot_idx], -_v_ms_adv[_bot_idx])) % 360)
+            _dir_top = float(np.degrees(np.arctan2(-_u_ms_adv[_top_idx], -_v_ms_adv[_top_idx])) % 360)
+
+            _delta = (_dir_top - _dir_bot + 540) % 360 - 180
+
+            if abs(_delta) < 5:
+                _adv_type = "NEUTRAL"
+            elif _delta > 0:
+                _adv_type = "WAA"
+            else:
+                _adv_type = "CAA"
+
+            _adv_layers.append({
+                "layer": f"{_bot_km}-{_top_km} km",
+                "type": _adv_type,
+                "turn": round(float(_delta), 1)
+            })
+
+        params["temp_advection"] = _adv_layers
+    except Exception as e:
+        print(f"  Warning: Temperature advection calc failed: {e}")
+        params["temp_advection"] = []
+
     return params
 
 
@@ -3275,23 +3584,39 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             np.append(hodo_v[eil_bot_idx:eil_top_idx + 1], sm_v_kt),
             'lightblue', alpha=0.3, zorder=2, label=_eil_label)
 
-        # --- MCS motion markers (upshear / downshear) ---
-        bwd_u = (hodo_u[min(60, n_full-1)] - hodo_u[0])
-        bwd_v = (hodo_v[min(60, n_full-1)] - hodo_v[0])
-        bwd_mag = np.sqrt(bwd_u**2 + bwd_v**2)
-        if bwd_mag > 0.1:
-            us_u = mw_u_kt + 7.5 * 1.94384 * (-bwd_u / bwd_mag)
-            us_v = mw_v_kt + 7.5 * 1.94384 * (-bwd_v / bwd_mag)
-            ds_u = mw_u_kt + 7.5 * 1.94384 * (bwd_u / bwd_mag)
-            ds_v = mw_v_kt + 7.5 * 1.94384 * (bwd_v / bwd_mag)
+        # --- Corfidi MCS motion vectors (Corfidi 2003) ---
+        if params.get("corfidi_up_u") is not None and params.get("corfidi_dn_u") is not None:
+            cup_u = params["corfidi_up_u"]
+            cup_v = params["corfidi_up_v"]
+            cdn_u = params["corfidi_dn_u"]
+            cdn_v = params["corfidi_dn_v"]
+            hodo.ax.plot(cup_u, cup_v, 's', markersize=9, color='orange',
+                         markeredgecolor='white', markeredgewidth=0.8,
+                         zorder=15, alpha=0.85, clip_on=True)
+            hodo.ax.text(cup_u, cup_v + 3.5, 'CU', weight='bold', fontsize=10,
+                         color='orange', ha='center', alpha=0.8, clip_on=True)
+            hodo.ax.plot(cdn_u, cdn_v, 's', markersize=9, color='#ff4444',
+                         markeredgecolor='white', markeredgewidth=0.8,
+                         zorder=15, alpha=0.85, clip_on=True)
+            hodo.ax.text(cdn_u, cdn_v + 3.5, 'CD', weight='bold', fontsize=10,
+                         color='#ff4444', ha='center', alpha=0.8, clip_on=True)
         else:
-            us_u, us_v = mw_u_kt, mw_v_kt
-            ds_u, ds_v = mw_u_kt, mw_v_kt
-
-        hodo.ax.text(us_u, us_v, 'UP', weight='bold', fontsize=12,
-                     color='orange', ha='center', alpha=0.5, clip_on=True)
-        hodo.ax.text(ds_u, ds_v, 'DN', weight='bold', fontsize=12,
-                     color='orange', ha='center', alpha=0.5, clip_on=True)
+            # Fallback to simplified MCS markers
+            bwd_u = (hodo_u[min(60, n_full-1)] - hodo_u[0])
+            bwd_v = (hodo_v[min(60, n_full-1)] - hodo_v[0])
+            bwd_mag = np.sqrt(bwd_u**2 + bwd_v**2)
+            if bwd_mag > 0.1:
+                us_u = mw_u_kt + 7.5 * 1.94384 * (-bwd_u / bwd_mag)
+                us_v = mw_v_kt + 7.5 * 1.94384 * (-bwd_v / bwd_mag)
+                ds_u = mw_u_kt + 7.5 * 1.94384 * (bwd_u / bwd_mag)
+                ds_v = mw_v_kt + 7.5 * 1.94384 * (bwd_v / bwd_mag)
+            else:
+                us_u, us_v = mw_u_kt, mw_v_kt
+                ds_u, ds_v = mw_u_kt, mw_v_kt
+            hodo.ax.text(us_u, us_v, 'UP', weight='bold', fontsize=12,
+                         color='orange', ha='center', alpha=0.5, clip_on=True)
+            hodo.ax.text(ds_u, ds_v, 'DN', weight='bold', fontsize=12,
+                         color='orange', ha='center', alpha=0.5, clip_on=True)
 
     # --- Storm motion info text box ---
     sm_lines = []
@@ -3787,24 +4112,29 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     ml_lfc_v = f"{params['ml_lfc_m']:.0f}m" if params.get('ml_lfc_m') is not None else "---"
     ml_el_v = f"{params['ml_el_m']:.0f}m" if params.get('ml_el_m') is not None else "---"
     ecape_v = f"{params.get('ecape', 0)} J/kg" if params.get('ecape') else "0 J/kg"
+    precip_type_v = params.get("precip_type", "N/A")
+    fosberg_v = f"{params['fosberg_fwi']:.0f}" if params.get('fosberg_fwi') is not None else "---"
+    haines_v = f"{params['haines']}" if params.get('haines') is not None else "---"
+    hdw_v = f"{params['hdw']:.0f}" if params.get('hdw') is not None else "---"
     
     # Rows: (text, color, y_position) — tightly spaced
     thermo_rows = [
         ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.90),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.83),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.76),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.69),
-        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.62),
-        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.55),
-        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.48),
-        (f"   DCIN: {dcin_v}", FG_DIM, 0.41),
-        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.34),
-        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.27),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.20),
-        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.12),
-        (f"   DCP: {fv(params.get('dcp'), '', 1)}", ACCENT, 0.05),
-        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, -0.02),
+        (header, FG_FAINT, 0.91),
+        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.85),
+        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.79),
+        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.73),
+        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.67),
+        (f"   DCAPE: {dcape_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.61),
+        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.55),
+        (f"   DCIN: {dcin_v}", FG_DIM, 0.49),
+        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.43),
+        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.37),
+        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.31),
+        (f"   Precip Type: {precip_type_v}", "#22d3ee", 0.25),
+        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.18),
+        (f"   DCP: {fv(params.get('dcp'), '', 1)}  |  FireWx: FWI {fosberg_v}  Haines {haines_v}", ACCENT, 0.11),
+        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.04),
     ]
     
     for text, color, y_pos in thermo_rows:
@@ -3857,13 +4187,13 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     
     kin_rows = [
         ("KINEMATIC", ACCENT, 0.97),
-        (kin_header, FG_FAINT, 0.88),
-        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.79),
-        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.70),
-        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.61),
-        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.52),
-        (f"   EFFECTIVE: BWD {ebwd_v}  ESRH {esrh_v}", "#44ddaa", 0.43),
-        (f"   EIL: {eil_bot_v}–{eil_top_v} m AGL", "#44ddaa", 0.34),
+        (kin_header, FG_FAINT, 0.89),
+        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.81),
+        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.73),
+        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.65),
+        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.57),
+        (f"   EFFECTIVE: BWD {ebwd_v}  ESRH {esrh_v}", "#44ddaa", 0.49),
+        (f"   EIL: {eil_bot_v}–{eil_top_v} m AGL", "#44ddaa", 0.41),
     ]
     
     # Bunkers
@@ -3875,11 +4205,21 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         lm_toward = np.degrees(np.arctan2(params["lm_u"].magnitude,
                      params["lm_v"].magnitude)) % 360
         
-        kin_rows.append(("   BUNKERS STORM MOTION:", ACCENT, 0.25))
+        kin_rows.append(("   BUNKERS STORM MOTION:", ACCENT, 0.33))
         kin_rows.append((
             f"    RM: {rm_toward:.0f}° @ {rm_spd.magnitude:.0f} kt  |  "
             f"LM: {lm_toward:.0f}° @ {lm_spd.magnitude:.0f} kt",
-            FG_DIM, 0.14
+            FG_DIM, 0.25
+        ))
+
+    # Corfidi MCS motion vectors
+    _cup_spd = params.get("corfidi_up_spd")
+    _cdn_spd = params.get("corfidi_dn_spd")
+    if _cup_spd is not None and _cdn_spd is not None:
+        kin_rows.append(("   CORFIDI MCS MOTION:", "orange", 0.17))
+        kin_rows.append((
+            f"    UPW: {_cup_spd:.0f} kt  |  DNW: {_cdn_spd:.0f} kt",
+            FG_DIM, 0.09
         ))
     
     for text, color, y_pos in kin_rows:

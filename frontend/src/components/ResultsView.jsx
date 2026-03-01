@@ -29,6 +29,9 @@ import {
   RotateCcw,
   Target,
   Snowflake,
+  Flame,
+  CloudRain,
+  ShieldAlert,
 } from "lucide-react";
 
 /* ── Icon map for summary section cards ─────────────── */
@@ -71,6 +74,12 @@ const THRESHOLDS = {
   "SRH 0-1 km":[{ v: 300, c: "extreme" }, { v: 150, c: "high" }, { v: 100, c: "mod" }],
   "SRH 0-3 km":[{ v: 400, c: "extreme" }, { v: 200, c: "high" }, { v: 100, c: "mod" }],
   "Eff. SRH": [{ v: 300, c: "extreme" }, { v: 150, c: "high" }, { v: 100, c: "mod" }],
+  "WMSI":     [{ v: 5, c: "extreme" }, { v: 3, c: "high" }, { v: 1, c: "mod" }],
+  "MDPI":     [{ v: 3, c: "extreme" }, { v: 2, c: "high" }, { v: 1, c: "mod" }],
+  "Max Gust": [{ v: 80, c: "extreme" }, { v: 58, c: "high" }, { v: 40, c: "mod" }],
+  "Fosberg FWI": [{ v: 75, c: "extreme" }, { v: 50, c: "high" }, { v: 35, c: "mod" }],
+  "Haines":   [{ v: 6, c: "extreme" }, { v: 5, c: "high" }, { v: 4, c: "mod" }],
+  "HDW":      [{ v: 400, c: "extreme" }, { v: 200, c: "high" }, { v: 100, c: "mod" }],
 };
 
 function getAlertClass(label, value) {
@@ -385,7 +394,15 @@ function generateSoundingSummary(params, meta) {
   if (dcp != null && dcp >= 4) threats.push("Widespread damaging winds / derecho");
   else if (dcp != null && dcp >= 2) threats.push("Damaging straight-line winds");
   else if (dcape != null && dcape >= 1000 && bwd6 >= 20) threats.push("Damaging outflow gusts");
+  const wmsi = n(params.wmsi);
+  const mdpi = n(params.mdpi);
+  if (wmsi != null && wmsi >= 3) threats.push("Wet microburst potential");
+  else if (mdpi != null && mdpi >= 2) threats.push("Microburst potential");
   if (pwat != null && pwat >= 40) threats.push("Flash flooding");
+  const precipType = params.precipType;
+  if (precipType && precipType !== "N/A" && precipType !== "Rain") {
+    threats.push(`Winter precip: ${precipType}`);
+  }
 
   return {
     station: stName,
@@ -973,7 +990,72 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="Eff. BWD" value={params.ebwd} unit="kt" color="#34d399" desc="Effective Bulk Wind Difference — shear from the effective inflow base to half the MU EL height. Better discriminator for supercells than fixed 0-6 km shear." />
           <ParamCard label="EIL Base" value={params.eilBot} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer base — lowest level where CAPE ≥ 100 J/kg and CIN > -250 J/kg. Identifies the true inflow layer for storms." />
           <ParamCard label="EIL Top" value={params.eilTop} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer top — highest contiguous level meeting the CAPE/CIN thresholds. Deeper EIL = deeper inflow available for storms." />
+          <ParamCard label="Corfidi UPW" value={params.corfidiUpSpd} unit="kt" color="orange" desc="Corfidi Upwind vector speed (Corfidi 2003) — MCS upwind propagation component. Represents back-building tendency. Slower speeds favor training echoes and flash flooding." />
+          <ParamCard label="Corfidi DNW" value={params.corfidiDnSpd} unit="kt" color="#ff4444" desc="Corfidi Downwind vector speed (Corfidi 2003) — MCS forward propagation. Faster speeds = fast-moving MCS; slower = quasi-stationary. Key for flash flood risk." />
         </ParamSection>
+
+        <ParamSection
+          title="Downburst & Microburst"
+          icon={<ArrowDown size={14} />}
+        >
+          <ParamCard label="WMSI" value={params.wmsi} unit="" color="#f97316" desc="Wet Microburst Severity Index — approximated as CAPE × Γ0-3 / 1000. Higher values indicate stronger potential for wet microbursts. >3 is significant." />
+          <ParamCard label="MDPI" value={params.mdpi} unit="" color="#fb923c" desc="Microburst Day Potential Index — θe deficit (surface minus minimum in 0-6 km) divided by 20. Values >1 indicate favorable conditions for microbursts." />
+          <ParamCard label="Max Gust" value={params.maxGust} unit="kt" color="#ef4444" desc="Maximum estimated downburst gust speed — derived from √(2×DCAPE). Simple theoretical maximum; actual gusts may differ. >58 kt = severe." />
+        </ParamSection>
+
+        <ParamSection
+          title="Winter Wx / Precip Type"
+          icon={<CloudRain size={14} />}
+        >
+          <ParamCard label="Precip Type" value={params.precipType} unit="" color="#22d3ee" desc="Precipitation type derived from the Bourgouin (2000) method — classifies as Rain, Snow, Ice Pellets, or Freezing Rain based on warm-nose and cold-layer energy areas." />
+          <ParamCard label="Warm Area" value={params.warmLayerEnergy} unit="J/kg" color="#f97316" desc="Warm-nose energy — integrated positive area above 0°C in the melting layer. Higher values (>13.2 J/kg) indicate complete melting of ice particles." />
+          <ParamCard label="Cold Area" value={params.coldLayerEnergy} unit="J/kg" color="#60a5fa" desc="Cold-layer energy — integrated negative area below 0°C beneath the warm nose. Higher values indicate refreezing of melted precipitation into ice pellets." />
+        </ParamSection>
+
+        <ParamSection
+          title="Fire Weather"
+          icon={<Flame size={14} />}
+        >
+          <ParamCard label="Fosberg FWI" value={params.fosbergFwi} unit="" color="#f97316" desc="Fosberg Fire Weather Index — combines temperature, relative humidity, and wind speed. Scale 0-100; values >50 indicate high fire weather potential, >75 extreme." />
+          <ParamCard label="Haines" value={params.haines} unit="" color="#ef4444" desc="Haines Index — stability and moisture measure for wildfire growth potential. Range 2-6; 5 = high potential, 6 = very high potential for large fire growth." />
+          <ParamCard label="HDW" value={params.hdw} unit="" color="#fb923c" desc="Hot-Dry-Windy Index (Srock et al. 2018) — maximum VPD × wind speed in the lowest 500m. Higher values indicate conditions favorable for rapid fire spread." />
+        </ParamSection>
+
+        {params.hazards && params.hazards.length > 0 && (
+          <ParamSection
+            title="Hazard Assessment"
+            icon={<ShieldAlert size={14} />}
+          >
+            {params.hazards.map((h, i) => (
+              <ParamCard
+                key={i}
+                label={h.type}
+                value={h.level}
+                unit=""
+                color={h.level === "HIGH" ? "#ef4444" : h.level === "MOD" ? "#f59e0b" : "#60a5fa"}
+                desc={`Sounding-derived ${h.type.toLowerCase()} threat level based on composite parameter analysis.`}
+              />
+            ))}
+          </ParamSection>
+        )}
+
+        {params.tempAdvection && params.tempAdvection.length > 0 && (
+          <ParamSection
+            title="Temperature Advection"
+            icon={<TrendingUp size={14} />}
+          >
+            {params.tempAdvection.map((layer, i) => (
+              <ParamCard
+                key={i}
+                label={layer.layer}
+                value={`${layer.type} (${layer.turn > 0 ? "+" : ""}${layer.turn}°)`}
+                unit=""
+                color={layer.type === "WAA" ? "#f97316" : layer.type === "CAA" ? "#60a5fa" : "#888"}
+                desc={`${layer.type === "WAA" ? "Warm Air Advection — wind veering" : layer.type === "CAA" ? "Cold Air Advection — wind backing" : "Neutral — minimal directional change"} in the ${layer.layer} layer.`}
+              />
+            ))}
+          </ParamSection>
+        )}
       </div>
 
       {/* Text Summary */}
