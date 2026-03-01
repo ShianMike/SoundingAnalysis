@@ -508,12 +508,15 @@
 .composite-value.param-alert-extreme { color: #ef4444 !important; }
 
 .composite-card:has(.param-alert-mod) {
+  border-top: 2px solid #eab308;
   background: rgba(234, 179, 8, 0.05);
 }
 .composite-card:has(.param-alert-high) {
+  border-top: 2px solid #f97316;
   background: rgba(249, 115, 22, 0.06);
 }
 .composite-card:has(.param-alert-extreme) {
+  border-top: 2px solid #ef4444;
   background: rgba(239, 68, 68, 0.07);
   box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.06), 0 0 8px rgba(239, 68, 68, 0.08);
 }
