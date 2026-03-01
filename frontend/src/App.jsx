@@ -4,7 +4,6 @@ import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
 import HistoryPanel from "./components/HistoryPanel";
 import CustomUpload from "./components/CustomUpload";
-import MesoPanel from "./components/MesoPanel";
 import EnsemblePlume from "./components/EnsemblePlume";
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
@@ -227,15 +226,10 @@ export default function App() {
           theme={theme}
           colorblind={colorblind}
         />
-      ) : page === "meso" ? (
-        <MesoPanel
-          riskData={riskData}
-          onStationSelect={(id) => { handleMapStationSelect(id); setPage("main"); }}
-          onBack={() => setPage("main")}
-        />
       ) : page === "ensemble" ? (
         <EnsemblePlume
           station={selectedStation}
+          stations={stations}
           onBack={() => setPage("main")}
           theme={theme}
           colorblind={colorblind}
@@ -266,7 +260,6 @@ export default function App() {
             onToggleCompare={() => setShowCompare((v) => !v)}
             showVwp={showVwp}
             onToggleVwp={() => setShowVwp((v) => !v)}
-            onNavigateMeso={() => setPage("meso")}
             onNavigateEnsemble={() => setPage("ensemble")}
             selectedStation={selectedStation}
             onStationChange={handleStationChange}

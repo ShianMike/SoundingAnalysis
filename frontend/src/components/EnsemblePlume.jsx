@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Layers, ArrowLeft, Loader2, AlertTriangle, Info, RefreshCw, Lightbulb, HelpCircle, Zap, MapPin } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { Layers, ArrowLeft, Loader2, AlertTriangle, Info, RefreshCw, Lightbulb, HelpCircle, Zap, MapPin, Search, X } from "lucide-react";
 import { fetchEnsemblePlume } from "../api";
 import "./EnsemblePlume.css";
 
@@ -34,7 +34,8 @@ const QUICK_COMBOS = [
   { station: "DVN", model: "rap", source: "psu", label: "DVN", region: "Davenport" },
 ];
 
-export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
+export default function EnsemblePlume({ station, stations = [], onBack, theme, colorblind }) {
+  const [localStation, setLocalStation] = useState(station || "OUN");
   const [model, setModel] = useState("rap");
   const [presetId, setPresetId] = useState("medium");
   const [source, setSource] = useState("psu");
@@ -43,6 +44,36 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
   const [error, setError] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [stationSearch, setStationSearch] = useState("");
+  const [stationDropdownOpen, setStationDropdownOpen] = useState(false);
+  const stationRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (stationRef.current && !stationRef.current.contains(e.target)) {
+        setStationDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Sync if parent station changes
+  useEffect(() => {
+    if (station) setLocalStation(station);
+  }, [station]);
+
+  const filteredStations = useMemo(() => {
+    if (!stations.length) return [];
+    const q = stationSearch.trim().toUpperCase();
+    if (!q) return stations.slice(0, 40);
+    return stations.filter((s) => {
+      const id = (s.id || "").toUpperCase();
+      const name = (s.name || s.label || "").toUpperCase();
+      return id.includes(q) || name.includes(q);
+    }).slice(0, 40);
+  }, [stations, stationSearch]);
 
   const preset = HOUR_PRESETS.find((p) => p.id === presetId) || HOUR_PRESETS[1];
 
@@ -51,7 +82,7 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
     setError(null);
     setSuggestions([]);
     setResult(null);
-    const usedStation = overrides.station || station || "OUN";
+    const usedStation = overrides.station || localStation;
     const usedModel = overrides.model || model;
     const usedSource = overrides.source || source;
     const usedHours = preset.hours;
@@ -88,6 +119,7 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
   };
 
   const handleQuickCombo = (combo) => {
+    setLocalStation(combo.station);
     setModel(combo.model);
     setSource(combo.source);
     handleFetch({ model: combo.model, source: combo.source, station: combo.station });
@@ -130,13 +162,54 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
         {/* Controls card — grid layout */}
         <div className="ens-controls-card">
           <div className="ens-controls-grid">
-            <div className="ens-ctrl-cell">
+            <div className="ens-ctrl-cell" ref={stationRef}>
               <span className="ens-ctrl-label">Station</span>
-              <div className="ens-station-display">
+              <button
+                className="ens-station-btn"
+                onClick={() => setStationDropdownOpen((v) => !v)}
+                type="button"
+              >
                 <MapPin size={12} className="ens-station-icon" />
-                {(station || "OUN").toUpperCase()}
-              </div>
-              <span className="ens-ctrl-hint">Selected from main page</span>
+                {localStation.toUpperCase()}
+                <span className="ens-station-arrow">▾</span>
+              </button>
+              {stationDropdownOpen && (
+                <div className="ens-station-dropdown">
+                  <div className="ens-station-search-wrap">
+                    <Search size={12} />
+                    <input
+                      className="ens-station-search"
+                      placeholder="Search stations…"
+                      value={stationSearch}
+                      onChange={(e) => setStationSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {stationSearch && (
+                      <button className="ens-station-search-clear" onClick={() => setStationSearch("")}><X size={10} /></button>
+                    )}
+                  </div>
+                  <div className="ens-station-list">
+                    {filteredStations.length === 0 && (
+                      <div className="ens-station-empty">No stations found</div>
+                    )}
+                    {filteredStations.map((s) => (
+                      <button
+                        key={s.id}
+                        className={`ens-station-option${s.id === localStation ? " active" : ""}`}
+                        onClick={() => {
+                          setLocalStation(s.id);
+                          setStationDropdownOpen(false);
+                          setStationSearch("");
+                        }}
+                      >
+                        <span className="ens-station-option-id">{s.id}</span>
+                        {(s.name || s.label) && <span className="ens-station-option-name">{s.name || s.label}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <span className="ens-ctrl-hint">{stations.length > 0 ? `${stations.length} stations available` : "Type to search"}</span>
             </div>
             <div className="ens-ctrl-cell">
               <span className="ens-ctrl-label">Model</span>
@@ -234,7 +307,7 @@ export default function EnsemblePlume({ station, onBack, theme, colorblind }) {
         {loading && (
           <div className="ens-loading">
             <div className="ens-loading-spinner"><Loader2 size={22} className="spin" /></div>
-            <p>Fetching {preset.hours.length} forecast hours for {(station || "OUN").toUpperCase()} ({model.toUpperCase()})…</p>
+            <p>Fetching {preset.hours.length} forecast hours for {localStation.toUpperCase()} ({model.toUpperCase()})…</p>
             <span className="ens-loading-sub">This typically takes 10–30 seconds</span>
             <div className="ens-loading-bar"><div className="ens-loading-bar-fill" /></div>
           </div>
