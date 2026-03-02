@@ -126,7 +126,7 @@ STATION_WMO = {
     "OUN": "72357", "FWD": "72249", "AMA": "72363", "DDC": "72451",
     "TOP": "72456", "SGF": "72440", "LZK": "72340", "SHV": "72248",
     "BMX": "72230", "JAN": "72235", "LCH": "72240", "BNA": "72327",
-    "ILN": "72426", "DTX": "72632", "DVN": "72558", "OAX": "72558",
+    "ILN": "72426", "DTX": "72632", "DVN": "74455", "OAX": "72558",
     "LBF": "72562", "ABR": "72659", "UNR": "72662", "BIS": "72764",
     "GJT": "72476", "DNR": "72469", "ABQ": "72365", "EPZ": "72270",
     "TFX": "72776", "SLC": "72572", "BOI": "72681", "MFR": "72597",
@@ -138,8 +138,7 @@ STATION_WMO = {
     "CHH": "74494", "CAR": "72712", "PIT": "72520", "RNK": "72318",
     "MPX": "72649", "GRB": "72645", "ILX": "74560", "APX": "72634",
     "INL": "72747", "CRP": "72251", "MAF": "72265", "DRT": "72261",
-    "BRO": "72250", "KEY": "72201", "RIW": "72672", "DVN": "74455",
-    "LMN": "74646", "OAX": "72558",
+    "BRO": "72250", "KEY": "72201", "RIW": "72672", "LMN": "74646",
 }
 
 
@@ -178,19 +177,32 @@ def fetch_iem_sounding(station_id, dt, quiet=False):
     This is generally more reliable than the UWyo server.
     Returns parsed arrays with units.
     """
-    # IEM API works with 3-letter station IDs directly
-    url = (
-        f"https://mesonet.agron.iastate.edu/json/raob.py?"
-        f"ts={dt.strftime('%Y%m%d%H%M')}&station={station_id}"
-    )
-    
-    if not quiet:
-        print(f"  Fetching from IEM: {url}")
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    result = resp.json()
-    
-    profiles = result.get("profiles", [])
+    # Try the 3-letter station ID first, then WMO number as fallback.
+    # Some station IDs (e.g. MFL) are primarily WFO identifiers and
+    # IEM may only recognise the WMO number for the radiosonde.
+    ids_to_try = [station_id]
+    wmo = STATION_WMO.get(station_id)
+    if wmo and wmo != station_id:
+        ids_to_try.append(wmo)
+
+    profiles = None
+    result = None
+    last_url = None
+    for sid in ids_to_try:
+        url = (
+            f"https://mesonet.agron.iastate.edu/json/raob.py?"
+            f"ts={dt.strftime('%Y%m%d%H%M')}&station={sid}"
+        )
+        last_url = url
+        if not quiet:
+            print(f"  Fetching from IEM: {url}")
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        profiles = result.get("profiles", [])
+        if profiles:
+            break
+
     if not profiles:
         raise ValueError(f"No IEM sounding data for {station_id} at {dt}")
     
@@ -289,13 +301,39 @@ def fetch_wyoming_sounding(station_id, dt):
     wmo = STATION_WMO.get(station_id, station_id)
 
     dt_str = f"{dt.year}-{dt.month:02d}-{dt.day:02d} {dt.hour:02d}:00:00"
-    url = "https://weather.uwyo.edu/wsgi/sounding"
-    params = {"type": "TEXT:LIST", "datetime": dt_str, "id": wmo}
 
-    print(f"  Fetching from UWyo: {url}  params={params}")
-    resp = requests.get(url, params=params, timeout=20)
-    resp.raise_for_status()
-    html = resp.text
+    # Try the modern wsgi endpoint first (with required src=FM35),
+    # then fall back to the legacy cgi-bin endpoint.
+    html = None
+    wsgi_url = "https://weather.uwyo.edu/wsgi/sounding"
+    wsgi_params = {
+        "type": "TEXT:LIST",
+        "datetime": dt_str,
+        "id": wmo,
+        "src": "FM35",
+    }
+    print(f"  Fetching from UWyo (wsgi): {wsgi_url}  params={wsgi_params}")
+    try:
+        resp = requests.get(wsgi_url, params=wsgi_params, timeout=20)
+        resp.raise_for_status()
+        html = resp.text
+    except requests.exceptions.RequestException as e:
+        print(f"  UWyo wsgi failed ({e}), trying legacy cgi-bin...")
+        # Legacy cgi-bin endpoint (widely used by Siphon and others)
+        cgi_url = "https://weather.uwyo.edu/cgi-bin/sounding"
+        cgi_params = {
+            "region": "naconf",
+            "TYPE": "TEXT:LIST",
+            "YEAR": f"{dt.year}",
+            "MONTH": f"{dt.month:02d}",
+            "FROM": f"{dt.day:02d}{dt.hour:02d}",
+            "TO": f"{dt.day:02d}{dt.hour:02d}",
+            "STNM": wmo,
+        }
+        print(f"  Fetching from UWyo (cgi): {cgi_url}  params={cgi_params}")
+        resp = requests.get(cgi_url, params=cgi_params, timeout=20)
+        resp.raise_for_status()
+        html = resp.text
 
     if "Can't get" in html or "No data" in html:
         raise ValueError(f"No sounding data available for {station_id} at {dt}")
@@ -1238,16 +1276,42 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
 
     # ── Observed (default) ──────────────────────────────────────────
     if source == "obs":
-        try:
-            return fetch_iem_sounding(station_id, dt)
-        except Exception as e:
-            errors.append(f"IEM: {e}")
-            print(f"  IEM fetch failed: {e}")
-        try:
-            return fetch_wyoming_sounding(station_id, dt)
-        except Exception as e:
-            errors.append(f"UWyo: {e}")
-            print(f"  UWyo fetch failed: {e}")
+        # Try the requested time first, then nearby standard cycles
+        # (00Z / 12Z) so we can still return data if the exact time
+        # is missing from the archive.
+        times_to_try = [dt]
+        for offset_h in [12, -12, 24, -24]:
+            alt = dt + timedelta(hours=offset_h)
+            # Only add standard sounding hours (00Z, 12Z)
+            if alt.hour in (0, 12) and alt not in times_to_try:
+                times_to_try.append(alt)
+
+        for try_dt in times_to_try:
+            if try_dt != dt:
+                print(f"  Trying nearby cycle: {try_dt}")
+            try:
+                data = fetch_iem_sounding(station_id, try_dt)
+                if try_dt != dt:
+                    print(f"  NOTE: Using data from {try_dt} "
+                          f"(requested {dt} was unavailable)")
+                return data
+            except Exception as e:
+                errors.append(f"IEM@{try_dt:%Y-%m-%d %HZ}: {e}")
+                if not any("UWyo" in err for err in errors):
+                    # Only print IEM failure for first attempt
+                    if try_dt == dt:
+                        print(f"  IEM fetch failed: {e}")
+            try:
+                data = fetch_wyoming_sounding(station_id, try_dt)
+                if try_dt != dt:
+                    print(f"  NOTE: Using data from {try_dt} "
+                          f"(requested {dt} was unavailable)")
+                return data
+            except Exception as e:
+                errors.append(f"UWyo@{try_dt:%Y-%m-%d %HZ}: {e}")
+                if try_dt == dt:
+                    print(f"  UWyo fetch failed: {e}")
+
         raise ValueError(
             "Could not fetch observed sounding:\n    "
             + "\n    ".join(errors)
