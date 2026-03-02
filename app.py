@@ -862,6 +862,11 @@ def _serialize_params(params, data, station, dt, source):
     for key in CLIMO:
         val = base.get(key)
         if val is not None:
+            # CIN=0 is meaningless when CAPE=0 (no convection) — skip it
+            if key == "mlCin":
+                ml_cape_val = base.get("mlCape")
+                if ml_cape_val is None or float(ml_cape_val) < 25:
+                    continue
             base["percentiles"][key] = _percentile(key, float(val))
 
     return base
