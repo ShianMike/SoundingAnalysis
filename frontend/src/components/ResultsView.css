@@ -1082,16 +1082,20 @@
 
 /* ── Climatology Percentile Bars ────────────────────── */
 @keyframes climoSlideIn {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes climoFillGrow {
+  from { width: 0%; }
 }
 
 .rv-climo-body {
   margin-top: 6px;
   padding: 16px 20px 20px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
 }
 
 /* ── Header: description + legend ── */
@@ -1101,19 +1105,19 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .rv-climo-desc {
   font-size: 11px;
-  color: #94a3b8;
+  color: #64748b;
   margin: 0;
   line-height: 1.5;
 }
 .rv-climo-legend {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-shrink: 0;
 }
 .rv-climo-leg {
@@ -1121,23 +1125,23 @@
   align-items: center;
   gap: 5px;
   font-size: 10px;
-  color: #94a3b8;
+  color: #64748b;
   font-weight: 500;
 }
 .rv-climo-leg i {
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
-.rv-climo-leg.low i       { background: linear-gradient(135deg, #4b5563, #6b7280); }
-.rv-climo-leg.moderate i  { background: linear-gradient(135deg, #16a34a, #22c55e); }
-.rv-climo-leg.high i      { background: linear-gradient(135deg, #d97706, #f59e0b); }
-.rv-climo-leg.extreme i   { background: linear-gradient(135deg, #dc2626, #ef4444); }
+.rv-climo-leg.low i       { background: #475569; }
+.rv-climo-leg.moderate i  { background: #22c55e; }
+.rv-climo-leg.high i      { background: #f59e0b; }
+.rv-climo-leg.extreme i   { background: #ef4444; }
 
 /* ── Category groups ── */
 .rv-climo-group {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .rv-climo-group:last-child {
   margin-bottom: 0;
@@ -1145,49 +1149,56 @@
 .rv-climo-group-hdr {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .rv-climo-group-icon {
-  font-size: 12px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  flex-shrink: 0;
 }
 .rv-climo-group-title {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: #cbd5e1;
   white-space: nowrap;
 }
 .rv-climo-group-line {
   flex: 1;
   height: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 /* ── Bar rows ── */
 .rv-climo-bars {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
 }
 .rv-climo-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
-  animation: climoSlideIn 0.35s ease-out both;
+  padding: 5px 8px;
+  animation: climoSlideIn 0.3s ease-out both;
   transition: background 0.15s ease;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 .rv-climo-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
 }
 .rv-climo-label {
-  width: 68px;
+  width: 60px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: #94a3b8;
   text-align: right;
   flex-shrink: 0;
@@ -1201,12 +1212,11 @@
 /* ── Track with reference markers ── */
 .rv-climo-track {
   flex: 1;
-  height: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
-  overflow: hidden;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: visible;
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 .rv-climo-markers {
   position: absolute;
@@ -1215,66 +1225,115 @@
 }
 .rv-climo-markers span {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: -2px;
+  bottom: -2px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
 }
 
-/* ── Fill bar with gradient per tier ── */
+/* ── Fill bar ── */
 .rv-climo-fill {
   height: 100%;
-  border-radius: 8px;
-  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border-radius: 3px;
+  transition: width 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: climoFillGrow 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
+.rv-climo-dot {
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: inherit;
+  border: 2px solid rgba(15, 23, 42, 0.8);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
 .rv-climo-low .rv-climo-fill {
-  background: linear-gradient(90deg, #374151 0%, #6b7280 100%);
+  background: #475569;
+}
+.rv-climo-low .rv-climo-dot {
+  background: #6b7280;
 }
 .rv-climo-moderate .rv-climo-fill {
-  background: linear-gradient(90deg, #15803d 0%, #22c55e 60%, #4ade80 100%);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.2);
+  background: linear-gradient(90deg, #15803d, #22c55e);
+}
+.rv-climo-moderate .rv-climo-dot {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
 }
 .rv-climo-high .rv-climo-fill {
-  background: linear-gradient(90deg, #b45309 0%, #f59e0b 60%, #fbbf24 100%);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+  background: linear-gradient(90deg, #b45309, #f59e0b);
+}
+.rv-climo-high .rv-climo-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
 }
 .rv-climo-extreme .rv-climo-fill {
-  background: linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #f87171 100%);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+}
+.rv-climo-extreme .rv-climo-dot {
+  background: #f87171;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+/* ── Raw value ── */
+.rv-climo-val {
+  min-width: 42px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: #cbd5e1;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 /* ── Percentile badge ── */
 .rv-climo-badge {
-  min-width: 34px;
-  padding: 2px 7px;
+  min-width: 38px;
+  padding: 2px 6px;
   font-size: 10px;
   font-family: var(--font-mono);
   font-weight: 700;
   text-align: center;
-  border-radius: 10px;
+  border-radius: 6px;
   flex-shrink: 0;
+  line-height: 1.4;
+}
+.rv-climo-badge sup {
+  font-size: 7px;
+  font-weight: 500;
+  opacity: 0.7;
+  margin-left: 0px;
 }
 .rv-climo-badge.rv-climo-low {
-  background: rgba(107, 114, 128, 0.2);
-  color: #9ca3af;
+  background: rgba(71, 85, 105, 0.25);
+  color: #94a3b8;
 }
 .rv-climo-badge.rv-climo-moderate {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(34, 197, 94, 0.12);
   color: #4ade80;
 }
 .rv-climo-badge.rv-climo-high {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(245, 158, 11, 0.12);
   color: #fbbf24;
 }
 .rv-climo-badge.rv-climo-extreme {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.15);
   color: #f87171;
   animation: climoPulse 2s ease-in-out infinite;
 }
 @keyframes climoPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-  50%      { box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.2); }
+  50%      { box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.15); }
 }
 
 /* ── Mobile ── */
@@ -1285,6 +1344,9 @@
   }
   .rv-climo-legend {
     gap: 8px;
+  }
+  .rv-climo-val {
+    display: none;
   }
 }
 @media (max-width: 480px) {
@@ -1299,22 +1361,31 @@
     gap: 3px;
   }
   .rv-climo-leg i {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   .rv-climo-label {
-    width: 52px;
+    width: 48px;
     font-size: 9px;
   }
   .rv-climo-track {
-    height: 12px;
+    height: 5px;
+  }
+  .rv-climo-dot {
+    width: 6px;
+    height: 6px;
+    right: -3px;
   }
   .rv-climo-badge {
-    min-width: 28px;
+    min-width: 32px;
     font-size: 9px;
     padding: 1px 5px;
   }
   .rv-climo-group-title {
     font-size: 9px;
+  }
+  .rv-climo-group-icon {
+    width: 20px;
+    height: 20px;
   }
 }

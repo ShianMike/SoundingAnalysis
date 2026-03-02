@@ -1178,18 +1178,18 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       {/* Climatology Percentiles */}
       {params.percentiles && Object.keys(params.percentiles).length > 0 && (() => {
         const CLIMO_GROUPS = [
-          { title: "Instability", icon: "🔥", items: [
+          { title: "Instability", Icon: Flame, items: [
             ["SB CAPE", "sbCape"], ["ML CAPE", "mlCape"], ["MU CAPE", "muCape"],
             ["ECAPE", "ecape"], ["3km CAPE", "cape3km"], ["ML CIN", "mlCin"], ["DCAPE", "dcape"],
           ]},
-          { title: "Shear & Kinematics", icon: "🌀", items: [
+          { title: "Shear & Kinematics", Icon: Wind, items: [
             ["0-1 BWD", "bwd1km"], ["0-6 BWD", "bwd6km"], ["Eff BWD", "ebwd"],
             ["0-1 SRH", "srh1km"], ["0-3 SRH", "srh3km"], ["Eff SRH", "esrh"],
           ]},
-          { title: "Composite Indices", icon: "📊", items: [
+          { title: "Composite Indices", Icon: Gauge, items: [
             ["STP", "stp"], ["SCP", "scp"], ["SHIP", "ship"], ["DCP", "dcp"],
           ]},
-          { title: "Thermodynamic", icon: "🌡️", items: [
+          { title: "Thermodynamic", Icon: Thermometer, items: [
             ["LR 0-3", "lr03"], ["LR 3-6", "lr36"], ["PWAT", "pwat"],
           ]},
         ];
@@ -1217,10 +1217,13 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                 {CLIMO_GROUPS.map((group) => {
                   const rows = group.items.filter(([, k]) => params.percentiles[k] != null);
                   if (!rows.length) return null;
+                  const GroupIcon = group.Icon;
                   return (
                     <div key={group.title} className="rv-climo-group">
                       <div className="rv-climo-group-hdr">
-                        <span className="rv-climo-group-icon">{group.icon}</span>
+                        <span className="rv-climo-group-icon">
+                          <GroupIcon size={13} />
+                        </span>
                         <span className="rv-climo-group-title">{group.title}</span>
                         <div className="rv-climo-group-line" />
                       </div>
@@ -1228,6 +1231,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                         {rows.map(([label, key], idx) => {
                           const pct = params.percentiles[key];
                           const tier = pctTier(pct);
+                          const rawVal = params[key];
                           return (
                             <div key={key} className={`rv-climo-item rv-climo-${tier}`}
                                  style={{ animationDelay: `${idx * 40}ms` }}>
@@ -1239,10 +1243,15 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                                   <span style={{ left: "75%" }} />
                                   <span style={{ left: "95%" }} />
                                 </div>
-                                <div className="rv-climo-fill" style={{ width: `${pct}%` }} />
+                                <div className="rv-climo-fill" style={{ width: `${pct}%` }}>
+                                  <span className="rv-climo-dot" />
+                                </div>
                               </div>
+                              <span className={`rv-climo-val`}>
+                                {rawVal != null ? (typeof rawVal === 'number' ? (Number.isInteger(rawVal) ? rawVal : rawVal.toFixed(1)) : rawVal) : '—'}
+                              </span>
                               <span className={`rv-climo-badge rv-climo-${tier}`}>
-                                {Math.round(pct)}
+                                {Math.round(pct)}<sup>th</sup>
                               </span>
                             </div>
                           );
