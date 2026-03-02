@@ -1080,13 +1080,10 @@
   }
 }
 
-/* ── Climatology Percentile Bars ────────────────────── */
+/* ── Climatology Percentile Cards ────────────────────── */
 @keyframes climoSlideIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes climoFillGrow {
-  from { width: 0%; }
 }
 
 .rv-climo-body {
@@ -1177,160 +1174,168 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* ── Bar rows ── */
-.rv-climo-bars {
+/* ── Card grid ── */
+.rv-climo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
+}
+
+.rv-climo-card {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
-}
-.rv-climo-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 8px;
+  padding: 10px 8px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
   animation: climoSlideIn 0.3s ease-out both;
-  transition: background 0.15s ease;
-  border-radius: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: default;
 }
-.rv-climo-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-.rv-climo-label {
-  width: 60px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  text-align: right;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  letter-spacing: -0.02em;
-}
-.rv-climo-item:hover .rv-climo-label {
-  color: #e2e8f0;
-}
-
-/* ── Track with reference markers ── */
-.rv-climo-track {
-  flex: 1;
-  height: 6px;
+.rv-climo-card:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 3px;
-  overflow: visible;
-  position: relative;
-}
-.rv-climo-markers {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.rv-climo-markers span {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 1px;
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
-/* ── Fill bar ── */
-.rv-climo-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
-  animation: climoFillGrow 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+/* ── Card label ── */
+.rv-climo-card-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.2;
 }
-.rv-climo-dot {
-  position: absolute;
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: inherit;
-  border: 2px solid rgba(15, 23, 42, 0.8);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
-  flex-shrink: 0;
+.rv-climo-card:hover .rv-climo-card-label {
+  color: #94a3b8;
 }
 
-.rv-climo-low .rv-climo-fill {
-  background: #475569;
-}
-.rv-climo-low .rv-climo-dot {
-  background: #6b7280;
-}
-.rv-climo-moderate .rv-climo-fill {
-  background: linear-gradient(90deg, #15803d, #22c55e);
-}
-.rv-climo-moderate .rv-climo-dot {
-  background: #4ade80;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-}
-.rv-climo-high .rv-climo-fill {
-  background: linear-gradient(90deg, #b45309, #f59e0b);
-}
-.rv-climo-high .rv-climo-dot {
-  background: #fbbf24;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
-}
-.rv-climo-extreme .rv-climo-fill {
-  background: linear-gradient(90deg, #b91c1c, #ef4444);
-}
-.rv-climo-extreme .rv-climo-dot {
-  background: #f87171;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
-}
-
-/* ── Raw value ── */
-.rv-climo-val {
-  min-width: 42px;
-  font-size: 11px;
+/* ── Card value ── */
+.rv-climo-card-value {
+  font-size: 16px;
   font-family: var(--font-mono);
-  font-weight: 600;
-  color: #cbd5e1;
-  text-align: right;
-  flex-shrink: 0;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.2;
 }
 
-/* ── Percentile badge ── */
-.rv-climo-badge {
-  min-width: 38px;
-  padding: 2px 6px;
+/* ── Card badge ── */
+.rv-climo-card-badge {
+  padding: 1px 6px;
   font-size: 10px;
   font-family: var(--font-mono);
   font-weight: 700;
   text-align: center;
-  border-radius: 6px;
-  flex-shrink: 0;
+  border-radius: 4px;
   line-height: 1.4;
+  margin-top: 2px;
 }
-.rv-climo-badge sup {
+.rv-climo-card-badge sup {
   font-size: 7px;
   font-weight: 500;
   opacity: 0.7;
-  margin-left: 0px;
 }
-.rv-climo-badge.rv-climo-low {
+.rv-climo-card-badge.rv-climo-low {
   background: rgba(71, 85, 105, 0.25);
   color: #94a3b8;
 }
-.rv-climo-badge.rv-climo-moderate {
+.rv-climo-card-badge.rv-climo-moderate {
   background: rgba(34, 197, 94, 0.12);
   color: #4ade80;
 }
-.rv-climo-badge.rv-climo-high {
+.rv-climo-card-badge.rv-climo-high {
   background: rgba(245, 158, 11, 0.12);
   color: #fbbf24;
 }
-.rv-climo-badge.rv-climo-extreme {
+.rv-climo-card-badge.rv-climo-extreme {
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
   animation: climoPulse 2s ease-in-out infinite;
 }
+
+/* ── Tier border accents ── */
+.rv-climo-card.rv-climo-low {
+  border-left: 2px solid #47556944;
+}
+.rv-climo-card.rv-climo-moderate {
+  border-left: 2px solid rgba(34, 197, 94, 0.3);
+}
+.rv-climo-card.rv-climo-high {
+  border-left: 2px solid rgba(245, 158, 11, 0.35);
+}
+.rv-climo-card.rv-climo-extreme {
+  border-left: 2px solid rgba(239, 68, 68, 0.4);
+}
+
+/* ── Hover tooltip ── */
+.rv-climo-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: 240px;
+  padding: 8px 10px;
+  background: #1a1a2e;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.rv-climo-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1a2e;
+}
+.rv-climo-card:hover .rv-climo-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%);
+}
+
+/* Prevent tooltip clipping on edges */
+.rv-climo-card:first-child .rv-climo-tooltip {
+  left: 0;
+  transform: translateY(4px);
+}
+.rv-climo-card:first-child:hover .rv-climo-tooltip {
+  transform: translateY(0);
+}
+.rv-climo-card:first-child .rv-climo-tooltip::after {
+  left: 20px;
+  transform: none;
+}
+.rv-climo-card:last-child .rv-climo-tooltip {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+}
+.rv-climo-card:last-child:hover .rv-climo-tooltip {
+  transform: translateY(0);
+}
+.rv-climo-card:last-child .rv-climo-tooltip::after {
+  left: auto;
+  right: 20px;
+  transform: none;
+}
+
 @keyframes climoPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
   50%      { box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.15); }
@@ -1345,8 +1350,12 @@
   .rv-climo-legend {
     gap: 8px;
   }
-  .rv-climo-val {
-    display: none;
+  .rv-climo-cards {
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+    gap: 4px;
+  }
+  .rv-climo-card-value {
+    font-size: 14px;
   }
 }
 @media (max-width: 480px) {
@@ -1364,22 +1373,22 @@
     width: 6px;
     height: 6px;
   }
-  .rv-climo-label {
-    width: 48px;
+  .rv-climo-cards {
+    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+    gap: 3px;
+  }
+  .rv-climo-card {
+    padding: 8px 6px 6px;
+  }
+  .rv-climo-card-label {
+    font-size: 8px;
+  }
+  .rv-climo-card-value {
+    font-size: 13px;
+  }
+  .rv-climo-card-badge {
     font-size: 9px;
-  }
-  .rv-climo-track {
-    height: 5px;
-  }
-  .rv-climo-dot {
-    width: 6px;
-    height: 6px;
-    right: -3px;
-  }
-  .rv-climo-badge {
-    min-width: 32px;
-    font-size: 9px;
-    padding: 1px 5px;
+    padding: 1px 4px;
   }
   .rv-climo-group-title {
     font-size: 9px;

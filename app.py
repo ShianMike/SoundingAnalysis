@@ -764,8 +764,9 @@ def _serialize_params(params, data, station, dt, source):
         bp = CLIMO[key]
         # CIN is inverted (more negative = worse)
         if key == "mlCin":
-            # For CIN, 0 is 99th, -300 is 10th
-            if val >= bp[6]: return 99
+            # CIN=0 or positive means no meaningful inhibition — skip
+            if val >= 0:
+                return None
             if val <= bp[0]: return 10
             for i in range(len(bp) - 1):
                 if bp[i] <= val <= bp[i + 1]:
@@ -862,12 +863,9 @@ def _serialize_params(params, data, station, dt, source):
     for key in CLIMO:
         val = base.get(key)
         if val is not None:
-            # CIN=0 is meaningless when CAPE=0 (no convection) — skip it
-            if key == "mlCin":
-                ml_cape_val = base.get("mlCape")
-                if ml_cape_val is None or float(ml_cape_val) < 25:
-                    continue
-            base["percentiles"][key] = _percentile(key, float(val))
+            pct = _percentile(key, float(val))
+            if pct is not None:
+                base["percentiles"][key] = pct
 
     return base
 

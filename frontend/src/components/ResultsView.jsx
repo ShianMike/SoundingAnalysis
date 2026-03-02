@@ -1177,6 +1177,28 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
 
       {/* Climatology Percentiles */}
       {params.percentiles && Object.keys(params.percentiles).length > 0 && (() => {
+        const CLIMO_DESCS = {
+          sbCape: "Surface-Based CAPE — total buoyant energy for a surface parcel. Higher values = stronger updraft potential.",
+          mlCape: "Mixed-Layer CAPE — buoyancy for a parcel representing the lowest 100 hPa. Best estimate for well-mixed BL storms.",
+          muCape: "Most-Unstable CAPE — maximum buoyancy available from any parcel in the lowest 300 hPa.",
+          ecape: "Entraining CAPE — CAPE adjusted for environmental entrainment. Better predictor of updraft intensity than traditional CAPE.",
+          cape3km: "0–3 km CAPE — buoyancy in the lowest 3 km. Higher values favor low-level stretching and tornado potential.",
+          mlCin: "Mixed-Layer CIN — energy barrier the ML parcel must overcome. More negative = stronger cap inhibiting convection.",
+          dcape: "Downdraft CAPE — potential energy available for downdrafts. Higher values favor stronger outflow winds.",
+          bwd1km: "0–1 km Bulk Wind Difference — low-level shear magnitude. >15 kt supports mesocyclone stretching near the surface.",
+          bwd6km: "0–6 km Bulk Wind Difference — deep-layer shear. >40 kt supports organized supercells.",
+          ebwd: "Effective Bulk Wind Difference — shear across the effective inflow layer. Better than fixed-layer shear for elevated storms.",
+          srh1km: "0–1 km Storm-Relative Helicity — rotational potential in the lowest 1 km. >150 m²/s² supports significant tornadoes.",
+          srh3km: "0–3 km Storm-Relative Helicity — total low-level rotational energy. >250 m²/s² is notable for mesocyclones.",
+          esrh: "Effective SRH — helicity integrated over the effective inflow layer. Better captures elevated shear environments.",
+          stp: "Significant Tornado Parameter — composite index combining CAPE, shear, SRH, and LCL. Values ≥1 indicate significant tornado environments.",
+          scp: "Supercell Composite — combines CAPE, effective shear, and SRH. Values ≥1 support supercell development.",
+          ship: "Significant Hail Parameter — identifies environments favoring ≥2\" hail. Values ≥1 are notable.",
+          dcp: "Derecho Composite Parameter — identifies environments favorable for long-lived damaging wind events (derechos).",
+          lr03: "0–3 km Lapse Rate — steeper lapse rates enhance low-level instability and tornado potential. >7°C/km is steep.",
+          lr36: "3–6 km Lapse Rate — mid-level lapse rates supporting deep convection. >7°C/km enhances CAPE significantly.",
+          pwat: "Precipitable Water — total column water vapor in mm. Higher values increase heavy precipitation and flash flood risk.",
+        };
         const CLIMO_GROUPS = [
           { title: "Instability", Icon: Flame, items: [
             ["SB CAPE", "sbCape"], ["ML CAPE", "mlCape"], ["MU CAPE", "muCape"],
@@ -1227,32 +1249,23 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                         <span className="rv-climo-group-title">{group.title}</span>
                         <div className="rv-climo-group-line" />
                       </div>
-                      <div className="rv-climo-bars">
+                      <div className="rv-climo-cards">
                         {rows.map(([label, key], idx) => {
                           const pct = params.percentiles[key];
                           const tier = pctTier(pct);
                           const rawVal = params[key];
+                          const desc = CLIMO_DESCS[key];
                           return (
-                            <div key={key} className={`rv-climo-item rv-climo-${tier}`}
+                            <div key={key} className={`rv-climo-card rv-climo-${tier}`}
                                  style={{ animationDelay: `${idx * 40}ms` }}>
-                              <span className="rv-climo-label">{label}</span>
-                              <div className="rv-climo-track">
-                                <div className="rv-climo-markers">
-                                  <span style={{ left: "25%" }} />
-                                  <span style={{ left: "50%" }} />
-                                  <span style={{ left: "75%" }} />
-                                  <span style={{ left: "95%" }} />
-                                </div>
-                                <div className="rv-climo-fill" style={{ width: `${pct}%` }}>
-                                  <span className="rv-climo-dot" />
-                                </div>
-                              </div>
-                              <span className={`rv-climo-val`}>
+                              <span className="rv-climo-card-label">{label}</span>
+                              <span className="rv-climo-card-value">
                                 {rawVal != null ? (typeof rawVal === 'number' ? (Number.isInteger(rawVal) ? rawVal : rawVal.toFixed(1)) : rawVal) : '—'}
                               </span>
-                              <span className={`rv-climo-badge rv-climo-${tier}`}>
+                              <span className={`rv-climo-card-badge rv-climo-${tier}`}>
                                 {Math.round(pct)}<sup>th</sup>
                               </span>
+                              {desc && <span className="rv-climo-tooltip">{desc}</span>}
                             </div>
                           );
                         })}
