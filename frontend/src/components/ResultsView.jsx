@@ -1249,26 +1249,36 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                         <span className="rv-climo-group-title">{group.title}</span>
                         <div className="rv-climo-group-line" />
                       </div>
-                      <div className="rv-climo-cards">
-                        {rows.map(([label, key], idx) => {
-                          const pct = params.percentiles[key];
-                          const tier = pctTier(pct);
-                          const rawVal = params[key];
-                          const desc = CLIMO_DESCS[key];
-                          return (
-                            <div key={key} className={`rv-climo-card rv-climo-${tier}`}
-                                 style={{ animationDelay: `${idx * 40}ms` }}>
-                              <span className="rv-climo-card-label">{label}</span>
-                              <span className="rv-climo-card-value">
-                                {rawVal != null ? (typeof rawVal === 'number' ? (Number.isInteger(rawVal) ? rawVal : rawVal.toFixed(1)) : rawVal) : '—'}
-                              </span>
-                              <span className={`rv-climo-card-badge rv-climo-${tier}`}>
-                                {Math.round(pct)}<sup>th</sup>
-                              </span>
-                              {desc && <span className="rv-climo-tooltip">{desc}</span>}
-                            </div>
-                          );
-                        })}
+                      <div className="rv-climo-chart">
+                        {/* Y-axis grid lines */}
+                        <div className="rv-climo-chart-grid">
+                          <div className="rv-climo-gridline" style={{ bottom: '25%' }}><span>25</span></div>
+                          <div className="rv-climo-gridline" style={{ bottom: '50%' }}><span>50</span></div>
+                          <div className="rv-climo-gridline" style={{ bottom: '75%' }}><span>75</span></div>
+                          <div className="rv-climo-gridline" style={{ bottom: '95%' }}><span>95</span></div>
+                        </div>
+                        <div className="rv-climo-chart-bars">
+                          {rows.map(([label, key], idx) => {
+                            const pct = params.percentiles[key];
+                            const tier = pctTier(pct);
+                            const rawVal = params[key];
+                            const desc = CLIMO_DESCS[key];
+                            const fmtVal = rawVal != null ? (typeof rawVal === 'number' ? (Number.isInteger(rawVal) ? rawVal : rawVal.toFixed(1)) : rawVal) : '—';
+                            return (
+                              <div key={key} className={`rv-climo-col rv-climo-${tier}`}
+                                   style={{ animationDelay: `${idx * 60}ms` }}>
+                                <span className="rv-climo-col-pct">{Math.round(pct)}<sup>th</sup></span>
+                                <div className="rv-climo-col-track">
+                                  <div className={`rv-climo-col-fill rv-climo-${tier}`}
+                                       style={{ height: `${pct}%` }} />
+                                </div>
+                                <span className="rv-climo-col-val">{fmtVal}</span>
+                                <span className="rv-climo-col-label">{label}</span>
+                                {desc && <span className="rv-climo-tooltip">{desc}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
