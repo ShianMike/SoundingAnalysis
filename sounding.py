@@ -1371,7 +1371,24 @@ def _quick_tornado_score(station_id, dt):
     Returns (stp_score, raw_score, cape, srh, bwd, scp, ship, dcp) or None on failure.
     """
     try:
-        data = fetch_iem_sounding(station_id, dt, quiet=True)
+        # Try IEM with both 3-letter ID and WMO number fallback
+        data = None
+        ids_to_try = [station_id]
+        wmo = STATION_WMO.get(station_id)
+        if wmo and wmo != station_id:
+            ids_to_try.append(wmo)
+        for sid in ids_to_try:
+            try:
+                data = fetch_iem_sounding(sid, dt, quiet=True)
+                break
+            except Exception:
+                pass
+        if data is None:
+            # Last resort: try UWyo
+            try:
+                data = fetch_wyoming_sounding(station_id, dt)
+            except Exception:
+                return None
     except Exception:
         return None
 
