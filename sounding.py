@@ -359,6 +359,11 @@ def fetch_wyoming_sounding(station_id, dt):
     if data_start is None:
         raise ValueError("Could not find data in sounding response")
     
+    # UWyo TEXT:LIST has 11 fixed columns:
+    # PRES HGHT TEMP DWPT RELH MIXR DRCT SKNT THTA THTE THTV
+    # When DRCT+SKNT are missing (common at surface/tropo), the line has
+    # 9 tokens instead of 11.  Using split() collapses blank columns, so
+    # we must check the token count to avoid reading THTA/THTE as wind.
     pressure, height, temp, dewpoint, wind_dir, wind_spd = [], [], [], [], [], []
     
     for line in lines[data_start:]:
@@ -366,15 +371,24 @@ def fetch_wyoming_sounding(station_id, dt):
         if not line or line.lower().startswith("</pre>"):
             break
         parts = line.split()
-        if len(parts) < 8:
+        if len(parts) < 7:       # need at least thermo + theta cols
             continue
         try:
-            p = float(parts[0])
-            h = float(parts[1])
-            t = float(parts[2])
+            p  = float(parts[0])
+            h  = float(parts[1])
+            t  = float(parts[2])
             td = float(parts[3])
-            wd = float(parts[6])
-            ws = float(parts[7])
+            if p < 10 or t < -999 or td < -999:
+                continue
+            # Wind is only at indices 6,7 when ALL 11 columns are present.
+            if len(parts) == 11:
+                wd = float(parts[6])
+                ws = float(parts[7])
+                # Sanity: reject obviously bogus wind
+                if ws > 250 or wd > 360:
+                    wd, ws = np.nan, np.nan
+            else:
+                wd, ws = np.nan, np.nan
             pressure.append(p)
             height.append(h)
             temp.append(t)
@@ -387,6 +401,28 @@ def fetch_wyoming_sounding(station_id, dt):
     if len(pressure) < 5:
         raise ValueError(f"Insufficient data ({len(pressure)} levels) from UWyo")
     
+    # Interpolate missing wind data (same approach as IEM parser).
+    wd_arr = np.array(wind_dir)
+    ws_arr = np.array(wind_spd)
+    valid_wind = ~np.isnan(wd_arr) & ~np.isnan(ws_arr)
+    has_wind = valid_wind.copy()
+    if np.any(~valid_wind) and np.sum(valid_wind) >= 2:
+        h_arr = np.array(height)
+        u_valid, v_valid = mpcalc.wind_components(
+            ws_arr[valid_wind] * units.knot,
+            wd_arr[valid_wind] * units.degree,
+        )
+        u_all = np.interp(h_arr, h_arr[valid_wind],
+                          u_valid.to("knot").magnitude)
+        v_all = np.interp(h_arr, h_arr[valid_wind],
+                          v_valid.to("knot").magnitude)
+        wd_arr = mpcalc.wind_direction(
+            u_all * units.knot, v_all * units.knot
+        ).to("degree").magnitude
+        ws_arr = mpcalc.wind_speed(
+            u_all * units.knot, v_all * units.knot
+        ).to("knot").magnitude
+
     station_info = {}
     info_start = html.find("Station number:")
     if info_start > -1:
@@ -407,9 +443,9 @@ def fetch_wyoming_sounding(station_id, dt):
         "height": np.array(height) * units.meter,
         "temperature": np.array(temp) * units.degC,
         "dewpoint": np.array(dewpoint) * units.degC,
-        "wind_direction": np.array(wind_dir) * units.degree,
-        "wind_speed": np.array(wind_spd) * units('m/s'),
-        "has_wind": np.ones(len(pressure), dtype=bool),
+        "wind_direction": wd_arr * units.degree,
+        "wind_speed": ws_arr * units.knot,
+        "has_wind": has_wind,
         "station_info": station_info,
     }
     
