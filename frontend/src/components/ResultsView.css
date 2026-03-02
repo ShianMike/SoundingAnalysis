@@ -1080,10 +1080,13 @@
   }
 }
 
-/* ── Climatology Percentile Cards ────────────────────── */
+/* ── Climatology Percentile Charts ────────────────────── */
 @keyframes climoSlideIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes climoGrow {
+  from { height: 0%; }
 }
 
 .rv-climo-body {
@@ -1138,7 +1141,7 @@
 
 /* ── Category groups ── */
 .rv-climo-group {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .rv-climo-group:last-child {
   margin-bottom: 0;
@@ -1174,101 +1177,141 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* ── Card grid ── */
-.rv-climo-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 6px;
+/* ── Vertical bar chart ── */
+.rv-climo-chart {
+  position: relative;
+  padding-left: 28px;
+  height: 140px;
+}
+.rv-climo-chart-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.rv-climo-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+.rv-climo-gridline span {
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  font-size: 8px;
+  font-family: var(--font-mono);
+  color: #475569;
+  width: 22px;
+  text-align: right;
+}
+.rv-climo-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.rv-climo-card {
-  position: relative;
+/* ── Individual column ── */
+.rv-climo-col {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 10px 8px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.025);
+  gap: 3px;
+  min-width: 0;
+  position: relative;
   animation: climoSlideIn 0.3s ease-out both;
-  transition: background 0.15s ease, border-color 0.15s ease;
   cursor: default;
 }
-.rv-climo-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-}
 
-/* ── Card label ── */
-.rv-climo-card-label {
+/* ── Percentile label above bar ── */
+.rv-climo-col-pct {
   font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #64748b;
-  text-align: center;
-  line-height: 1.2;
-}
-.rv-climo-card:hover .rv-climo-card-label {
-  color: #94a3b8;
-}
-
-/* ── Card value ── */
-.rv-climo-card-value {
-  font-size: 16px;
   font-family: var(--font-mono);
   font-weight: 700;
-  color: #e2e8f0;
-  line-height: 1.2;
+  color: #94a3b8;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.rv-climo-col-pct sup {
+  font-size: 6px;
+  font-weight: 500;
+  opacity: 0.6;
+}
+.rv-climo-col.rv-climo-moderate .rv-climo-col-pct { color: #4ade80; }
+.rv-climo-col.rv-climo-high .rv-climo-col-pct     { color: #fbbf24; }
+.rv-climo-col.rv-climo-extreme .rv-climo-col-pct  { color: #f87171; }
+
+/* ── The vertical bar track ── */
+.rv-climo-col-track {
+  width: 100%;
+  max-width: 36px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
 }
 
-/* ── Card badge ── */
-.rv-climo-card-badge {
-  padding: 1px 6px;
+/* ── Filled portion ── */
+.rv-climo-col-fill {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: climoGrow 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.rv-climo-col-fill.rv-climo-low      { background: linear-gradient(0deg, #334155, #475569); }
+.rv-climo-col-fill.rv-climo-moderate  { background: linear-gradient(0deg, #15803d, #22c55e); }
+.rv-climo-col-fill.rv-climo-high      { background: linear-gradient(0deg, #b45309, #f59e0b); }
+.rv-climo-col-fill.rv-climo-extreme   { background: linear-gradient(0deg, #b91c1c, #ef4444); }
+
+/* ── Hover glow on bar ── */
+.rv-climo-col:hover .rv-climo-col-fill.rv-climo-moderate {
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+}
+.rv-climo-col:hover .rv-climo-col-fill.rv-climo-high {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+.rv-climo-col:hover .rv-climo-col-fill.rv-climo-extreme {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+}
+
+/* ── Raw value below bar ── */
+.rv-climo-col-val {
   font-size: 10px;
   font-family: var(--font-mono);
-  font-weight: 700;
-  text-align: center;
-  border-radius: 4px;
-  line-height: 1.4;
-  margin-top: 2px;
-}
-.rv-climo-card-badge sup {
-  font-size: 7px;
-  font-weight: 500;
-  opacity: 0.7;
-}
-.rv-climo-card-badge.rv-climo-low {
-  background: rgba(71, 85, 105, 0.25);
-  color: #94a3b8;
-}
-.rv-climo-card-badge.rv-climo-moderate {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
-}
-.rv-climo-card-badge.rv-climo-high {
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-}
-.rv-climo-card-badge.rv-climo-extreme {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  animation: climoPulse 2s ease-in-out infinite;
+  font-weight: 600;
+  color: #cbd5e1;
+  white-space: nowrap;
+  line-height: 1;
+  margin-top: 4px;
+  flex-shrink: 0;
 }
 
-/* ── Tier border accents ── */
-.rv-climo-card.rv-climo-low {
-  border-left: 2px solid #47556944;
+/* ── Label at bottom ── */
+.rv-climo-col-label {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.1;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
-.rv-climo-card.rv-climo-moderate {
-  border-left: 2px solid rgba(34, 197, 94, 0.3);
-}
-.rv-climo-card.rv-climo-high {
-  border-left: 2px solid rgba(245, 158, 11, 0.35);
-}
-.rv-climo-card.rv-climo-extreme {
-  border-left: 2px solid rgba(239, 68, 68, 0.4);
+.rv-climo-col:hover .rv-climo-col-label {
+  color: #94a3b8;
 }
 
 /* ── Hover tooltip ── */
@@ -1277,7 +1320,7 @@
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%) translateY(4px);
-  width: 240px;
+  width: 230px;
   padding: 8px 10px;
   background: #1a1a2e;
   border: 1px solid #334155;
@@ -1304,35 +1347,34 @@
   border: 5px solid transparent;
   border-top-color: #1a1a2e;
 }
-.rv-climo-card:hover .rv-climo-tooltip {
+.rv-climo-col:hover .rv-climo-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%);
 }
-
-/* Prevent tooltip clipping on edges */
-.rv-climo-card:first-child .rv-climo-tooltip {
+/* Prevent clipping on first/last columns */
+.rv-climo-col:first-child .rv-climo-tooltip {
   left: 0;
   transform: translateY(4px);
 }
-.rv-climo-card:first-child:hover .rv-climo-tooltip {
+.rv-climo-col:first-child:hover .rv-climo-tooltip {
   transform: translateY(0);
 }
-.rv-climo-card:first-child .rv-climo-tooltip::after {
-  left: 20px;
+.rv-climo-col:first-child .rv-climo-tooltip::after {
+  left: 16px;
   transform: none;
 }
-.rv-climo-card:last-child .rv-climo-tooltip {
+.rv-climo-col:last-child .rv-climo-tooltip {
   left: auto;
   right: 0;
   transform: translateY(4px);
 }
-.rv-climo-card:last-child:hover .rv-climo-tooltip {
+.rv-climo-col:last-child:hover .rv-climo-tooltip {
   transform: translateY(0);
 }
-.rv-climo-card:last-child .rv-climo-tooltip::after {
+.rv-climo-col:last-child .rv-climo-tooltip::after {
   left: auto;
-  right: 20px;
+  right: 16px;
   transform: none;
 }
 
@@ -1350,12 +1392,15 @@
   .rv-climo-legend {
     gap: 8px;
   }
-  .rv-climo-cards {
-    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-    gap: 4px;
+  .rv-climo-chart {
+    height: 120px;
+    padding-left: 22px;
   }
-  .rv-climo-card-value {
-    font-size: 14px;
+  .rv-climo-col-val {
+    font-size: 9px;
+  }
+  .rv-climo-col-label {
+    font-size: 7px;
   }
 }
 @media (max-width: 480px) {
@@ -1373,22 +1418,18 @@
     width: 6px;
     height: 6px;
   }
-  .rv-climo-cards {
-    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
-    gap: 3px;
+  .rv-climo-chart {
+    height: 100px;
+    padding-left: 18px;
   }
-  .rv-climo-card {
-    padding: 8px 6px 6px;
-  }
-  .rv-climo-card-label {
+  .rv-climo-col-pct {
     font-size: 8px;
   }
-  .rv-climo-card-value {
-    font-size: 13px;
+  .rv-climo-col-val {
+    font-size: 8px;
   }
-  .rv-climo-card-badge {
-    font-size: 9px;
-    padding: 1px 4px;
+  .rv-climo-col-label {
+    font-size: 6px;
   }
   .rv-climo-group-title {
     font-size: 9px;
