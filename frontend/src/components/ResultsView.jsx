@@ -632,7 +632,6 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   const [linkCopied, setLinkCopied] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
-  const [showClimo, setShowClimo] = useState(false);
   const exportRef = useRef(null);
   const plotRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
@@ -1175,119 +1174,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         })()}
       </div>
 
-      {/* Climatology Percentiles */}
-      {params.percentiles && Object.keys(params.percentiles).length > 0 && (() => {
-        const CLIMO_DESCS = {
-          sbCape: "Surface-Based CAPE — total buoyant energy for a surface parcel. Higher values = stronger updraft potential.",
-          mlCape: "Mixed-Layer CAPE — buoyancy for a parcel representing the lowest 100 hPa. Best estimate for well-mixed BL storms.",
-          muCape: "Most-Unstable CAPE — maximum buoyancy available from any parcel in the lowest 300 hPa.",
-          ecape: "Entraining CAPE — CAPE adjusted for environmental entrainment. Better predictor of updraft intensity than traditional CAPE.",
-          cape3km: "0–3 km CAPE — buoyancy in the lowest 3 km. Higher values favor low-level stretching and tornado potential.",
-          mlCin: "Mixed-Layer CIN — energy barrier the ML parcel must overcome. More negative = stronger cap inhibiting convection.",
-          dcape: "Downdraft CAPE — potential energy available for downdrafts. Higher values favor stronger outflow winds.",
-          bwd1km: "0–1 km Bulk Wind Difference — low-level shear magnitude. >15 kt supports mesocyclone stretching near the surface.",
-          bwd6km: "0–6 km Bulk Wind Difference — deep-layer shear. >40 kt supports organized supercells.",
-          ebwd: "Effective Bulk Wind Difference — shear across the effective inflow layer. Better than fixed-layer shear for elevated storms.",
-          srh1km: "0–1 km Storm-Relative Helicity — rotational potential in the lowest 1 km. >150 m²/s² supports significant tornadoes.",
-          srh3km: "0–3 km Storm-Relative Helicity — total low-level rotational energy. >250 m²/s² is notable for mesocyclones.",
-          esrh: "Effective SRH — helicity integrated over the effective inflow layer. Better captures elevated shear environments.",
-          stp: "Significant Tornado Parameter — composite index combining CAPE, shear, SRH, and LCL. Values ≥1 indicate significant tornado environments.",
-          scp: "Supercell Composite — combines CAPE, effective shear, and SRH. Values ≥1 support supercell development.",
-          ship: "Significant Hail Parameter — identifies environments favoring ≥2\" hail. Values ≥1 are notable.",
-          dcp: "Derecho Composite Parameter — identifies environments favorable for long-lived damaging wind events (derechos).",
-          lr03: "0–3 km Lapse Rate — steeper lapse rates enhance low-level instability and tornado potential. >7°C/km is steep.",
-          lr36: "3–6 km Lapse Rate — mid-level lapse rates supporting deep convection. >7°C/km enhances CAPE significantly.",
-          pwat: "Precipitable Water — total column water vapor in mm. Higher values increase heavy precipitation and flash flood risk.",
-        };
-        const CLIMO_GROUPS = [
-          { title: "Instability", Icon: Flame, items: [
-            ["SB CAPE", "sbCape"], ["ML CAPE", "mlCape"], ["MU CAPE", "muCape"],
-            ["ECAPE", "ecape"], ["3km CAPE", "cape3km"], ["ML CIN", "mlCin"], ["DCAPE", "dcape"],
-          ]},
-          { title: "Shear & Kinematics", Icon: Wind, items: [
-            ["0-1 BWD", "bwd1km"], ["0-6 BWD", "bwd6km"], ["Eff BWD", "ebwd"],
-            ["0-1 SRH", "srh1km"], ["0-3 SRH", "srh3km"], ["Eff SRH", "esrh"],
-          ]},
-          { title: "Composite Indices", Icon: Gauge, items: [
-            ["STP", "stp"], ["SCP", "scp"], ["SHIP", "ship"], ["DCP", "dcp"],
-          ]},
-          { title: "Thermodynamic", Icon: Thermometer, items: [
-            ["LR 0-3", "lr03"], ["LR 3-6", "lr36"], ["PWAT", "pwat"],
-          ]},
-        ];
-        const pctTier = (p) => p >= 95 ? "extreme" : p >= 75 ? "high" : p >= 50 ? "moderate" : "low";
-        return (
-          <div className="rv-summary-section">
-            <button className="rv-summary-toggle" onClick={() => setShowClimo((s) => !s)}>
-              <BarChart3 size={14} />
-              <span>Climatology Percentiles</span>
-              <ChevronDown size={12} className={showClimo ? "rv-chev-open" : ""} />
-            </button>
-            {showClimo && (
-              <div className="rv-climo-body">
-                <div className="rv-climo-header">
-                  <p className="rv-climo-desc">
-                    Percentile rank vs. SPC severe-weather proximity sounding climatology.
-                  </p>
-                  <div className="rv-climo-legend">
-                    <span className="rv-climo-leg low"><i/>{"<"}50th</span>
-                    <span className="rv-climo-leg moderate"><i/>50–75th</span>
-                    <span className="rv-climo-leg high"><i/>75–95th</span>
-                    <span className="rv-climo-leg extreme"><i/>≥95th</span>
-                  </div>
-                </div>
-                {CLIMO_GROUPS.map((group) => {
-                  const rows = group.items.filter(([, k]) => params.percentiles[k] != null);
-                  if (!rows.length) return null;
-                  const GroupIcon = group.Icon;
-                  return (
-                    <div key={group.title} className="rv-climo-group">
-                      <div className="rv-climo-group-hdr">
-                        <span className="rv-climo-group-icon">
-                          <GroupIcon size={13} />
-                        </span>
-                        <span className="rv-climo-group-title">{group.title}</span>
-                        <div className="rv-climo-group-line" />
-                      </div>
-                      <div className="rv-climo-chart">
-                        {/* Y-axis grid lines */}
-                        <div className="rv-climo-chart-grid">
-                          <div className="rv-climo-gridline" style={{ bottom: '25%' }}><span>25</span></div>
-                          <div className="rv-climo-gridline" style={{ bottom: '50%' }}><span>50</span></div>
-                          <div className="rv-climo-gridline" style={{ bottom: '75%' }}><span>75</span></div>
-                          <div className="rv-climo-gridline" style={{ bottom: '95%' }}><span>95</span></div>
-                        </div>
-                        <div className="rv-climo-chart-bars">
-                          {rows.map(([label, key], idx) => {
-                            const pct = params.percentiles[key];
-                            const tier = pctTier(pct);
-                            const rawVal = params[key];
-                            const desc = CLIMO_DESCS[key];
-                            const fmtVal = rawVal != null ? (typeof rawVal === 'number' ? (Number.isInteger(rawVal) ? rawVal : rawVal.toFixed(1)) : rawVal) : '—';
-                            return (
-                              <div key={key} className={`rv-climo-col rv-climo-${tier}`}
-                                   style={{ animationDelay: `${idx * 60}ms` }}>
-                                <span className="rv-climo-col-pct">{Math.round(pct)}<sup>th</sup></span>
-                                <div className="rv-climo-col-track">
-                                  <div className={`rv-climo-col-fill rv-climo-${tier}`}
-                                       style={{ height: `${pct}%` }} />
-                                </div>
-                                <span className="rv-climo-col-val">{fmtVal}</span>
-                                <span className="rv-climo-col-label">{label}</span>
-                                {desc && <span className="rv-climo-tooltip">{desc}</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+
     </div>
   );
 }
