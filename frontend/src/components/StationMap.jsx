@@ -1,9 +1,46 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind } from "lucide-react";
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause } from "lucide-react";
 import { fetchSpcOutlook } from "../api";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
+
+/* ── Wrapper to make TileLayer opacity reactive ──────────── */
+function RadarLayer({ url, opacity, ...rest }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) ref.current.setOpacity(opacity);
+  }, [opacity]);
+  return <TileLayer ref={ref} url={url} opacity={opacity} {...rest} />;
+}
+
+/* ── base-map tile options ───────────────────────────────────── */
+const BASE_MAPS = [
+  { id: "dark",      name: "Dark",      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" },
+  { id: "light",     name: "Light",     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" },
+  { id: "satellite", name: "Satellite", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" },
+  { id: "terrain",   name: "Terrain",   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" },
+];
+
+/* ── animated radar frame URLs (IEM n0q, up to 60 min back in 5-min steps) */
+const RADAR_INTERVAL_MS = 800; // ms between frames
+
+/** Build URL list for the last `minutes` (must be multiple of 5, max 60). */
+function buildRadarUrls(minutes = 30) {
+  const steps = Math.min(12, Math.max(1, Math.round(minutes / 5)));
+  // offsets: e.g. 60,55,50…5,0  (0 = latest)
+  const offsets = [];
+  for (let i = steps; i >= 0; i--) offsets.push(i * 5);
+  return offsets.map((m) => {
+    const layer = m > 0
+      ? `nexrad-n0q-900913-m${String(m).padStart(2, "0")}m`
+      : "nexrad-n0q-900913";
+    return {
+      url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/{z}/{x}/{y}.png`,
+      label: m > 0 ? `-${m}m` : "Now",
+    };
+  });
+}
 
 /* ── colours ────────────────────────────────────────────────── */
 const RISK_COLORS = {
@@ -220,6 +257,17 @@ function FlyToStation({ station, stations }) {
   return null;
 }
 
+/* ── Invalidate map size when container changes ────────────── */
+function MapResizeHandler({ trigger }) {
+  const map = useMap();
+  useEffect(() => {
+    // Small delay lets the CSS transition finish before recalculating
+    const id = setTimeout(() => map.invalidateSize(), 350);
+    return () => clearTimeout(id);
+  }, [trigger, map]);
+  return null;
+}
+
 /* ── main component ─────────────────────────────────────────── */
 export default function StationMap({
   stations = [],
@@ -230,14 +278,47 @@ export default function StationMap({
   latLonMode,   // true when source is rap
   onClose,
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [outlookDay, setOutlookDay] = useState(1);
   const [outlookType, setOutlookType] = useState("cat");
   const [outlookData, setOutlookData] = useState(null);
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
-  const [showRadar, setShowRadar] = useState(false);
+  const [showRadar, setShowRadar] = useState(true);
   const [showVelocity, setShowVelocity] = useState(false);
   const [velocityRadar, setVelocityRadar] = useState("TLX");   // nearest NEXRAD ID
+  const [baseMap, setBaseMap] = useState("dark");
+  const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
+
+  // Animated radar state
+  const [radarPlaying, setRadarPlaying] = useState(false);
+  const [radarFrame, setRadarFrame] = useState(0);
+  const [radarMinutes, setRadarMinutes] = useState(30); // 5-60
+  const radarTimerRef = useRef(null);
+  const radarUrls = useMemo(() => buildRadarUrls(radarMinutes), [radarMinutes]);
+  const radarFrameCount = radarUrls.length;
+
+  // Advance radar frame
+  useEffect(() => {
+    if (!radarPlaying || !showRadar) {
+      clearInterval(radarTimerRef.current);
+      return;
+    }
+    radarTimerRef.current = setInterval(() => {
+      setRadarFrame((f) => (f + 1) % radarFrameCount);
+    }, RADAR_INTERVAL_MS);
+    return () => clearInterval(radarTimerRef.current);
+  }, [radarPlaying, showRadar, radarFrameCount]);
+
+  // Clamp frame when duration changes
+  useEffect(() => {
+    setRadarFrame((f) => Math.min(f, radarFrameCount - 1));
+  }, [radarFrameCount]);
+
+  // Reset frame when radar is toggled off
+  useEffect(() => {
+    if (!showRadar) { setRadarPlaying(false); setRadarFrame(0); }
+  }, [showRadar]);
 
   const handleCenterChange = useCallback((lat, lng) => {
     setVelocityRadar(nearestNexrad(lat, lng));
@@ -296,129 +377,158 @@ export default function StationMap({
   const mapCenter = CONUS_CENTER;
   const mapZoom = CONUS_ZOOM;
 
+  // Escape key exits fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handler = (e) => { if (e.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isFullscreen]);
+
+  // Toggle body scroll lock when fullscreen
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.classList.add("smap-fullscreen-active");
+    } else {
+      document.body.classList.remove("smap-fullscreen-active");
+    }
+    return () => document.body.classList.remove("smap-fullscreen-active");
+  }, [isFullscreen]);
+
   return (
-    <section className="station-map-panel">
-      <header className="smap-header">
-        <div className="smap-title-group">
-          <Crosshair size={14} />
-          <span className="smap-title">Station Map</span>
-          {latLonMode && (
-            <span className="smap-tag">Click map to set coordinates</span>
-          )}
-        </div>
-        <button className="smap-close" onClick={onClose} title="Close map">
-          <X size={16} />
-        </button>
-      </header>
-
-      {/* SPC Outlook & Radar controls */}
-      <div className="smap-outlook-bar">
-        <button
-          className={`smap-outlook-toggle ${showOutlook ? "active" : ""}`}
-          onClick={() => setShowOutlook((v) => !v)}
-          title="Toggle SPC outlook overlay"
-        >
-          <CloudLightning size={12} />
-          SPC Outlook
-        </button>
-        <button
-          className={`smap-outlook-toggle ${showRadar ? "active" : ""}`}
-          onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
-          title="Toggle NEXRAD radar reflectivity overlay"
-        >
-          <Crosshair size={12} />
-          Radar
-        </button>
-        <button
-          className={`smap-outlook-toggle ${showVelocity ? "active" : ""}`}
-          onClick={() => { setShowVelocity((v) => !v); setShowRadar(false); }}
-          title="Toggle NEXRAD storm-relative velocity overlay"
-        >
-          <Wind size={12} />
-          Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar}</span>}
-        </button>
-        {showOutlook && (
-          <>
-            <div className="smap-day-btns">
-              {[1, 2, 3].map((d) => (
-                <button
-                  key={d}
-                  className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
-                  onClick={() => setOutlookDay(d)}
-                >
-                  Day {d}
-                </button>
-              ))}
-            </div>
-            <div className="smap-day-btns smap-type-btns">
-              {OUTLOOK_TYPES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${outlookDay === 3 && t.id !== "cat" ? " smap-btn-disabled" : ""}`}
-                  onClick={() => { if (outlookDay !== 3 || t.id === "cat") setOutlookType(t.id); }}
-                  title={outlookDay === 3 && t.id !== "cat" ? "Day 3 only has categorical" : t.name}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        {showOutlook && outlookLoading && (
-          <span className="smap-outlook-loading">Loading…</span>
-        )}
-        {showOutlook && outlookMeta && !outlookLoading && (
-          <span className="smap-outlook-meta">
-            {outlookMeta.forecaster} · Valid {outlookMeta.valid}
-          </span>
-        )}
-      </div>
-
-      {/* Legends */}
-      <div className="smap-legends">
-        {riskData && (
-          <div className="smap-legend">
-            <span className="smap-legend-item">
-              <span className="smap-dot" style={{ background: RISK_COLORS.high }} />
-              STP &ge; 1
-            </span>
-            <span className="smap-legend-item">
-              <span className="smap-dot" style={{ background: RISK_COLORS.med }} />
-              0.3 &ndash; 1
-            </span>
-            <span className="smap-legend-item">
-              <span className="smap-dot" style={{ background: RISK_COLORS.low }} />
-              &lt; 0.3
-            </span>
+    <section className={`station-map-panel${isFullscreen ? " smap-fullscreen" : ""}`}>
+      {/* Two-tier toolbar matching rv-meta-bar layout */}
+      <div className="smap-toolbar">
+        <div className="smap-toolbar-top">
+          <span className="smap-title"><Crosshair size={12} /> Station Map</span>
+          {latLonMode && <span className="smap-tag">Click map to set coordinates</span>}
+          <div className="smap-toolbar-end">
+            <button
+              className={`smap-expand${isFullscreen ? " active" : ""}`}
+              onClick={() => setIsFullscreen((v) => !v)}
+              title={isFullscreen ? "Exit fullscreen (Esc)" : "Expand map fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+            <button className="smap-expand" onClick={() => { setIsFullscreen(false); onClose(); }} title="Close map">
+              <X size={14} />
+            </button>
           </div>
-        )}
-        {showOutlook && activeCategories.length > 0 && (
-          <div className="smap-legend smap-legend-outlook">
-            {effectiveType === "cat" ? (
-              activeCategories.map((c) => (
-                <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
-                  <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
-                  <span className="smap-cat-label">{c.name}</span>
-                  <span className="smap-cat-info">{c.info}</span>
-                </span>
-              ))
-            ) : (
-              activeCategories.map((p) => (
-                <span key={p.label} className="smap-legend-item smap-outlook-cat">
-                  {p.label === "SIGN" ? (
-                    <span className="smap-dot-rect smap-sig-hatch" style={{ borderColor: "#111" }} />
-                  ) : (
-                    <span className="smap-dot-rect" style={{ background: p.fill, borderColor: p.color }} />
-                  )}
-                  <span className="smap-cat-label">{p.label === "SIGN" ? "Significant" : p.pct}</span>
-                </span>
-              ))
+        </div>
+        <div className="smap-toolbar-bottom">
+          <div className="smap-controls">
+            <button
+              className={`smap-tbtn ${showOutlook ? "active" : ""}`}
+              onClick={() => setShowOutlook((v) => !v)}
+              title="Toggle SPC outlook overlay"
+            >
+              <CloudLightning size={11} />
+              SPC Outlook
+            </button>
+            <button
+              className={`smap-tbtn ${showRadar ? "active" : ""}`}
+              onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
+              title="Toggle NEXRAD radar reflectivity overlay"
+            >
+              <Crosshair size={11} />
+              Radar
+            </button>
+            {showRadar && (
+              <>
+                <button
+                  className={`smap-tbtn smap-anim-btn ${radarPlaying ? "active" : ""}`}
+                  onClick={() => setRadarPlaying((v) => !v)}
+                  title={radarPlaying ? "Pause radar animation" : "Animate radar frames"}
+                >
+                  {radarPlaying ? <Pause size={10} /> : <Play size={10} />}
+                  {radarPlaying ? radarUrls[radarFrame]?.label : "Animate"}
+                </button>
+                <div className="smap-radar-slider-wrap" title={`Lookback: ${radarMinutes} min`}>
+                  <input
+                    type="range"
+                    className="smap-radar-slider"
+                    min={10}
+                    max={60}
+                    step={5}
+                    value={radarMinutes}
+                    onChange={(e) => setRadarMinutes(Number(e.target.value))}
+                  />
+                  <span className="smap-radar-slider-label">{radarMinutes}m</span>
+                </div>
+              </>
+            )}
+            <button
+              className={`smap-tbtn ${showVelocity ? "active" : ""}`}
+              onClick={() => { setShowVelocity((v) => !v); setShowRadar(false); }}
+              title="Toggle NEXRAD storm-relative velocity overlay"
+            >
+              <Wind size={11} />
+              Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar}</span>}
+            </button>
+            {showOutlook && (
+              <>
+                <div className="smap-day-btns">
+                  {[1, 2, 3].map((d) => (
+                    <button
+                      key={d}
+                      className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
+                      onClick={() => setOutlookDay(d)}
+                    >
+                      Day {d}
+                    </button>
+                  ))}
+                </div>
+                <div className="smap-day-btns smap-type-btns">
+                  {OUTLOOK_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${outlookDay === 3 && t.id !== "cat" ? " smap-btn-disabled" : ""}`}
+                      onClick={() => { if (outlookDay !== 3 || t.id === "cat") setOutlookType(t.id); }}
+                      title={outlookDay === 3 && t.id !== "cat" ? "Day 3 only has categorical" : t.name}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
-        )}
+          {showOutlook && outlookLoading && (
+            <span className="smap-outlook-loading">Loading…</span>
+          )}
+          {showOutlook && outlookMeta && !outlookLoading && (
+            <span className="smap-outlook-meta">
+              {outlookMeta.forecaster} · {outlookMeta.valid}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="smap-container">
+        {/* Base map switcher — below zoom controls */}
+        <div className="smap-basemap-wrapper">
+          <button
+            className="smap-basemap-btn"
+            onClick={() => setShowBaseMapPicker((v) => !v)}
+            title="Change base map"
+          >
+            <Layers size={14} />
+          </button>
+          {showBaseMapPicker && (
+            <div className="smap-basemap-picker">
+              {BASE_MAPS.map((bm) => (
+                <button
+                  key={bm.id}
+                  className={`smap-basemap-opt ${baseMap === bm.id ? "active" : ""}`}
+                  onClick={() => { setBaseMap(bm.id); setShowBaseMapPicker(false); }}
+                >
+                  {bm.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <MapContainer
           center={mapCenter}
           zoom={mapZoom}
@@ -427,19 +537,21 @@ export default function StationMap({
           attributionControl={false}
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            key={baseMap}
+            url={BASE_MAPS.find((b) => b.id === baseMap)?.url}
             maxZoom={18}
           />
 
-          {/* NEXRAD Radar reflectivity overlay (IEM) */}
-          {showRadar && (
-            <TileLayer
-              url="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png"
-              opacity={0.55}
+          {/* NEXRAD Radar reflectivity overlay (IEM) — animated frames */}
+          {showRadar && radarUrls.map((r, i) => (
+            <RadarLayer
+              key={`radar-${baseMap}-${radarMinutes}-${i}`}
+              url={r.url}
+              opacity={i === radarFrame ? 0.55 : 0}
               maxZoom={12}
               attribution="NEXRAD via IEM"
             />
-          )}
+          ))}
 
           {/* NEXRAD Storm-Relative Velocity overlay (RIDGE single-site) */}
           {showVelocity && (
@@ -458,6 +570,7 @@ export default function StationMap({
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />
           <FlyToStation station={selectedStation} stations={stations} />
+          <MapResizeHandler trigger={isFullscreen} />
 
           {stations.map((s) => {
             const risk = riskMap[s.id];
@@ -476,11 +589,21 @@ export default function StationMap({
                   fillColor: isSelected ? "#3b82f6" : color,
                   fillOpacity: isSelected ? 0.9 : 0.7,
                   weight: isSelected ? 3 : 1.5,
+                  className: isSelected ? "smap-marker-pulse" : "",
                 }}
                 eventHandlers={{
                   click: () => onStationSelect(s.id),
                 }}
               >
+                <Tooltip
+                  direction="top"
+                  offset={[0, -6]}
+                  className="smap-tooltip"
+                  sticky
+                >
+                  <strong>{s.id}</strong> — {s.name}
+                  {stp != null && <span className="smap-tt-stp"> · STP {stp.toFixed(1)}</span>}
+                </Tooltip>
                 <Popup className="smap-popup">
                   <div className="smap-popup-inner">
                     <strong>{s.id}</strong> &mdash; {s.name}
@@ -501,6 +624,42 @@ export default function StationMap({
             );
           })}
         </MapContainer>
+
+        {/* Floating legend overlay */}
+        {(riskData || (showOutlook && activeCategories.length > 0)) && (
+          <div className="smap-legend-float">
+            {riskData && (
+              <div className="smap-legend">
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.high }} />STP &ge; 1</span>
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.med }} />0.3–1</span>
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.low }} />&lt; 0.3</span>
+              </div>
+            )}
+            {showOutlook && activeCategories.length > 0 && (
+              <div className="smap-legend smap-legend-outlook">
+                {effectiveType === "cat" ? (
+                  activeCategories.map((c) => (
+                    <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
+                      <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
+                      <span className="smap-cat-label">{c.name}</span>
+                    </span>
+                  ))
+                ) : (
+                  activeCategories.map((p) => (
+                    <span key={p.label} className="smap-legend-item smap-outlook-cat">
+                      {p.label === "SIGN" ? (
+                        <span className="smap-dot-rect smap-sig-hatch" style={{ borderColor: "#111" }} />
+                      ) : (
+                        <span className="smap-dot-rect" style={{ background: p.fill, borderColor: p.color }} />
+                      )}
+                      <span className="smap-cat-label">{p.label === "SIGN" ? "Sig" : p.pct}</span>
+                    </span>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

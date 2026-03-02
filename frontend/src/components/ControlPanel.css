@@ -14,6 +14,59 @@
   z-index: 100;
 }
 
+/* ── Drag handle (hidden by default, shown in float mode) ── */
+.cp-drag-handle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 2px 8px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.cp-drag-handle:active {
+  cursor: grabbing;
+}
+
+.cp-drag-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.cp-drag-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.cp-drag-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.cp-drag-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
 /* Brand */
 .cp-brand {
   display: flex;

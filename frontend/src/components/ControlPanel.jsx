@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Search,
   MapPin,
@@ -30,6 +30,9 @@ import {
   Upload,
   Minus,
   X,
+  GripVertical,
+  ChevronUp,
+  PanelLeftClose,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite, getStationGroups, saveStationGroup, deleteStationGroup } from "../favorites";
@@ -156,6 +159,74 @@ export default function ControlPanel({
   onToggleColorblind,
   onNavigateUpload,
 }) {
+  /* ── Drag & collapse state for fullscreen-float mode ─────── */
+  const [floatCollapsed, setFloatCollapsed] = useState(false);
+  const [dragPos, setDragPos] = useState({ x: 16, y: 16 });
+  const dragRef = useRef(null);
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+
+  const onPointerDown = useCallback((e) => {
+    if (!document.body.classList.contains("smap-fullscreen-active")) return;
+    // Don't start drag if clicking a button (let the click event fire)
+    if (e.target.closest("button")) return;
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX, y: e.clientY, posX: dragPos.x, posY: dragPos.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [dragPos]);
+
+  /** Minimum Y = bottom of the map toolbar + gap so sidebar never overlaps it */
+  const getMinY = useCallback(() => {
+    const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
+    if (tb) {
+      const rect = tb.getBoundingClientRect();
+      return rect.bottom + 8;        // 8px gap below toolbar
+    }
+    return 90;                         // safe fallback
+  }, []);
+
+  const onPointerMove = useCallback((e) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    const minY = getMinY();
+    const pad = 12;
+    const panelW = dragRef.current ? dragRef.current.offsetWidth : 270;
+    setDragPos({
+      x: Math.max(pad, Math.min(window.innerWidth - panelW - pad, dragStart.current.posX + dx)),
+      y: Math.max(minY, Math.min(window.innerHeight - 40, dragStart.current.posY + dy)),
+    });
+  }, [getMinY]);
+
+  const onPointerUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  // Centre sidebar when entering fullscreen; reset when exiting
+  // Only react when the fullscreen state actually *changes* (not every class mutation)
+  const wasFullscreen = useRef(false);
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      const active = document.body.classList.contains("smap-fullscreen-active");
+      if (active === wasFullscreen.current) return; // no change — ignore
+      wasFullscreen.current = active;
+      if (active) {
+        // Compute a vertically-centred initial Y, clamped below toolbar
+        const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
+        const minY = tb ? tb.getBoundingClientRect().bottom + 8 : 90;
+        const el = dragRef.current;
+        const h = el ? el.offsetHeight : 400;
+        const centredY = Math.max(minY, (window.innerHeight - h) / 2);
+        setDragPos({ x: 16, y: centredY });
+      } else {
+        setDragPos({ x: 16, y: 16 });
+        setFloatCollapsed(false);
+      }
+    });
+    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
   const [source, setSourceLocal] = useState(urlParams?.source || "obs");
   const [station, setStationLocal] = useState(urlParams?.station || "OUN");
   const [date, setDate] = useState(() => {
@@ -491,8 +562,35 @@ export default function ControlPanel({
     );
   }
 
+  const isFloat = typeof window !== "undefined" && document.body.classList.contains("smap-fullscreen-active");
+
   return (
-    <aside className="control-panel">
+    <aside
+      className={`control-panel${floatCollapsed ? " cp-float-collapsed" : ""}`}
+      style={isFloat ? { left: dragPos.x, top: dragPos.y, bottom: 'auto', margin: 0 } : undefined}
+      ref={dragRef}
+    >
+      {/* Drag handle – only visible in float mode */}
+      <div
+        className="cp-drag-handle"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <GripVertical size={14} />
+        <span className="cp-drag-label">Sounding Analysis</span>
+        <div className="cp-drag-actions">
+          <button
+            type="button"
+            className="cp-drag-btn"
+            onClick={() => setFloatCollapsed((v) => !v)}
+            title={floatCollapsed ? "Expand panel" : "Collapse panel"}
+          >
+            {floatCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+        </div>
+      </div>
+
       {/* Brand */}
       <div className="cp-brand">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">

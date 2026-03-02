@@ -834,25 +834,43 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
 
   return (
     <div className="results-view">
-      {/* Meta bar */}
+      {/* Map + Risk scan table */}
+      {showMap && mapProps && <StationMap {...mapProps} />}
+      {showRisk && <RiskTable riskData={riskData} />}
+
+      {/* Time-Series Chart */}
+      {showTimeSeries && (
+        <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+      )}
+
+      {/* Comparison View */}
+      {showCompare && (
+        <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+      )}
+
+      {/* VWP Display */}
+      {showVwp && (
+        <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+      )}
+
+      {/* Meta bar — above the sounding plot */}
       <div className="rv-meta-bar">
-        <div className="rv-meta-items">
-          <span className="rv-meta-tag rv-meta-station">{meta.station || meta.source.toUpperCase()}</span>
-          <span className="rv-meta-text">{meta.stationName}</span>
-          <span className="rv-meta-sep" />
-          <span className="rv-meta-text">{meta.date}</span>
-          <span className="rv-meta-sep" />
-          <span className="rv-meta-text">{meta.levels} levels</span>
-          <span className="rv-meta-text rv-meta-dim">
-            {meta.sfcPressure}&ndash;{meta.topPressure} hPa
-          </span>
-          {meta.vadRadar && (
-            <span className="rv-meta-tag rv-meta-vad" title={meta.vadTime ? `VAD valid: ${meta.vadTime}` : ""}>
-              VAD: {meta.vadRadar}
-            </span>
-          )}
+        <div className="rv-meta-row-top">
+          <span className="rv-meta-station">{meta.station || meta.source.toUpperCase()}</span>
+          <span className="rv-meta-name">{meta.stationName}</span>
+          <span className="rv-meta-date">{meta.date}</span>
         </div>
-        <div className="rv-meta-actions">
+        <div className="rv-meta-row-bottom">
+          <div className="rv-meta-details">
+            <span className="rv-meta-chip">{meta.levels} <span className="rv-meta-chip-value">levels</span></span>
+            <span className="rv-meta-chip">{meta.sfcPressure}&ndash;{meta.topPressure} <span className="rv-meta-chip-value">hPa</span></span>
+            {meta.vadRadar && (
+              <span className="rv-meta-chip rv-meta-vad" title={meta.vadTime ? `VAD valid: ${meta.vadTime}` : ""}>
+                VAD <span className="rv-meta-chip-value">{meta.vadRadar}</span>
+              </span>
+            )}
+          </div>
+          <div className="rv-meta-actions">
           <button
             className={`rv-btn ${zoomed ? "rv-btn-active" : ""}`}
             onClick={() => setZoomed((z) => !z)}
@@ -905,27 +923,8 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
             <Printer size={14} />
           </button>
         </div>
+        </div>
       </div>
-
-      {/* Map + Risk scan table */}
-      {showMap && mapProps && <StationMap {...mapProps} />}
-      {showRisk && <RiskTable riskData={riskData} />}
-
-      {/* Time-Series Chart */}
-      {showTimeSeries && (
-        <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
-      )}
-
-      {/* Comparison View */}
-      {showCompare && (
-        <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
-      )}
-
-      {/* VWP Display */}
-      {showVwp && (
-        <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
-      )}
-
       {/* Plot — supports drag-to-pan (desktop) and touch pan/pinch-zoom (mobile) */}
       <div
         ref={plotRef}

@@ -222,3 +222,83 @@
     print-color-adjust: exact !important;
   }
 }
+
+/* ── Floating sidebar when map is fullscreen ─────────────── */
+body.smap-fullscreen-active .control-panel {
+  z-index: 1100;
+  width: 270px;
+  height: auto;
+  max-height: min(480px, calc(100vh - 32px));
+  top: 16px;
+  bottom: auto;
+  left: 16px;
+  margin: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border, #333);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(17, 17, 17, 0.92);
+  transition: box-shadow 0.3s, background 0.3s;
+  padding: 0 10px 8px;
+  font-size: 11px;
+  overflow-y: auto;
+}
+
+body.smap-fullscreen-active .control-panel .cp-brand {
+  display: none;
+}
+
+body.smap-fullscreen-active .control-panel .cp-drag-handle {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: inherit;
+  margin: 0 -10px;
+  padding: 10px 10px 12px;
+  border-radius: 14px 14px 0 0;
+  border-bottom: 1px solid var(--border, #333);
+  margin-bottom: 10px;
+}
+
+/* Compact sizing overrides */
+body.smap-fullscreen-active .control-panel .cp-label {
+  font-size: 10px;
+}
+body.smap-fullscreen-active .control-panel .cp-source-btn {
+  padding: 4px 6px;
+  font-size: 9px;
+}
+body.smap-fullscreen-active .control-panel .cp-section {
+  margin-bottom: 6px;
+}
+body.smap-fullscreen-active .control-panel .cp-form {
+  gap: 4px;
+}
+body.smap-fullscreen-active .control-panel .cp-tool-btn {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+body.smap-fullscreen-active .control-panel .cp-bottom {
+  padding-top: 6px;
+}
+
+/* Collapsed state — hide everything except the drag handle */
+body.smap-fullscreen-active .control-panel.cp-float-collapsed {
+  max-height: 44px;
+  overflow: hidden;
+  padding-bottom: 0;
+  transition: max-height 0.25s ease, padding 0.15s ease;
+}
+
+/* Expanded state transition */
+body.smap-fullscreen-active .control-panel {
+  transition: max-height 0.3s ease, padding 0.15s ease, box-shadow 0.3s, background 0.3s;
+}
+
+[data-theme="light"] body.smap-fullscreen-active .control-panel,
+body.smap-fullscreen-active [data-theme="light"] .control-panel {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
