@@ -728,61 +728,6 @@ def upload_file():
 def _serialize_params(params, data, station, dt, source):
     """Extract key computed parameters into a JSON-friendly dict."""
 
-    # ── Climatology percentile lookup ──────────────────────────────
-    # Approximate percentile ranks based on SPC proximity sounding
-    # climatology for significant severe weather environments.
-    # Breakpoints: [10th, 25th, 50th, 75th, 90th, 95th, 99th]
-    CLIMO = {
-        "sbCape":  [50, 250, 700, 1500, 2800, 3800, 5500],
-        "mlCape":  [25, 150, 500, 1200, 2200, 3000, 4500],
-        "muCape":  [100, 400, 900, 1800, 3200, 4200, 6000],
-        "ecape":   [50, 200, 500, 1000, 1800, 2500, 3500],
-        "mlCin":   [-300, -150, -60, -25, -8, -3, 0],  # CIN is negative
-        "bwd6km":  [8, 15, 25, 38, 52, 62, 80],
-        "bwd1km":  [3, 6, 10, 16, 24, 30, 45],
-        "srh1km":  [20, 50, 100, 180, 300, 450, 700],
-        "srh3km":  [30, 80, 150, 250, 400, 550, 900],
-        "esrh":    [10, 40, 80, 150, 280, 400, 650],
-        "ebwd":    [5, 12, 22, 35, 50, 60, 78],
-        "stp":     [0, 0.1, 0.4, 1.0, 3.0, 6.0, 12.0],
-        "stpEff":  [0, 0.1, 0.5, 1.0, 4.0, 8.0, 15.0],
-        "scp":     [0, 0.2, 1.0, 3.0, 8.0, 15.0, 30.0],
-        "ship":    [0, 0.1, 0.4, 1.0, 2.0, 3.0, 5.0],
-        "dcp":     [0, 0.3, 1.0, 2.5, 5.0, 8.0, 15.0],
-        "dcape":   [50, 200, 500, 850, 1200, 1500, 2000],
-        "lr03":    [4.5, 5.5, 6.2, 7.0, 7.8, 8.3, 9.2],
-        "lr36":    [4.0, 5.0, 5.8, 6.5, 7.3, 7.8, 8.8],
-        "pwat":    [8, 15, 25, 35, 48, 58, 72],
-        "wmsi":    [0, 0.5, 1.5, 3.0, 5.0, 8.0, 12.0],
-        "mdpi":    [0, 0.3, 0.8, 1.5, 2.5, 3.5, 5.0],
-        "fosbergFwi": [10, 20, 35, 50, 65, 75, 90],
-    }
-
-    def _percentile(key, val):
-        if val is None or key not in CLIMO:
-            return None
-        bp = CLIMO[key]
-        # CIN is inverted (more negative = worse)
-        if key == "mlCin":
-            # CIN=0 or positive means no meaningful inhibition — skip
-            if val >= 0:
-                return None
-            if val <= bp[0]: return 10
-            for i in range(len(bp) - 1):
-                if bp[i] <= val <= bp[i + 1]:
-                    pcts = [10, 25, 50, 75, 90, 95, 99]
-                    frac = (val - bp[i]) / (bp[i + 1] - bp[i]) if bp[i + 1] != bp[i] else 0
-                    return round(pcts[i] + frac * (pcts[i + 1] - pcts[i]))
-            return 50
-        if val <= bp[0]: return 5
-        if val >= bp[6]: return 99
-        pcts = [10, 25, 50, 75, 90, 95, 99]
-        for i in range(len(bp) - 1):
-            if bp[i] <= val <= bp[i + 1]:
-                frac = (val - bp[i]) / (bp[i + 1] - bp[i]) if bp[i + 1] != bp[i] else 0
-                return round(pcts[i] + frac * (pcts[i + 1] - pcts[i]))
-        return 50
-
     base = {
         # Thermodynamic
         "sbCape": _fmt(params.get("sb_cape")),
@@ -857,15 +802,6 @@ def _serialize_params(params, data, station, dt, source):
         "eilBot": round(params["eil_bot_h"]) if params.get("eil_bot_h") is not None else None,
         "eilTop": round(params["eil_top_h"]) if params.get("eil_top_h") is not None else None,
     }
-
-    # ── Percentiles vs severe-weather climatology ─────────────────
-    base["percentiles"] = {}
-    for key in CLIMO:
-        val = base.get(key)
-        if val is not None:
-            pct = _percentile(key, float(val))
-            if pct is not None:
-                base["percentiles"][key] = pct
 
     return base
 
