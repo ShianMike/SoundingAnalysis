@@ -117,8 +117,8 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 14px;
-  overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
 }
 .ens-controls-grid {
   display: grid;
@@ -134,8 +134,12 @@
   border-right: 1px solid var(--border);
   min-width: 0;
 }
+.ens-ctrl-cell:first-child {
+  border-radius: 14px 0 0 0;
+}
 .ens-ctrl-cell:last-child {
   border-right: none;
+  border-radius: 0 14px 0 0;
 }
 .ens-ctrl-label {
   font-size: 10px;
@@ -158,26 +162,41 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
   color: var(--accent, #60a5fa);
   background: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(96, 165, 250, 0.03));
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 8px;
-  letter-spacing: 0.05em;
   width: 100%;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 0;
 }
 .ens-station-btn:hover {
   border-color: rgba(96, 165, 250, 0.4);
   background: linear-gradient(135deg, rgba(96, 165, 250, 0.14), rgba(96, 165, 250, 0.05));
 }
+.ens-station-btn-id {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.ens-station-btn-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .ens-station-arrow {
   margin-left: auto;
   font-size: 10px;
   opacity: 0.5;
+  flex-shrink: 0;
 }
 .ens-station-icon {
   color: rgba(96, 165, 250, 0.5);
@@ -188,16 +207,17 @@
 .ens-ctrl-cell { position: relative; }
 .ens-station-dropdown {
   position: absolute;
-  top: calc(100% - 18px);
+  top: 100%;
   left: 0;
-  right: 0;
-  min-width: 260px;
+  min-width: 300px;
+  max-width: 420px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  z-index: 100;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  z-index: 200;
   overflow: hidden;
+  margin-top: 4px;
 }
 .ens-station-search-wrap {
   display: flex;
@@ -239,14 +259,18 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 12px;
+  padding: 8px 12px;
   border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   background: none;
   color: var(--text-secondary);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.12s ease;
+}
+.ens-station-option:last-child {
+  border-bottom: none;
 }
 .ens-station-option:hover {
   background: rgba(96, 165, 250, 0.08);
@@ -258,15 +282,27 @@
 .ens-station-option-id {
   font-weight: 700;
   font-family: var(--font-mono);
-  min-width: 36px;
+  min-width: 40px;
   letter-spacing: 0.03em;
+  color: var(--accent, #60a5fa);
+  font-size: 11px;
 }
 .ens-station-option-name {
-  color: var(--text-muted);
+  flex: 1;
+  color: var(--text-secondary);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+.ens-station-option-coords {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.55;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .ens-controls-card select {
   padding: 8px 30px 8px 12px;
@@ -296,6 +332,7 @@
   display: flex;
   padding: 14px 20px;
   justify-content: flex-end;
+  border-radius: 0 0 14px 14px;
 }
 .ens-fetch-btn {
   padding: 10px 28px;

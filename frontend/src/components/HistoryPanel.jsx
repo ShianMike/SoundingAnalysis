@@ -112,10 +112,13 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
           ) : (
             <div className="hp-list">
               {entries.map((entry) => (
-                <button
+                <div
                   key={entry.id}
                   className="hp-item"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleLoad(entry.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleLoad(entry.id); }}
                 >
                   <div className="hp-item-main">
                     <span className="hp-item-station">
@@ -137,7 +140,7 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
                       <X size={12} />
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -155,10 +158,13 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
           ) : (
             <div className="hp-list">
               {compareEntries.map((entry) => (
-                <button
+                <div
                   key={entry.id}
                   className="hp-item hp-item-compare"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleLoadCompare(entry.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleLoadCompare(entry.id); }}
                 >
                   <div className="hp-item-main">
                     <GitCompareArrows size={12} className="hp-compare-icon" />
@@ -184,7 +190,7 @@ export default function HistoryPanel({ onLoad, onLoadCompare, onClose }) {
                       <X size={12} />
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

@@ -106,12 +106,28 @@ export async function fetchComposite(soundings) {
 /**
  * Fetch SPC convective outlook GeoJSON.
  * @param {number} day - 1, 2, or 3
- * @param {string} type - "cat" | "torn" | "wind" | "hail"
+ * @param {string} type - "cat" | "torn" | "wind" | "hail" | "ci_torn" | "ci_wind" | "ci_hail"
  */
 export async function fetchSpcOutlook(day = 1, type = "cat") {
   const res = await fetchWithTimeout(`${API_BASE}/api/spc-outlook?day=${day}&type=${type}`, {}, 15000);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to fetch SPC outlook");
+  return data;
+}
+
+/**
+ * Fetch sounding stations that fall within SPC outlook polygons.
+ * @param {number} day - 1, 2, or 3
+ * @param {string} type - "cat" | "torn" | "wind" | "hail" | "ci_torn" | "ci_wind" | "ci_hail"
+ * @param {string} [minRisk] - Minimum categorical risk level (e.g. "SLGT")
+ * @returns {{ day, type, stations: [{id, name, lat, lon, riskLabel}], count }}
+ */
+export async function fetchSpcOutlookStations(day = 1, type = "cat", minRisk = "") {
+  let url = `${API_BASE}/api/spc-outlook-stations?day=${day}&type=${type}`;
+  if (minRisk) url += `&minRisk=${encodeURIComponent(minRisk)}`;
+  const res = await fetchWithTimeout(url, {}, 20000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch outlook stations");
   return data;
 }
 

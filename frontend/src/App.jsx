@@ -165,6 +165,18 @@ export default function App() {
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
   };
 
+  const handleFetchLatest = (stationId) => {
+    // Auto-select the best source: try PSU (latest model run) first,
+    // the backend auto-falls back to BUFKIT / OBS if PSU fails
+    setSelectedStation(stationId);
+    handleSubmit({
+      source: "psu",
+      station: stationId,
+      model: "hrrr",
+      fhour: 0,
+    });
+  };
+
   const handleSourceChange = (src) => {
     setSource(src);
   };
@@ -309,6 +321,7 @@ export default function App() {
               onLatLonSelect: handleMapLatLonSelect,
               latLonMode: source === "rap",
               onClose: () => setShowMap(false),
+              onFetchLatest: handleFetchLatest,
             }}
           />
         </main>

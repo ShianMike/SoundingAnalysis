@@ -170,7 +170,8 @@ export default function EnsemblePlume({ station, stations = [], onBack, theme, c
                 type="button"
               >
                 <MapPin size={12} className="ens-station-icon" />
-                {localStation.toUpperCase()}
+                <span className="ens-station-btn-id">{localStation.toUpperCase()}</span>
+                {(() => { const s = stations.find((s) => s.id === localStation); return s ? <span className="ens-station-btn-name">{s.name}</span> : null; })()}
                 <span className="ens-station-arrow">▾</span>
               </button>
               {stationDropdownOpen && (
@@ -203,7 +204,8 @@ export default function EnsemblePlume({ station, stations = [], onBack, theme, c
                         }}
                       >
                         <span className="ens-station-option-id">{s.id}</span>
-                        {(s.name || s.label) && <span className="ens-station-option-name">{s.name || s.label}</span>}
+                        <span className="ens-station-option-name">{s.name || s.label || ""}</span>
+                        <span className="ens-station-option-coords">{s.lat?.toFixed(1)}, {s.lon?.toFixed(1)}</span>
                       </button>
                     ))}
                   </div>

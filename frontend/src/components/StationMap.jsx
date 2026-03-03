@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause } from "lucide-react";
-import { fetchSpcOutlook } from "../api";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap } from "lucide-react";
+import { fetchSpcOutlook, fetchSpcOutlookStations } from "../api";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
 
@@ -151,9 +151,9 @@ const SPC_CATEGORIES = [
     info: "60%+ severe · 30%+ tornado" },
 ];
 
-/* ── SPC probability outlook styling (tornado/wind/hail) ───── */
+/* ── SPC conditional intensity outlook styling ──────────────── */
 const PROB_COLORS = {
-  torn: [
+  ci_torn: [
     { label: "0.02", pct: "2%",  color: "#008B00", fill: "#66CC66" },
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
     { label: "0.10", pct: "10%", color: "#FFD700", fill: "#FFEE88" },
@@ -163,7 +163,7 @@ const PROB_COLORS = {
     { label: "0.60", pct: "60%", color: "#000080", fill: "#6666CC" },
     { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
   ],
-  wind: [
+  ci_wind: [
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
     { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
     { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
@@ -171,7 +171,7 @@ const PROB_COLORS = {
     { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
     { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
   ],
-  hail: [
+  ci_hail: [
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
     { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
     { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
@@ -182,10 +182,10 @@ const PROB_COLORS = {
 };
 
 const OUTLOOK_TYPES = [
-  { id: "cat",  name: "Categorical" },
-  { id: "torn", name: "Tornado" },
-  { id: "wind", name: "Wind" },
-  { id: "hail", name: "Hail" },
+  { id: "cat",     name: "Categorical" },
+  { id: "ci_torn", name: "Tornado", title: "Conditional Intensity — Tornado" },
+  { id: "ci_wind", name: "Wind", title: "Conditional Intensity — Wind" },
+  { id: "ci_hail", name: "Hail", title: "Conditional Intensity — Hail" },
 ];
 
 function spcStyle(feature, outlookType) {
@@ -277,6 +277,7 @@ export default function StationMap({
   onLatLonSelect,
   latLonMode,   // true when source is rap
   onClose,
+  onFetchLatest,            // (stationId) => void  — triggers auto-fetch with best source
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [outlookDay, setOutlookDay] = useState(1);
@@ -289,6 +290,13 @@ export default function StationMap({
   const [velocityRadar, setVelocityRadar] = useState("TLX");   // nearest NEXRAD ID
   const [baseMap, setBaseMap] = useState("dark");
   const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
+
+  // Outlook stations (stations within SPC outlook polygons)
+  const [outlookStations, setOutlookStations] = useState(null);
+  const [outlookStationsLoading, setOutlookStationsLoading] = useState(false);
+  const [showOutlookStations, setShowOutlookStations] = useState(false);
+  const [outlookError, setOutlookError] = useState(null);
+  const [popupStationId, setPopupStationId] = useState(null);
 
   // Animated radar state
   const [radarPlaying, setRadarPlaying] = useState(false);
@@ -327,19 +335,55 @@ export default function StationMap({
   // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
     if (!showOutlook) return;
-    // Day 3 only has categorical
-    const effectiveType = outlookDay === 3 ? "cat" : outlookType;
+    // Day 3 only has categorical + conditional intensity (no traditional prob)
+    let effectiveT = outlookType;
+    if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
+      effectiveT = "cat";
+    }
+    const isCI = effectiveT.startsWith("ci_");
     let cancelled = false;
     setOutlookLoading(true);
-    fetchSpcOutlook(outlookDay, effectiveType)
-      .then((data) => { if (!cancelled) setOutlookData(data); })
-      .catch(() => { if (!cancelled) setOutlookData(null); })
+    setOutlookError(null);
+    fetchSpcOutlook(outlookDay, effectiveT)
+      .then((data) => { if (!cancelled) { setOutlookData(data); setOutlookError(null); } })
+      .catch(() => {
+        if (!cancelled) {
+          setOutlookData(null);
+          if (isCI) {
+            setOutlookError("Conditional Intensity outlooks launch March 4, 2026 at 1630z. Data may not be available yet.");
+          } else {
+            setOutlookError(null);
+          }
+        }
+      })
       .finally(() => { if (!cancelled) setOutlookLoading(false); });
     return () => { cancelled = true; };
   }, [outlookDay, outlookType, showOutlook]);
 
+  // Fetch stations within outlook when toggled
+  useEffect(() => {
+    if (!showOutlookStations || !showOutlook) {
+      setOutlookStations(null);
+      return;
+    }
+    let effectiveT = outlookType;
+    if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
+      effectiveT = "cat";
+    }
+    let cancelled = false;
+    setOutlookStationsLoading(true);
+    fetchSpcOutlookStations(outlookDay, effectiveT)
+      .then((data) => { if (!cancelled) setOutlookStations(data); })
+      .catch(() => { if (!cancelled) setOutlookStations(null); })
+      .finally(() => { if (!cancelled) setOutlookStationsLoading(false); });
+    return () => { cancelled = true; };
+  }, [showOutlookStations, showOutlook, outlookDay, outlookType]);
+
   // Determine which SPC categories are present in the current data
-  const effectiveType = outlookDay === 3 ? "cat" : outlookType;
+  const effectiveType = (() => {
+    if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) return "cat";
+    return outlookType;
+  })();
   const activeCategories = useMemo(() => {
     if (!outlookData?.features) return [];
     const labels = new Set(outlookData.features.map((f) => f.properties?.LABEL || f.properties?.LABEL2));
@@ -360,6 +404,12 @@ export default function StationMap({
       forecaster: p.FORECASTER || "",
     };
   }, [outlookData]);
+
+  // Set of station IDs within the outlook area
+  const outlookStationIds = useMemo(() => {
+    if (!outlookStations?.stations) return new Set();
+    return new Set(outlookStations.stations.map((s) => s.id));
+  }, [outlookStations]);
 
   const riskMap = useMemo(() => {
     const m = {};
@@ -425,6 +475,18 @@ export default function StationMap({
               <CloudLightning size={11} />
               SPC Outlook
             </button>
+            {showOutlook && (
+              <button
+                className={`smap-tbtn ${showOutlookStations ? "active" : ""}`}
+                onClick={() => setShowOutlookStations((v) => !v)}
+                title="Highlight stations within outlook area — click to fetch forecast soundings"
+              >
+                <Zap size={11} />
+                Outlook Sndgs
+                {outlookStationsLoading && <span className="smap-outlook-loading-dot">...</span>}
+                {outlookStations && <span className="smap-radar-badge">{outlookStations.count}</span>}
+              </button>
+            )}
             <button
               className={`smap-tbtn ${showRadar ? "active" : ""}`}
               onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
@@ -479,16 +541,20 @@ export default function StationMap({
                   ))}
                 </div>
                 <div className="smap-day-btns smap-type-btns">
-                  {OUTLOOK_TYPES.map((t) => (
-                    <button
-                      key={t.id}
-                      className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${outlookDay === 3 && t.id !== "cat" ? " smap-btn-disabled" : ""}`}
-                      onClick={() => { if (outlookDay !== 3 || t.id === "cat") setOutlookType(t.id); }}
-                      title={outlookDay === 3 && t.id !== "cat" ? "Day 3 only has categorical" : t.name}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
+                  {OUTLOOK_TYPES.map((t) => {
+                    // Day 3 disables traditional prob types (but CI is available for all days)
+                    const isDisabledD3 = outlookDay === 3 && ["torn", "wind", "hail"].includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${isDisabledD3 ? " smap-btn-disabled" : ""}`}
+                        onClick={() => { if (!isDisabledD3) setOutlookType(t.id); }}
+                        title={isDisabledD3 ? "Day 3: use CI variant instead" : (t.title || t.name)}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -500,6 +566,9 @@ export default function StationMap({
             <span className="smap-outlook-meta">
               {outlookMeta.forecaster} · {outlookMeta.valid}
             </span>
+          )}
+          {showOutlook && outlookError && !outlookLoading && (
+            <span className="smap-outlook-error">{outlookError}</span>
           )}
         </div>
       </div>
@@ -577,7 +646,14 @@ export default function StationMap({
             const stp = risk?.stp;
             const color = riskColor(stp);
             const isSelected = s.id === selectedStation;
-            const radius = isSelected ? 8 : stp != null ? (stp >= 1 ? 7 : 5) : 4;
+            const inOutlook = showOutlookStations && outlookStationIds.has(s.id);
+            const outlookInfo = inOutlook
+              ? outlookStations?.stations?.find((os) => os.id === s.id)
+              : null;
+            const radius = isSelected ? 8 : inOutlook ? 7 : stp != null ? (stp >= 1 ? 7 : 5) : 4;
+
+            // Orange glow for stations in the SPC outlook area
+            const markerColor = isSelected ? "#3b82f6" : inOutlook ? "#f59e0b" : color;
 
             return (
               <CircleMarker
@@ -585,37 +661,69 @@ export default function StationMap({
                 center={[s.lat, s.lon]}
                 radius={radius}
                 pathOptions={{
-                  color: isSelected ? "#3b82f6" : color,
-                  fillColor: isSelected ? "#3b82f6" : color,
-                  fillOpacity: isSelected ? 0.9 : 0.7,
-                  weight: isSelected ? 3 : 1.5,
-                  className: isSelected ? "smap-marker-pulse" : "",
+                  color: markerColor,
+                  fillColor: markerColor,
+                  fillOpacity: isSelected ? 0.9 : inOutlook ? 0.85 : 0.7,
+                  weight: isSelected ? 3 : inOutlook ? 2.5 : 1.5,
+                  className: isSelected ? "smap-marker-pulse" : inOutlook ? "smap-marker-outlook" : "",
                 }}
                 eventHandlers={{
                   click: () => onStationSelect(s.id),
+                  popupopen: () => setPopupStationId(s.id),
+                  popupclose: () => setPopupStationId((prev) => prev === s.id ? null : prev),
                 }}
               >
-                <Tooltip
-                  direction="top"
-                  offset={[0, -6]}
-                  className="smap-tooltip"
-                  sticky
-                >
-                  <strong>{s.id}</strong> — {s.name}
-                  {stp != null && <span className="smap-tt-stp"> · STP {stp.toFixed(1)}</span>}
-                </Tooltip>
-                <Popup className="smap-popup">
+                {popupStationId !== s.id && (
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -8]}
+                    className="smap-tooltip"
+                  >
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id">{s.id}</span>
+                        <span className="smap-tt-name">{s.name}</span>
+                      </div>
+                      <span className="smap-tt-type">{s.wmo ? "Radiosonde" : "Model-only"}</span>
+                    </div>
+                  </Tooltip>
+                )}
+                <Popup className="smap-popup" maxWidth={260} minWidth={200}>
                   <div className="smap-popup-inner">
-                    <strong>{s.id}</strong> &mdash; {s.name}
-                    <br />
-                    <span className="smap-popup-coords">
-                      {s.lat.toFixed(2)}, {s.lon.toFixed(2)}
-                    </span>
+                    <div className="smap-popup-header">
+                      <span className="smap-popup-id">{s.id}</span>
+                      <span className="smap-popup-name">{s.name}</span>
+                    </div>
+                    <div className="smap-popup-meta">
+                      <span className="smap-popup-coords">{s.lat.toFixed(2)}°, {s.lon.toFixed(2)}°</span>
+                      {s.wmo && <span className="smap-popup-wmo">WMO {s.wmo}</span>}
+                    </div>
                     {risk && (
                       <div className="smap-popup-risk">
-                        <span>STP: <b>{stp.toFixed(2)}</b></span>
-                        {risk.cape != null && <span>CAPE: <b>{Math.round(risk.cape)}</b></span>}
-                        {risk.srh != null && <span>SRH: <b>{Math.round(risk.srh)}</b></span>}
+                        <div className="smap-popup-risk-item">
+                          <span className="smap-popup-risk-label">STP</span>
+                          <span className="smap-popup-risk-val">{stp.toFixed(2)}</span>
+                        </div>
+                        {risk.cape != null && (
+                          <div className="smap-popup-risk-item">
+                            <span className="smap-popup-risk-label">CAPE</span>
+                            <span className="smap-popup-risk-val">{Math.round(risk.cape)}</span>
+                          </div>
+                        )}
+                        {risk.srh != null && (
+                          <div className="smap-popup-risk-item">
+                            <span className="smap-popup-risk-label">SRH</span>
+                            <span className="smap-popup-risk-val">{Math.round(risk.srh)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {inOutlook && (
+                      <div className="smap-popup-outlook">
+                        <span className="smap-outlook-badge">{outlookInfo?.riskLabel} Outlook</span>
+                        <div className="smap-forecast-btns">
+                          <button className="smap-forecast-btn smap-forecast-btn-auto" onClick={(e) => { e.stopPropagation(); onFetchLatest?.(s.id); }}>Fetch Latest</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -625,18 +733,34 @@ export default function StationMap({
           })}
         </MapContainer>
 
-        {/* Floating legend overlay */}
-        {(riskData || (showOutlook && activeCategories.length > 0)) && (
-          <div className="smap-legend-float">
-            {riskData && (
+        {/* Floating legend overlays — each in its own container */}
+        <div className="smap-legend-stack">
+          {riskData && (
+            <div className="smap-legend-float">
               <div className="smap-legend">
                 <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.high }} />STP &ge; 1</span>
                 <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.med }} />0.3–1</span>
                 <span className="smap-legend-item"><span className="smap-dot" style={{ background: RISK_COLORS.low }} />&lt; 0.3</span>
               </div>
-            )}
-            {showOutlook && activeCategories.length > 0 && (
+            </div>
+          )}
+          {showOutlookStations && outlookStations && (
+            <div className="smap-legend-float">
+              <div className="smap-legend smap-legend-outlook-stations">
+                <span className="smap-legend-item">
+                  <span className="smap-dot" style={{ background: "#f59e0b" }} />
+                  {outlookStations.count} station{outlookStations.count !== 1 ? "s" : ""} in outlook
+                </span>
+                <span className="smap-legend-hint">Click station for forecast sounding</span>
+              </div>
+            </div>
+          )}
+          {showOutlook && activeCategories.length > 0 && (
+            <div className="smap-legend-float">
               <div className="smap-legend smap-legend-outlook">
+                {effectiveType.startsWith("ci_") && (
+                  <span className="smap-legend-ci-label">Conditional Intensity</span>
+                )}
                 {effectiveType === "cat" ? (
                   activeCategories.map((c) => (
                     <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
@@ -657,9 +781,9 @@ export default function StationMap({
                   ))
                 )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

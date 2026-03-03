@@ -35,7 +35,7 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
-import { getFavorites, toggleFavorite, getStationGroups, saveStationGroup, deleteStationGroup } from "../favorites";
+import { getFavorites, toggleFavorite } from "../favorites";
 import "./ControlPanel.css";
 
 /* ── NEXRAD radar sites for VAD nearest-radar lookup ──────── */
@@ -120,6 +120,21 @@ const SOURCE_META = {
     desc: "ACARS/AMDAR aircraft observation profiles at major airports from the IEM archive.",
   },
 };
+
+/* Model metadata: short label, resolution hint, max forecast hour, step */
+const MODEL_META = {
+  hrrr:    { short: "HRRR",     res: "3 km · hourly",     maxF: 48,  step: 1 },
+  rap:     { short: "RAP",      res: "13 km · hourly",    maxF: 21,  step: 1 },
+  nam:     { short: "NAM",      res: "12 km · hourly",    maxF: 84,  step: 1 },
+  namnest: { short: "NAM Nest", res: "3 km · hourly",     maxF: 60,  step: 1 },
+  nam4km:  { short: "NAM 4km",  res: "4 km · hourly",     maxF: 60,  step: 1 },
+  gfs:     { short: "GFS",      res: "global · 3-hourly", maxF: 384, step: 3 },
+  sref:    { short: "SREF",     res: "ens mean · 3-hr",   maxF: 87,  step: 3 },
+  hiresw:  { short: "HiResW",   res: "NMMB / ARW",        maxF: 48,  step: 1 },
+};
+
+/* Common quick-pick forecast hours */
+const FHOUR_PRESETS = [0, 3, 6, 12, 18, 24, 36, 48];
 
 export default function ControlPanel({
   stations,
@@ -242,6 +257,8 @@ export default function ControlPanel({
   const [model, setModel] = useState(urlParams?.model || "hrrr");
   const [fhour, setFhour] = useState(urlParams?.fhour != null ? String(urlParams.fhour) : "0");
   const [stationSearch, setStationSearch] = useState("");
+  const [rapStationSearch, setRapStationSearch] = useState("");
+  const [rapDropOpen, setRapDropOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [sortMode, setSortMode] = useState("az");
   const [favorites, setFavorites] = useState(() => getFavorites());
@@ -274,11 +291,6 @@ export default function ControlPanel({
   const [boundaryEnabled, setBoundaryEnabled] = useState(false);
   const [boundaryOrientation, setBoundaryOrientation] = useState("");
 
-  // Station groups state
-  const [stationGroups, setStationGroups] = useState(() => getStationGroups());
-  const [activeGroup, setActiveGroup] = useState("");
-  const [showGroupSave, setShowGroupSave] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
 
 
 
@@ -294,7 +306,7 @@ export default function ControlPanel({
     if (onStationChange) onStationChange(id);
   };
 
-  // Sync station from parent (map click)
+  // Sync station from parent (map click) and scroll into view
   useEffect(() => {
     if (selectedStation && selectedStation !== station) {
       setStationLocal(selectedStation);
@@ -303,6 +315,13 @@ export default function ControlPanel({
         setLat(String(stn.lat));
         setLon(String(stn.lon));
       }
+    }
+    // Scroll the selected station into view in the list
+    if (selectedStation && listRef.current) {
+      requestAnimationFrame(() => {
+        const el = listRef.current?.querySelector(`.cp-station-item[data-id="${selectedStation}"]`);
+        if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
     }
   }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,6 +332,16 @@ export default function ControlPanel({
       setLon(String(mapLatLon.lon));
     }
   }, [mapLatLon]);
+
+  // Close RAP station dropdown on outside click
+  useEffect(() => {
+    if (!rapDropOpen) return;
+    const handler = (e) => {
+      if (!e.target.closest(".cp-rap-station-pick")) setRapDropOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [rapDropOpen]);
 
   // Scroll selected station into view on mount
   useEffect(() => {
@@ -325,30 +354,6 @@ export default function ControlPanel({
   const needsLatLon = source === "rap";
   const needsStation = source === "obs" || source === "bufkit" || source === "acars" || source === "psu";
   const needsModel = source === "bufkit" || source === "psu";
-
-  // Station group filter
-  const activeGroupStations = activeGroup
-    ? (stationGroups.find((g) => g.name === activeGroup)?.stations || [])
-    : null;
-
-  const handleSaveGroup = () => {
-    const name = newGroupName.trim();
-    if (!name) return;
-    // Save currently visible (filtered) station IDs
-    const ids = filteredStations.map((s) => s.id);
-    if (ids.length === 0) return;
-    const updated = saveStationGroup(name, ids);
-    setStationGroups(updated);
-    setActiveGroup(name);
-    setShowGroupSave(false);
-    setNewGroupName("");
-  };
-
-  const handleDeleteGroup = (name) => {
-    const updated = deleteStationGroup(name);
-    setStationGroups(updated);
-    if (activeGroup === name) setActiveGroup("");
-  };
 
   // Build risk lookup from scan results
   const riskMap = {};
@@ -396,8 +401,7 @@ export default function ControlPanel({
     (s) => {
       const matchesSearch = s.id.toLowerCase().includes(stationSearch.toLowerCase()) ||
         s.name.toLowerCase().includes(stationSearch.toLowerCase());
-      const matchesGroup = activeGroupStations ? activeGroupStations.includes(s.id) : true;
-      return matchesSearch && matchesGroup;
+      return matchesSearch;
     }
   );
 
@@ -608,31 +612,6 @@ export default function ControlPanel({
       </div>
 
       <form onSubmit={handleSubmit} className="cp-form">
-        {/* Source */}
-        <div className="cp-section">
-          <label className="cp-label">
-            <Database size={14} />
-            Data Source
-          </label>
-          <div className="cp-source-grid">
-            {sources.map((s) => {
-              const meta = SOURCE_META[s.id];
-              return (
-                <div key={s.id} className="cp-source-btn-wrap">
-                  <button
-                    type="button"
-                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
-                    onClick={() => setSource(s.id)}
-                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
-                  >
-                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Station */}
         {needsStation && (
           <div className="cp-section">
@@ -691,42 +670,6 @@ export default function ControlPanel({
                 </div>
               </div>
 
-              {/* Station Groups */}
-              <div className="cp-groups-row">
-                <select
-                  className="cp-group-select"
-                  value={activeGroup}
-                  onChange={(e) => setActiveGroup(e.target.value)}
-                >
-                  <option value="">All Stations</option>
-                  {stationGroups.map((g) => (
-                    <option key={g.name} value={g.name}>{g.name} ({g.stations.length})</option>
-                  ))}
-                </select>
-                {activeGroup && (
-                  <button type="button" className="cp-group-del" onClick={() => handleDeleteGroup(activeGroup)} title="Delete group">
-                    <X size={11} />
-                  </button>
-                )}
-                <button type="button" className="cp-group-save-btn" onClick={() => setShowGroupSave((v) => !v)} title="Save current filter as group">
-                  +
-                </button>
-              </div>
-              {showGroupSave && (
-                <div className="cp-group-save-row">
-                  <input
-                    type="text"
-                    className="cp-input cp-input-sm"
-                    placeholder="Group name..."
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSaveGroup(); } }}
-                    autoFocus
-                  />
-                  <button type="button" className="cp-group-confirm" onClick={handleSaveGroup}>Save</button>
-                </div>
-              )}
-
               <div className="cp-station-list" ref={listRef}>
                 {filteredStations.length === 0 && (
                   <div className="cp-station-empty">No stations found</div>
@@ -735,6 +678,7 @@ export default function ControlPanel({
                   <button
                     key={s.id}
                     type="button"
+                    data-id={s.id}
                     className={`cp-station-item ${station === s.id ? "active" : ""}`}
                     onClick={() => handleStationSelect(s.id, !!riskData)}
                   >
@@ -767,6 +711,31 @@ export default function ControlPanel({
           </div>
         )}
 
+        {/* Source */}
+        <div className="cp-section">
+          <label className="cp-label">
+            <Database size={14} />
+            Data Source
+          </label>
+          <div className="cp-source-grid">
+            {sources.map((s) => {
+              const meta = SOURCE_META[s.id];
+              return (
+                <div key={s.id} className="cp-source-btn-wrap">
+                  <button
+                    type="button"
+                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
+                    onClick={() => setSource(s.id)}
+                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
+                  >
+                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Lat/Lon */}
         {needsLatLon && (
           <div className="cp-section">
@@ -774,6 +743,60 @@ export default function ControlPanel({
               <MapPin size={14} />
               Coordinates
             </label>
+
+            {/* Quick-pick from station */}
+            <div className="cp-rap-station-pick">
+              <div className="cp-input-wrap cp-search-flex">
+                <Search size={14} className="cp-input-icon" />
+                <input
+                  type="text"
+                  className="cp-input"
+                  placeholder="Jump to station..."
+                  value={rapStationSearch}
+                  onChange={(e) => setRapStationSearch(e.target.value)}
+                  onFocus={() => setRapDropOpen(true)}
+                />
+              </div>
+              {rapDropOpen && rapStationSearch.trim().length > 0 && (
+                <div className="cp-rap-dropdown">
+                  {stations
+                    .filter((s) =>
+                      s.id.toLowerCase().includes(rapStationSearch.toLowerCase()) ||
+                      s.name.toLowerCase().includes(rapStationSearch.toLowerCase())
+                    )
+                    .slice(0, 8)
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="cp-rap-drop-item"
+                        onClick={() => {
+                          setLat(String(s.lat));
+                          setLon(String(s.lon));
+                          setRapStationSearch("");
+                          setRapDropOpen(false);
+                        }}
+                      >
+                        <span className="cp-rap-drop-id">{s.id}</span>
+                        <span className="cp-rap-drop-name">{s.name}</span>
+                        <span className="cp-rap-drop-coords">{s.lat.toFixed(2)}, {s.lon.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  {stations.filter((s) =>
+                    s.id.toLowerCase().includes(rapStationSearch.toLowerCase()) ||
+                    s.name.toLowerCase().includes(rapStationSearch.toLowerCase())
+                  ).length === 0 && (
+                    <div className="cp-rap-drop-empty">No stations found</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="cp-rap-hint">
+              <Crosshair size={12} />
+              Type a station or click anywhere on the map
+            </p>
+
             <div className="cp-row">
               <div className="cp-field">
                 <span className="cp-field-label">Lat</span>
@@ -800,44 +823,88 @@ export default function ControlPanel({
                 />
               </div>
             </div>
+            {lat && lon && (
+              <div className="cp-rap-coords-preview">
+                <MapPin size={12} />
+                <span>{parseFloat(lat).toFixed(2)}°N, {Math.abs(parseFloat(lon)).toFixed(2)}°{parseFloat(lon) < 0 ? "W" : "E"}</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* BUFKIT Model */}
-        {needsModel && (
+        {needsModel && (() => {
+          const modelList = source === "psu" ? (psuModels || []) : models;
+          const meta = MODEL_META[model] || { maxF: 384, step: 1 };
+          const maxF = meta.maxF;
+          const step = meta.step;
+          const currentFhour = Math.min(parseInt(fhour) || 0, maxF);
+          return (
           <div className="cp-section">
             <label className="cp-label">
               <Layers size={14} />
               Model
             </label>
-            <div className="cp-select-wrap">
-              <select
-                className="cp-select"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                {(source === "psu" ? (psuModels || []) : models).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id.toUpperCase()} — {m.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="cp-select-icon" />
+            <div className="cp-model-grid">
+              {modelList.map((m) => {
+                const mm = MODEL_META[m.id];
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`cp-model-btn ${model === m.id ? "active" : ""}`}
+                    onClick={() => {
+                      setModel(m.id);
+                      // Clamp forecast hour to new model's max
+                      const newMeta = MODEL_META[m.id] || { maxF: 384, step: 1 };
+                      const cur = parseInt(fhour) || 0;
+                      if (cur > newMeta.maxF) setFhour(String(newMeta.maxF));
+                    }}
+                    title={m.name}
+                  >
+                    <span className="cp-model-id">{mm?.short || m.id.toUpperCase()}</span>
+                    {mm && <span className="cp-model-res">{mm.res}</span>}
+                  </button>
+                );
+              })}
             </div>
-            <div className="cp-field" style={{ marginTop: 8 }}>
-              <span className="cp-field-label">Forecast Hour</span>
+
+            {/* Forecast hour */}
+            <div className="cp-fhour-section">
+              <div className="cp-fhour-header">
+                <Clock size={13} />
+                <span>Forecast Hour</span>
+                <span className="cp-fhour-value">F{String(currentFhour).padStart(2, "0")}</span>
+              </div>
               <input
-                type="number"
+                type="range"
                 min="0"
-                max="384"
-                className="cp-input cp-input-sm"
-                placeholder="0"
-                value={fhour}
+                max={maxF}
+                step={step}
+                className="cp-fhour-slider"
+                value={currentFhour}
                 onChange={(e) => setFhour(e.target.value)}
               />
+              <div className="cp-fhour-range">
+                <span>F00</span>
+                <span>F{String(maxF).padStart(2, "0")}</span>
+              </div>
+              <div className="cp-fhour-presets">
+                {FHOUR_PRESETS.filter((h) => h <= maxF).map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    className={`cp-fhour-preset ${currentFhour === h ? "active" : ""}`}
+                    onClick={() => setFhour(String(h))}
+                  >
+                    {h === 0 ? "Anl" : `F${String(h).padStart(2, "0")}`}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Date */}
         <div className="cp-section">
