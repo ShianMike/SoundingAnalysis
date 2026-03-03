@@ -2,11 +2,15 @@
 frontend/node_modules/
 frontend/src/
 frontend/public/
+frontend/dist/
 frontend/*.js
 frontend/*.json
 frontend/*.html
 frontend/*.md
 node_modules/
+
+# Python venv
+.venv/
 
 # Git
 .git/

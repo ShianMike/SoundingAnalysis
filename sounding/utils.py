@@ -29,3 +29,4 @@ def find_nearest_station(lat, lon):
         if dist < best_dist:
             best_dist = dist
             best = code
+    return best

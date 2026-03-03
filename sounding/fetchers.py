@@ -760,7 +760,7 @@ def fetch_psu_bufkit(station_id, model="rap", fhour=0):
     valid_cycles = _MODEL_CYCLES.get(model_lower, [0, 6, 12, 18])
 
     # Build candidate cycles: most recent first (based on current UTC hour)
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
     current_hour = now_utc.hour
     # Sort cycles so the most recently passed cycle comes first
     candidates = sorted(valid_cycles, key=lambda c: (current_hour - c) % 24)

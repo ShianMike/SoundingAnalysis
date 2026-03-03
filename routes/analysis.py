@@ -200,7 +200,7 @@ def ensemble_plume():
 
         d0 = profiles[0]["data"]
         skew.plot(d0["pressure"].m, d0["temperature"].m, "r", linewidth=2, alpha=0.9, label="Analysis (f000)")
-        skew.plot(d0["dewpoint"].m, d0["dewpoint"].m, "g", linewidth=1.5, alpha=0.8)
+        skew.plot(d0["pressure"].m, d0["dewpoint"].m, "g", linewidth=1.5, alpha=0.8)
 
         skew.ax.set_title(
             f"Ensemble Plume: {station.upper()} {model.upper()}\n"
@@ -217,8 +217,8 @@ def ensemble_plume():
         for i, pf in enumerate(profiles):
             d = pf["data"]
             try:
-                u_w = d["wind_speed"].m * np.sin(np.radians(d["wind_direction"].m)) * 0.514444
-                v_w = d["wind_speed"].m * np.cos(np.radians(d["wind_direction"].m)) * 0.514444
+                u_w = -d["wind_speed"].m * np.sin(np.radians(d["wind_direction"].m)) * 0.514444
+                v_w = -d["wind_speed"].m * np.cos(np.radians(d["wind_direction"].m)) * 0.514444
                 h = d["height"].m
                 mask = h <= h[0] + 10000
                 ax_hodo.plot(u_w[mask], v_w[mask], color=colors[i], alpha=0.3, linewidth=0.8)

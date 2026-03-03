@@ -78,7 +78,8 @@ def _quick_tornado_score(station_id, dt):
 
         # Bunkers & SRH
         try:
-            rm_u, rm_v, _, _ = mpcalc.bunkers_storm_motion(p, u_wind, v_wind, h)
+            rm, lm, mw = mpcalc.bunkers_storm_motion(p, u_wind, v_wind, h)
+            rm_u, rm_v = rm
             _, _, total_srh_1km = mpcalc.storm_relative_helicity(
                 h_agl, u_wind, v_wind, 1000 * units.meter,
                 storm_u=rm_u, storm_v=rm_v
@@ -229,13 +230,13 @@ def find_highest_tornado_risk(dt, stations=None):
 
     # Try as a station ID (case-insensitive)
     choice_upper = choice.upper()
-    for sid, stp, raw, cape, srh, bwd, name in results:
+    for sid, stp, raw, cape, srh, bwd, name, scp, ship, dcp in results:
         if sid == choice_upper:
             print(f"  => Selected: {sid} ({name})")
             return sid
 
     # Also allow matching by partial name
-    for sid, stp, raw, cape, srh, bwd, name in results:
+    for sid, stp, raw, cape, srh, bwd, name, scp, ship, dcp in results:
         if choice_upper in name.upper():
             print(f"  => Matched: {sid} ({name})")
             return sid
