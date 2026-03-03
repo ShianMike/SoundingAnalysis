@@ -175,7 +175,6 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - Relative timestamps ("3m ago", "2h ago")
 - Tabbed view: Soundings and Comparisons tabs
 - **Favorite stations** — pin frequently used stations; persisted in localStorage
-- **Custom station groups** — create and save named groups for quick batch access
 
 ### Shareable Sounding Links
 - Sounding parameters encoded in the URL query string
@@ -229,14 +228,35 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ## Project Structure
 
 ```
-├── sounding.py          # Core: data fetching, parameter computation, plotting
-├── app.py               # Flask API serving the React frontend
+├── app.py               # Flask entry point (registers blueprints, SPA catch-all)
+├── routes/              # Flask API route blueprints
+│   ├── __init__.py        # Blueprint registration helper
+│   ├── analysis.py        # /api/compare, /api/time-series, /api/ensemble-plume
+│   ├── feedback.py        # /api/feedback (GET/POST)
+│   ├── helpers.py         # Shared helpers (safe_round, parse_date, etc.)
+│   ├── meta.py            # /api/stations, /api/sources
+│   ├── risk.py            # /api/risk-scan
+│   ├── sounding_routes.py # /api/sounding (main endpoint)
+│   ├── spc.py             # /api/spc-outlook
+│   └── wind.py            # /api/vwp-display
+├── sounding/            # Core sounding analysis package
+│   ├── __init__.py        # Public API exports
+│   ├── __main__.py        # CLI entry point (python -m sounding)
+│   ├── cli.py             # Interactive CLI menu
+│   ├── constants.py       # Station database, model metadata
+│   ├── fetchers.py        # Data fetching (OBS, RAP, BUFKIT, ACARS, PSU)
+│   ├── merge.py           # Profile merging utilities
+│   ├── parameters.py      # Thermodynamic & kinematic parameter computation
+│   ├── plotting.py        # Skew-T, hodograph, parameter panel plotting
+│   ├── tornado.py         # Tornado risk scanning logic
+│   ├── utils.py           # Time/station utilities
+│   └── vad.py             # VAD Wind Profile fetching & display
 ├── Dockerfile           # Docker config for Cloud Run deployment
 ├── gunicorn.conf.py     # Gunicorn config (reads PORT from env)
 ├── requirements.txt     # Python dependencies
 ├── deploy.ps1           # Build frontend + deploy to GitHub Pages
 ├── deploy-cloudrun.ps1  # Deploy backend to Google Cloud Run
-├── .gcloudignore        # Exclude frontend from Cloud Build uploads
+├── .gcloudignore        # Exclude dev files from Cloud Build uploads
 └── frontend/            # React + Vite frontend
     ├── src/
     │   ├── App.jsx              # Main app shell
@@ -254,9 +274,11 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
     │       ├── VwpDisplay.jsx     # VWP time-height display
     │       ├── MesoPanel.jsx      # Mesoscale analysis table
     │       ├── EnsemblePlume.jsx   # Ensemble sounding plume
+    │       ├── CustomUpload.jsx   # WRF/CSV/SHARPpy upload page
     │       └── *.css              # Component styles (dark theme)
     ├── public/
-    │   └── favicon.svg
+    │   ├── favicon.svg
+    │   └── og-thumbnail.png     # Open Graph preview image
     ├── package.json
     └── vite.config.js
 ```
@@ -278,13 +300,13 @@ pip install siphon
 **CLI usage (standalone):**
 
 ```bash
-python sounding.py                                            # Interactive menu
-python sounding.py --station OUN                              # Latest observed
-python sounding.py --station OUN --date 2024061200            # Specific date/time
-python sounding.py --source rap --lat 36.4 --lon -99.4        # RAP at any point
-python sounding.py --source bufkit --model hrrr --station OUN # HRRR forecast
-python sounding.py --source acars --station KDFW              # Aircraft obs
-python sounding.py --list-sources                             # Show all sources
+python -m sounding                                            # Interactive menu
+python -m sounding --station OUN                              # Latest observed
+python -m sounding --station OUN --date 2024061200            # Specific date/time
+python -m sounding --source rap --lat 36.4 --lon -99.4        # RAP at any point
+python -m sounding --source bufkit --model hrrr --station OUN # HRRR forecast
+python -m sounding --source acars --station KDFW              # Aircraft obs
+python -m sounding --list-sources                             # Show all sources
 ```
 
 **API server:**
