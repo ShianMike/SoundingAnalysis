@@ -25,6 +25,8 @@ const BASE_SPEED    = 0.012;   // degrees per frame per (m/s) at zoom 4
 const SPD_THRESH_SQ = 0.04;   // 0.2² — ignore wind below this
 const SPD_SQ_SLOW   = 25;     // 5²
 const SPD_SQ_MED    = 144;    // 12²
+const DEG2RAD       = Math.PI / 180;
+const mercY = (lat) => Math.log(Math.tan(Math.PI * 0.25 + lat * DEG2RAD * 0.5));
 
 const BUCKET_STYLES = [
   "rgba(140,180,255,0.45)",   // slow
@@ -135,22 +137,23 @@ export default function WindCanvas({ data }) {
       ];
     };
 
-    /* ── fast lat/lon → pixel projection (cached per frame) ── */
-    let projOriginX, projOriginY, projScaleX, projScaleY;
+    /* ── Mercator projection (cached per frame) ──────────────── */
+    let projOriginX, projScaleX, mercOY, mercSY;
     const cacheProjection = () => {
-      // Use two known points to derive a linear screen projection
       const b = map.getBounds();
       const nw = map.latLngToContainerPoint(b.getNorthWest());
       const se = map.latLngToContainerPoint(b.getSouthEast());
-      const north = b.getNorth(), south = b.getSouth();
       const west = b.getWest(), east = b.getEast();
+      // X – linear in longitude
       projScaleX = (se.x - nw.x) / (east - west);
-      projScaleY = (se.y - nw.y) / (south - north);  // note: south < north, se.y > nw.y
       projOriginX = nw.x - west * projScaleX;
-      projOriginY = nw.y - north * projScaleY;
+      // Y – linear in Mercator-Y (correct Web Mercator projection)
+      const mN = mercY(b.getNorth()), mS = mercY(b.getSouth());
+      mercSY  = (se.y - nw.y) / (mS - mN);
+      mercOY  = nw.y - mN * mercSY;
     };
     const toScreenX = (lon) => projOriginX + lon * projScaleX;
-    const toScreenY = (lat) => projOriginY + lat * projScaleY;
+    const toScreenY = (lat) => mercOY + mercY(lat) * mercSY;
 
     /* ── animation frame ───────────────────────────────────── */
     const frame = () => {
@@ -182,8 +185,9 @@ export default function WindCanvas({ data }) {
         const sx1 = toScreenX(pLon[i]);
         const sy1 = toScreenY(pLat[i]);
 
-        // Advance in geographic space
-        pLon[i] += u * speed;
+        // Advance in geographic space (cos correction for longitude)
+        const cosLat = Math.cos(pLat[i] * DEG2RAD);
+        pLon[i] += u * speed / cosLat;
         pLat[i] += v * speed;
         age[i]++;
 

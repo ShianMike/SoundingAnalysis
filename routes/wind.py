@@ -71,10 +71,9 @@ def vwp_display():
 _WF_CACHE = {}
 _WF_CACHE_TTL = 1800   # 30 min
 
-# CONUS grid at ~2.5° lat × 3° lon resolution
-_WF_LATS = [24, 26.5, 29, 31.5, 34, 36.5, 39, 41.5, 44, 46.5, 49]
-_WF_LONS = [-126, -123, -120, -117, -114, -111, -108, -105, -102,
-            -99, -96, -93, -90, -87, -84, -81, -78, -75, -72, -69, -66]
+# CONUS grid at ~2° resolution  (14 lat × 31 lon = 434 points)
+_WF_LATS = list(range(24, 51, 2))     # [24, 26, 28, ..., 50]
+_WF_LONS = list(range(-126, -65, 2))  # [-126, -124, ..., -66]
 
 
 @bp.route("/api/wind-field", methods=["GET"])
