@@ -24,7 +24,15 @@ _SPC_OUTLOOK_URLS = {
     "2_wind": "https://www.spc.noaa.gov/products/outlook/day2otlk_wind.lyr.geojson",
     "1_hail": "https://www.spc.noaa.gov/products/outlook/day1otlk_hail.lyr.geojson",
     "2_hail": "https://www.spc.noaa.gov/products/outlook/day2otlk_hail.lyr.geojson",
+    # Day 4-8 extended-range (probability-based, single product per day)
+    "4_prob": "https://www.spc.noaa.gov/products/exper/day4-8/day4prob.lyr.geojson",
+    "5_prob": "https://www.spc.noaa.gov/products/exper/day4-8/day5prob.lyr.geojson",
+    "6_prob": "https://www.spc.noaa.gov/products/exper/day4-8/day6prob.lyr.geojson",
+    "7_prob": "https://www.spc.noaa.gov/products/exper/day4-8/day7prob.lyr.geojson",
+    "8_prob": "https://www.spc.noaa.gov/products/exper/day4-8/day8prob.lyr.geojson",
 }
+
+_VALID_DAYS = {"1", "2", "3", "4", "5", "6", "7", "8"}
 
 _spc_cache = {}
 _SPC_CACHE_TTL = 600  # 10 minutes
@@ -35,9 +43,12 @@ def spc_outlook():
     """Proxy SPC outlook GeoJSON."""
     day = request.args.get("day", "1")
     otype = request.args.get("type", "cat")
-    if day not in ("1", "2", "3"):
-        return jsonify({"error": f"Invalid day: {day}. Use 1, 2, or 3."}), 400
-    valid_types = ("cat", "torn", "wind", "hail")
+    if day not in _VALID_DAYS:
+        return jsonify({"error": f"Invalid day: {day}. Use 1-8."}), 400
+    # Day 4-8 only supports "prob" type
+    if int(day) >= 4:
+        otype = "prob"
+    valid_types = ("cat", "torn", "wind", "hail", "prob")
     if otype not in valid_types:
         return jsonify({"error": f"Invalid type: {otype}. Use one of: {', '.join(valid_types)}"}), 400
 
@@ -68,9 +79,12 @@ def spc_outlook_stations():
     otype = request.args.get("type", "cat")
     min_risk = request.args.get("minRisk", "")
 
-    valid_types = ("cat", "torn", "wind", "hail")
-    if day not in ("1", "2", "3"):
-        return jsonify({"error": f"Invalid day: {day}"}), 400
+    valid_types = ("cat", "torn", "wind", "hail", "prob")
+    if day not in _VALID_DAYS:
+        return jsonify({"error": f"Invalid day: {day}. Use 1-8."}), 400
+    # Day 4-8 only supports "prob" type
+    if int(day) >= 4:
+        otype = "prob"
     if otype not in valid_types:
         return jsonify({"error": f"Invalid type: {otype}"}), 400
 

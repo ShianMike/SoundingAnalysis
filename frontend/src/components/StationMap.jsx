@@ -187,6 +187,15 @@ const PROB_COLORS = {
     { label: "CIG1", pct: "CIG1", color: "#005500", fill: "#66A366" },
     { label: "CIG2", pct: "CIG2", color: "#FF6600", fill: "#FFA366" },
   ],
+  /* Day 4-8 extended-range probability contours */
+  prob: [
+    { label: "0.15", pct: "15%", color: "#DDB600", fill: "#FFE066",
+      info: "15% probability of severe weather within 25 mi" },
+    { label: "0.30", pct: "30%", color: "#FF6600", fill: "#FFA366",
+      info: "30% probability of severe weather within 25 mi" },
+    { label: "CATEGORICAL", pct: "Cat", color: "#DDB600", fill: "#FFE066",
+      info: "General severe weather area" },
+  ],
 };
 
 const OUTLOOK_TYPES = [
@@ -344,8 +353,11 @@ export default function StationMap({
   useEffect(() => {
     if (!showOutlook) return;
     // Day 3 only has categorical (no prob outlooks)
+    // Day 4-8 only has extended-range prob
     let effectiveT = outlookType;
-    if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
+    if (outlookDay >= 4) {
+      effectiveT = "prob";
+    } else if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
       effectiveT = "cat";
     }
     let cancelled = false;
@@ -370,7 +382,9 @@ export default function StationMap({
       return;
     }
     let effectiveT = outlookType;
-    if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
+    if (outlookDay >= 4) {
+      effectiveT = "prob";
+    } else if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) {
       effectiveT = "cat";
     }
     let cancelled = false;
@@ -384,6 +398,7 @@ export default function StationMap({
 
   // Determine which SPC categories are present in the current data
   const effectiveType = (() => {
+    if (outlookDay >= 4) return "prob";
     if (outlookDay === 3 && ["torn", "wind", "hail"].includes(outlookType)) return "cat";
     return outlookType;
   })();
@@ -539,10 +554,22 @@ export default function StationMap({
                       className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
                       onClick={() => setOutlookDay(d)}
                     >
-                      Day {d}
+                      D{d}
+                    </button>
+                  ))}
+                  <span className="smap-day-sep">|</span>
+                  {[4, 5, 6, 7, 8].map((d) => (
+                    <button
+                      key={d}
+                      className={`smap-day-btn smap-day-ext ${outlookDay === d ? "active" : ""}`}
+                      onClick={() => setOutlookDay(d)}
+                      title={`Day ${d} extended-range outlook (probability only)`}
+                    >
+                      D{d}
                     </button>
                   ))}
                 </div>
+                {outlookDay <= 3 && (
                 <div className="smap-day-btns smap-type-btns">
                   {OUTLOOK_TYPES.map((t) => {
                     // Day 3 disables traditional prob types (but CI is available for all days)
@@ -559,6 +586,10 @@ export default function StationMap({
                     );
                   })}
                 </div>
+                )}
+                {outlookDay >= 4 && (
+                  <span className="smap-ext-label">Extended Range – Probability Only</span>
+                )}
               </>
             )}
           </div>
@@ -761,8 +792,10 @@ export default function StationMap({
           {showOutlook && activeCategories.length > 0 && (
             <div className="smap-legend-float">
               <div className="smap-legend smap-legend-outlook">
-                {["torn", "wind", "hail"].includes(effectiveType) && (
-                  <span className="smap-legend-ci-label">Probabilistic</span>
+                {["torn", "wind", "hail", "prob"].includes(effectiveType) && (
+                  <span className="smap-legend-ci-label">
+                    {effectiveType === "prob" ? `Day ${outlookDay} Extended` : "Probabilistic"}
+                  </span>
                 )}
                 {effectiveType === "cat" ? (
                   activeCategories.map((c) => (

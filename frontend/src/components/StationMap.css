@@ -268,6 +268,35 @@ body.smap-fullscreen-active {
   cursor: not-allowed !important;
 }
 
+/* Day separator between D1-3 and D4-8 */
+.smap-day-sep {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  padding: 0 1px;
+  user-select: none;
+}
+
+/* Extended-range day buttons — slightly smaller / subtler */
+.smap-day-ext {
+  font-size: 9px;
+  padding: 3px 7px;
+}
+.smap-day-ext.active {
+  background: var(--accent-amber, #f59e0b);
+  color: #fff;
+}
+
+/* Label shown when Day 4-8 is selected */
+.smap-ext-label {
+  font-size: 9px;
+  color: var(--accent-amber, #f59e0b);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
 .smap-type-btns {
   /* same pill group style as day buttons — no separator */
 }

@@ -105,8 +105,8 @@ export async function fetchComposite(soundings) {
 
 /**
  * Fetch SPC convective outlook GeoJSON.
- * @param {number} day - 1, 2, or 3
- * @param {string} type - "cat" | "torn" | "wind" | "hail" | "ci_torn" | "ci_wind" | "ci_hail"
+ * @param {number} day - 1-8 (Day 4-8 are extended-range)
+ * @param {string} type - "cat" | "torn" | "wind" | "hail" | "prob"
  */
 export async function fetchSpcOutlook(day = 1, type = "cat") {
   const res = await fetchWithTimeout(`${API_BASE}/api/spc-outlook?day=${day}&type=${type}`, {}, 15000);
@@ -117,8 +117,8 @@ export async function fetchSpcOutlook(day = 1, type = "cat") {
 
 /**
  * Fetch sounding stations that fall within SPC outlook polygons.
- * @param {number} day - 1, 2, or 3
- * @param {string} type - "cat" | "torn" | "wind" | "hail" | "ci_torn" | "ci_wind" | "ci_hail"
+ * @param {number} day - 1-8 (Day 4-8 are extended-range)
+ * @param {string} type - "cat" | "torn" | "wind" | "hail" | "prob"
  * @param {string} [minRisk] - Minimum categorical risk level (e.g. "SLGT")
  * @returns {{ day, type, stations: [{id, name, lat, lon, riskLabel}], count }}
  */
