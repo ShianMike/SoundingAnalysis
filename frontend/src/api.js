@@ -132,10 +132,13 @@ export async function fetchSpcOutlookStations(day = 1, type = "cat", minRisk = "
 }
 
 /**
- * Fetch gridded 10 m wind U/V field for the animated wind overlay.
+ * Fetch gridded wind U/V field for the animated wind overlay.
+ * @param {string} level – "500" (500 hPa steering flow, default) or "surface" (10 m).
  */
-export async function fetchWindField() {
-  const res = await fetchWithTimeout(`${API_BASE}/api/wind-field`, {}, 30000);
+export async function fetchWindField(level = "500") {
+  const res = await fetchWithTimeout(
+    `${API_BASE}/api/wind-field?level=${encodeURIComponent(level)}`, {}, 30000,
+  );
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to fetch wind field");
   return data;

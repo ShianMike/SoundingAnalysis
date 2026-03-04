@@ -47,6 +47,11 @@ export default function WindCanvas({ data }) {
       return;
     }
 
+    /* Speed bucket thresholds adapt to level */
+    const isUpper = data.level && data.level !== "surface";
+    const spdSqSlow = isUpper ? 100 : SPD_SQ_SLOW;   // 10² vs 5²
+    const spdSqMed  = isUpper ? 625 : SPD_SQ_MED;     // 25² vs 12²
+
     const container = map.getContainer();
     let canvas = canvasRef.current;
     if (!canvas) {
@@ -202,8 +207,8 @@ export default function WindCanvas({ data }) {
           continue;
         }
 
-        // Bucket by speed
-        const bk = spdSq < SPD_SQ_SLOW ? 0 : spdSq < SPD_SQ_MED ? 1 : 2;
+        // Bucket by speed (thresholds adapt to level)
+        const bk = spdSq < spdSqSlow ? 0 : spdSq < spdSqMed ? 1 : 2;
         const off = bufLen[bk];
         bufs[bk][off]     = sx1;
         bufs[bk][off + 1] = sy1;

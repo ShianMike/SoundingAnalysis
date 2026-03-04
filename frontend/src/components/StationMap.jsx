@@ -311,6 +311,7 @@ export default function StationMap({
 
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
+  const [windLevel, setWindLevel] = useState("500");  // "500" = steering, "surface" = 10m
   const [windData, setWindData] = useState(null);
   const [windLoading, setWindLoading] = useState(false);
 
@@ -358,18 +359,17 @@ export default function StationMap({
     setVelocityRadar(nearestNexrad(lat, lng));
   }, []);
 
-  // Fetch wind field when toggled on
+  // Fetch wind field when toggled on or level changes
   useEffect(() => {
     if (!showWind) return;
-    if (windData) return;           // already have data
     let cancelled = false;
     setWindLoading(true);
-    fetchWindField()
+    fetchWindField(windLevel)
       .then((d) => { if (!cancelled) setWindData(d); })
       .catch((e) => console.error("Wind field error:", e))
       .finally(() => { if (!cancelled) setWindLoading(false); });
     return () => { cancelled = true; };
-  }, [showWind]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showWind, windLevel]);
 
   // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
@@ -579,12 +579,30 @@ export default function StationMap({
             <button
               className={`smap-tbtn ${showWind ? "active" : ""}`}
               onClick={() => setShowWind((v) => !v)}
-              title="Toggle animated surface wind flow overlay (GFS 10 m winds)"
+              title="Toggle animated wind flow overlay"
             >
               <Wind size={11} />
               Wind Flow
               {windLoading && <span className="smap-outlook-loading-dot">...</span>}
             </button>
+            {showWind && (
+              <div className="smap-day-btns smap-wind-level-btns">
+                <button
+                  className={`smap-day-btn${windLevel === "500" ? " active" : ""}`}
+                  onClick={() => setWindLevel("500")}
+                  title="500 hPa steering flow — matches radar echo motion"
+                >
+                  Steering
+                </button>
+                <button
+                  className={`smap-day-btn${windLevel === "surface" ? " active" : ""}`}
+                  onClick={() => setWindLevel("surface")}
+                  title="10 m surface wind"
+                >
+                  Surface
+                </button>
+              </div>
+            )}
             {showOutlook && (
               <>
                 <div className="smap-day-btns">

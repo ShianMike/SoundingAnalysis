@@ -67,7 +67,7 @@ def vwp_display():
         return jsonify({"error": str(e)}), 500
 
 
-# ── Animated wind-field grid (Open-Meteo GFS 10 m wind) ─────────────
+# ── Animated wind-field grid (Open-Meteo GFS) ──────────────────────
 _WF_CACHE = {}
 _WF_CACHE_TTL = 1800   # 30 min
 
@@ -75,11 +75,22 @@ _WF_CACHE_TTL = 1800   # 30 min
 _WF_LATS = list(range(24, 51, 2))     # [24, 26, 28, ..., 50]
 _WF_LONS = list(range(-126, -65, 2))  # [-126, -124, ..., -66]
 
+_VALID_LEVELS = {"surface", "500"}
+
 
 @bp.route("/api/wind-field", methods=["GET"])
 def wind_field():
-    """Return gridded 10 m wind U/V components for CONUS."""
-    cached = _WF_CACHE.get("data")
+    """Return gridded wind U/V components for CONUS.
+
+    Query params:
+      level – "surface" (10 m) or "500" (500 hPa steering flow, default).
+    """
+    level = request.args.get("level", "500")
+    if level not in _VALID_LEVELS:
+        level = "500"
+
+    cache_key = f"wf_{level}"
+    cached = _WF_CACHE.get(cache_key)
     now = time.time()
     if cached and (now - cached["ts"]) < _WF_CACHE_TTL:
         return jsonify(cached["payload"])
@@ -94,12 +105,21 @@ def wind_field():
     lat_str = ",".join(f"{la:.1f}" for la in all_lats)
     lon_str = ",".join(f"{lo:.1f}" for lo in all_lons)
 
-    url = (
-        f"https://api.open-meteo.com/v1/forecast?"
-        f"latitude={lat_str}&longitude={lon_str}"
-        f"&current=wind_speed_10m,wind_direction_10m"
-        f"&wind_speed_unit=ms&timezone=auto"
-    )
+    if level == "surface":
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat_str}&longitude={lon_str}"
+            f"&current=wind_speed_10m,wind_direction_10m"
+            f"&wind_speed_unit=ms&timezone=auto"
+        )
+    else:
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat_str}&longitude={lon_str}"
+            f"&hourly=wind_speed_500hPa,wind_direction_500hPa"
+            f"&forecast_hours=1&wind_speed_unit=ms&timezone=auto"
+        )
+
     try:
         resp = _requests.get(url, timeout=30)
         resp.raise_for_status()
@@ -111,9 +131,16 @@ def wind_field():
     u_data, v_data = [], []
     items = results if isinstance(results, list) else [results]
     for r in items:
-        c = r.get("current", {})
-        spd = c.get("wind_speed_10m", 0) or 0
-        ddir = c.get("wind_direction_10m", 0) or 0
+        if level == "surface":
+            c = r.get("current", {})
+            spd = c.get("wind_speed_10m", 0) or 0
+            ddir = c.get("wind_direction_10m", 0) or 0
+        else:
+            h = r.get("hourly", {})
+            spd_arr = h.get("wind_speed_500hPa", [0])
+            dir_arr = h.get("wind_direction_500hPa", [0])
+            spd = (spd_arr[0] if spd_arr else 0) or 0
+            ddir = (dir_arr[0] if dir_arr else 0) or 0
         rad = math.radians(ddir)
         u_data.append(round(-spd * math.sin(rad), 2))
         v_data.append(round(-spd * math.cos(rad), 2))
@@ -126,6 +153,7 @@ def wind_field():
         "dy": _WF_LATS[1] - _WF_LATS[0],
         "uData": u_data,
         "vData": v_data,
+        "level": level,
     }
-    _WF_CACHE["data"] = {"payload": payload, "ts": now}
+    _WF_CACHE[cache_key] = {"payload": payload, "ts": now}
     return jsonify(payload)
