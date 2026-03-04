@@ -1,5 +1,5 @@
 """
-"""Wind-related routes: VAD, VWP display and animated wind-field grid.
+    Wind-related API endpoints for VAD profiles, VWP displays, and gridded wind fields.
 """
 import base64
 import io
