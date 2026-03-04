@@ -545,7 +545,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         pass
     
     # Set axis limits
-    skew.ax.set_xlim(-100, 50)
+    skew.ax.set_xlim(-50, 50)
     skew.ax.set_ylim(1050, 100)
     
     # Height labels — positioned inside the plot, offset from the y-axis

@@ -162,9 +162,9 @@ const PROB_COLORS = {
     { label: "0.45", pct: "45%", color: "#9400D3", fill: "#C488FF" },
     { label: "0.60", pct: "60%", color: "#000080", fill: "#6666CC" },
     { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
-    { label: "CIG1", pct: "CI-1", color: "#000000", fill: "#888888" },
-    { label: "CIG2", pct: "CI-2", color: "#000000", fill: "#666666" },
-    { label: "CIG3", pct: "CI-3", color: "#000000", fill: "#444444" },
+    { label: "CIG1", pct: "CIG1", color: "#005500", fill: "#66A366" },
+    { label: "CIG2", pct: "CIG2", color: "#FF6600", fill: "#FFA366" },
+    { label: "CIG3", pct: "CIG3", color: "#CC0000", fill: "#E06666" },
   ],
   wind: [
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
@@ -173,9 +173,9 @@ const PROB_COLORS = {
     { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
     { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
     { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
-    { label: "CIG1", pct: "CI-1", color: "#000000", fill: "#888888" },
-    { label: "CIG2", pct: "CI-2", color: "#000000", fill: "#666666" },
-    { label: "CIG3", pct: "CI-3", color: "#000000", fill: "#444444" },
+    { label: "CIG1", pct: "CIG1", color: "#005500", fill: "#66A366" },
+    { label: "CIG2", pct: "CIG2", color: "#FF6600", fill: "#FFA366" },
+    { label: "CIG3", pct: "CIG3", color: "#CC0000", fill: "#E06666" },
   ],
   hail: [
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
@@ -184,9 +184,8 @@ const PROB_COLORS = {
     { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
     { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
     { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
-    { label: "CIG1", pct: "CI-1", color: "#000000", fill: "#888888" },
-    { label: "CIG2", pct: "CI-2", color: "#000000", fill: "#666666" },
-    { label: "CIG3", pct: "CI-3", color: "#000000", fill: "#444444" },
+    { label: "CIG1", pct: "CIG1", color: "#005500", fill: "#66A366" },
+    { label: "CIG2", pct: "CIG2", color: "#FF6600", fill: "#FFA366" },
   ],
 };
 
