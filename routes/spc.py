@@ -10,11 +10,21 @@ from sounding import STATIONS
 
 bp = Blueprint("spc", __name__)
 
-# Keyed by "{day}_{type}" — type: cat, ci_torn, ci_wind, ci_hail
+# Keyed by "{day}_{type}"
+# Types: cat, torn, wind, hail (probabilistic), ci_torn, ci_wind, ci_hail (conditional intensity)
 _SPC_OUTLOOK_URLS = {
+    # Categorical
     "1_cat": "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson",
     "2_cat": "https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson",
     "3_cat": "https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson",
+    # Probabilistic (Day 1-2 only; Day 3 has no prob outlooks)
+    "1_torn": "https://www.spc.noaa.gov/products/outlook/day1otlk_torn.lyr.geojson",
+    "2_torn": "https://www.spc.noaa.gov/products/outlook/day2otlk_torn.lyr.geojson",
+    "1_wind": "https://www.spc.noaa.gov/products/outlook/day1otlk_wind.lyr.geojson",
+    "2_wind": "https://www.spc.noaa.gov/products/outlook/day2otlk_wind.lyr.geojson",
+    "1_hail": "https://www.spc.noaa.gov/products/outlook/day1otlk_hail.lyr.geojson",
+    "2_hail": "https://www.spc.noaa.gov/products/outlook/day2otlk_hail.lyr.geojson",
+    # Conditional Intensity (launching March 4 2026 1630z; Day 1-3)
     "1_ci_torn": "https://www.spc.noaa.gov/products/outlook/day1otlk_CI_torn.lyr.geojson",
     "2_ci_torn": "https://www.spc.noaa.gov/products/outlook/day2otlk_CI_torn.lyr.geojson",
     "3_ci_torn": "https://www.spc.noaa.gov/products/outlook/day3otlk_CI_torn.lyr.geojson",
@@ -37,7 +47,7 @@ def spc_outlook():
     otype = request.args.get("type", "cat")
     if day not in ("1", "2", "3"):
         return jsonify({"error": f"Invalid day: {day}. Use 1, 2, or 3."}), 400
-    valid_types = ("cat", "ci_torn", "ci_wind", "ci_hail")
+    valid_types = ("cat", "torn", "wind", "hail", "ci_torn", "ci_wind", "ci_hail")
     if otype not in valid_types:
         return jsonify({"error": f"Invalid type: {otype}. Use one of: {', '.join(valid_types)}"}), 400
 
@@ -68,7 +78,7 @@ def spc_outlook_stations():
     otype = request.args.get("type", "cat")
     min_risk = request.args.get("minRisk", "")
 
-    valid_types = ("cat", "ci_torn", "ci_wind", "ci_hail")
+    valid_types = ("cat", "torn", "wind", "hail", "ci_torn", "ci_wind", "ci_hail")
     if day not in ("1", "2", "3"):
         return jsonify({"error": f"Invalid day: {day}"}), 400
     if otype not in valid_types:

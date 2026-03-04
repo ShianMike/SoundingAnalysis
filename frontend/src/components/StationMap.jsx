@@ -151,8 +151,36 @@ const SPC_CATEGORIES = [
     info: "60%+ severe · 30%+ tornado" },
 ];
 
-/* ── SPC conditional intensity outlook styling ──────────────── */
+/* ── SPC probabilistic / conditional intensity outlook styling ── */
 const PROB_COLORS = {
+  // Probabilistic outlooks (Day 1-2)
+  torn: [
+    { label: "0.02", pct: "2%",  color: "#008B00", fill: "#66CC66" },
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.10", pct: "10%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.15", pct: "15%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.30", pct: "30%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.45", pct: "45%", color: "#9400D3", fill: "#C488FF" },
+    { label: "0.60", pct: "60%", color: "#000080", fill: "#6666CC" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+  wind: [
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+  hail: [
+    { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
+    { label: "0.15", pct: "15%", color: "#FFD700", fill: "#FFEE88" },
+    { label: "0.30", pct: "30%", color: "#FF0000", fill: "#FF6666" },
+    { label: "0.45", pct: "45%", color: "#FF00FF", fill: "#FF88FF" },
+    { label: "0.60", pct: "60%", color: "#9400D3", fill: "#C488FF" },
+    { label: "SIGN", pct: "Sig", color: "#000000", fill: "#000000" },
+  ],
+  // Conditional Intensity (launching March 4 2026 1630z)
   ci_torn: [
     { label: "0.02", pct: "2%",  color: "#008B00", fill: "#66CC66" },
     { label: "0.05", pct: "5%",  color: "#8B4513", fill: "#CD853F" },
@@ -183,9 +211,12 @@ const PROB_COLORS = {
 
 const OUTLOOK_TYPES = [
   { id: "cat",     name: "Categorical" },
-  { id: "ci_torn", name: "Tornado", title: "Conditional Intensity — Tornado" },
-  { id: "ci_wind", name: "Wind", title: "Conditional Intensity — Wind" },
-  { id: "ci_hail", name: "Hail", title: "Conditional Intensity — Hail" },
+  { id: "torn",    name: "Tornado",  title: "Probabilistic Tornado Outlook" },
+  { id: "wind",    name: "Wind",     title: "Probabilistic Wind Outlook" },
+  { id: "hail",    name: "Hail",     title: "Probabilistic Hail Outlook" },
+  { id: "ci_torn", name: "CI Torn",  title: "Conditional Intensity — Tornado (launches March 4, 2026)" },
+  { id: "ci_wind", name: "CI Wind",  title: "Conditional Intensity — Wind (launches March 4, 2026)" },
+  { id: "ci_hail", name: "CI Hail",  title: "Conditional Intensity — Hail (launches March 4, 2026)" },
 ];
 
 function spcStyle(feature, outlookType) {
@@ -760,6 +791,9 @@ export default function StationMap({
               <div className="smap-legend smap-legend-outlook">
                 {effectiveType.startsWith("ci_") && (
                   <span className="smap-legend-ci-label">Conditional Intensity</span>
+                )}
+                {["torn", "wind", "hail"].includes(effectiveType) && (
+                  <span className="smap-legend-ci-label">Probabilistic</span>
                 )}
                 {effectiveType === "cat" ? (
                   activeCategories.map((c) => (
