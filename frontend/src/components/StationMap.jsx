@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap } from "lucide-react";
-import { fetchSpcOutlook, fetchSpcOutlookStations } from "../api";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw } from "lucide-react";
+import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
+import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
 
@@ -308,6 +309,14 @@ export default function StationMap({
   const [baseMap, setBaseMap] = useState("dark");
   const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
 
+  // Animated wind flow overlay
+  const [showWind, setShowWind] = useState(false);
+  const [windData, setWindData] = useState(null);
+  const [windLoading, setWindLoading] = useState(false);
+
+  // SPC outlook refresh counter
+  const [outlookRefresh, setOutlookRefresh] = useState(0);
+
   // Outlook stations (stations within SPC outlook polygons)
   const [outlookStations, setOutlookStations] = useState(null);
   const [outlookStationsLoading, setOutlookStationsLoading] = useState(false);
@@ -349,6 +358,19 @@ export default function StationMap({
     setVelocityRadar(nearestNexrad(lat, lng));
   }, []);
 
+  // Fetch wind field when toggled on
+  useEffect(() => {
+    if (!showWind) return;
+    if (windData) return;           // already have data
+    let cancelled = false;
+    setWindLoading(true);
+    fetchWindField()
+      .then((d) => { if (!cancelled) setWindData(d); })
+      .catch((e) => console.error("Wind field error:", e))
+      .finally(() => { if (!cancelled) setWindLoading(false); });
+    return () => { cancelled = true; };
+  }, [showWind]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
     if (!showOutlook) return;
@@ -373,7 +395,7 @@ export default function StationMap({
       })
       .finally(() => { if (!cancelled) setOutlookLoading(false); });
     return () => { cancelled = true; };
-  }, [outlookDay, outlookType, showOutlook]);
+  }, [outlookDay, outlookType, showOutlook, outlookRefresh]);
 
   // Fetch stations within outlook when toggled
   useEffect(() => {
@@ -394,7 +416,7 @@ export default function StationMap({
       .catch(() => { if (!cancelled) setOutlookStations(null); })
       .finally(() => { if (!cancelled) setOutlookStationsLoading(false); });
     return () => { cancelled = true; };
-  }, [showOutlookStations, showOutlook, outlookDay, outlookType]);
+  }, [showOutlookStations, showOutlook, outlookDay, outlookType, outlookRefresh]);
 
   // Determine which SPC categories are present in the current data
   const effectiveType = (() => {
@@ -495,6 +517,15 @@ export default function StationMap({
             </button>
             {showOutlook && (
               <button
+                className="smap-tbtn smap-refresh-btn"
+                onClick={() => setOutlookRefresh((r) => r + 1)}
+                title="Refresh SPC outlook data"
+              >
+                <RefreshCw size={10} />
+              </button>
+            )}
+            {showOutlook && (
+              <button
                 className={`smap-tbtn ${showOutlookStations ? "active" : ""}`}
                 onClick={() => setShowOutlookStations((v) => !v)}
                 title="Highlight stations within outlook area — click to fetch forecast soundings"
@@ -544,6 +575,15 @@ export default function StationMap({
             >
               <Wind size={11} />
               Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar}</span>}
+            </button>
+            <button
+              className={`smap-tbtn ${showWind ? "active" : ""}`}
+              onClick={() => setShowWind((v) => !v)}
+              title="Toggle animated surface wind flow overlay (GFS 10 m winds)"
+            >
+              <Wind size={11} />
+              Wind Flow
+              {windLoading && <span className="smap-outlook-loading-dot">...</span>}
             </button>
             {showOutlook && (
               <>
@@ -669,6 +709,9 @@ export default function StationMap({
 
           {/* SPC outlook polygons (render first so stations sit on top) */}
           {showOutlook && outlookData && <OutlookLayer data={outlookData} outlookType={effectiveType} />}
+
+          {/* Animated wind particle field */}
+          {showWind && windData && <WindCanvas data={windData} />}
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />

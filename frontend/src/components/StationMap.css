@@ -222,6 +222,19 @@ body.smap-fullscreen-active {
   border-color: rgba(250, 204, 21, 0.3);
 }
 
+/* SPC refresh button — compact icon-only */
+.smap-refresh-btn {
+  padding: 4px 6px !important;
+  min-width: unset;
+}
+.smap-refresh-btn:hover svg {
+  animation: smap-spin 0.5s ease;
+}
+@keyframes smap-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .smap-radar-badge {
   font-size: 0.6rem;
   background: rgba(250, 204, 21, 0.25);

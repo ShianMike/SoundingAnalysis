@@ -132,6 +132,16 @@ export async function fetchSpcOutlookStations(day = 1, type = "cat", minRisk = "
 }
 
 /**
+ * Fetch gridded 10 m wind U/V field for the animated wind overlay.
+ */
+export async function fetchWindField() {
+  const res = await fetchWithTimeout(`${API_BASE}/api/wind-field`, {}, 30000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch wind field");
+  return data;
+}
+
+/**
  * Fetch VWP time-height display image for a given NEXRAD radar.
  */
 export async function fetchVwpDisplay(radar, hours = 12) {

@@ -1,9 +1,12 @@
 """
-Wind-related routes: VAD and VWP display.
+"""Wind-related routes: VAD, VWP display and animated wind-field grid.
 """
 import base64
 import io
+import math
+import time
 
+import requests as _requests
 from flask import Blueprint, jsonify, request
 
 import matplotlib
@@ -62,3 +65,68 @@ def vwp_display():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+# ── Animated wind-field grid (Open-Meteo GFS 10 m wind) ─────────────
+_WF_CACHE = {}
+_WF_CACHE_TTL = 1800   # 30 min
+
+# CONUS grid at ~2.5° lat × 3° lon resolution
+_WF_LATS = [24, 26.5, 29, 31.5, 34, 36.5, 39, 41.5, 44, 46.5, 49]
+_WF_LONS = [-126, -123, -120, -117, -114, -111, -108, -105, -102,
+            -99, -96, -93, -90, -87, -84, -81, -78, -75, -72, -69, -66]
+
+
+@bp.route("/api/wind-field", methods=["GET"])
+def wind_field():
+    """Return gridded 10 m wind U/V components for CONUS."""
+    cached = _WF_CACHE.get("data")
+    now = time.time()
+    if cached and (now - cached["ts"]) < _WF_CACHE_TTL:
+        return jsonify(cached["payload"])
+
+    ny, nx = len(_WF_LATS), len(_WF_LONS)
+    all_lats, all_lons = [], []
+    for la in _WF_LATS:
+        for lo in _WF_LONS:
+            all_lats.append(la)
+            all_lons.append(lo)
+
+    lat_str = ",".join(f"{la:.1f}" for la in all_lats)
+    lon_str = ",".join(f"{lo:.1f}" for lo in all_lons)
+
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={lat_str}&longitude={lon_str}"
+        f"&current=wind_speed_10m,wind_direction_10m"
+        f"&wind_speed_unit=ms&timezone=auto"
+    )
+    try:
+        resp = _requests.get(url, timeout=30)
+        resp.raise_for_status()
+        results = resp.json()
+    except Exception as e:
+        print(f"[WIND-FIELD] Open-Meteo error: {e}")
+        return jsonify({"error": f"Failed to fetch wind data: {e}"}), 502
+
+    u_data, v_data = [], []
+    items = results if isinstance(results, list) else [results]
+    for r in items:
+        c = r.get("current", {})
+        spd = c.get("wind_speed_10m", 0) or 0
+        ddir = c.get("wind_direction_10m", 0) or 0
+        rad = math.radians(ddir)
+        u_data.append(round(-spd * math.sin(rad), 2))
+        v_data.append(round(-spd * math.cos(rad), 2))
+
+    payload = {
+        "nx": nx, "ny": ny,
+        "la1": _WF_LATS[0], "la2": _WF_LATS[-1],
+        "lo1": _WF_LONS[0], "lo2": _WF_LONS[-1],
+        "dx": _WF_LONS[1] - _WF_LONS[0],
+        "dy": _WF_LATS[1] - _WF_LATS[0],
+        "uData": u_data,
+        "vData": v_data,
+    }
+    _WF_CACHE["data"] = {"payload": payload, "ts": now}
+    return jsonify(payload)
