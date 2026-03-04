@@ -70,7 +70,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .rv-meta-row-top {
@@ -79,6 +79,7 @@
   gap: 10px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .rv-meta-station {
@@ -118,6 +119,7 @@
   justify-content: space-between;
   padding: 8px 16px;
   gap: 12px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .rv-meta-details {
@@ -227,6 +229,29 @@
   width: auto;
   padding: 0 8px;
   gap: 3px;
+}
+
+/* Auto-refresh controls */
+.rv-autorefresh-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.rv-autorefresh-sel {
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
+  height: 28px;
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin-slow {
+  animation: spin-slow 2s linear infinite;
 }
 
 /* ── Export dropdown ── */
@@ -441,6 +466,82 @@
 /* Full-width composites row */
 .param-section--composites {
   grid-column: 1 / -1;
+}
+
+/* Full-width single section */
+.param-section--full {
+  grid-column: 1 / -1;
+}
+
+/* Three-column row for Winter / Fire / Downburst */
+.param-row--thirds {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.param-row--thirds > .param-section {
+  display: flex;
+  flex-direction: column;
+}
+.param-row--thirds > .param-section > .param-grid {
+  flex: 1;
+}
+
+/* ── Convective Mode Card ───────────────────────────── */
+.param-section--mode {
+  grid-column: 1 / -1;
+  position: relative;
+}
+.param-section--mode:hover > .cm-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.cm-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 16px;
+  right: 16px;
+  z-index: 20;
+}
+
+/* Spectrum bar */
+.cm-spectrum {
+  display: flex;
+  gap: 3px;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.cm-spec-seg {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
+  background: color-mix(in srgb, var(--seg-color) 12%, transparent);
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+.cm-spec-seg--active {
+  background: color-mix(in srgb, var(--seg-color) 25%, transparent);
+  border-bottom-color: var(--seg-color);
+}
+.cm-spec-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  text-align: center;
+  line-height: 1.2;
+}
+.cm-spec-seg--active .cm-spec-label {
+  color: var(--seg-color);
+  opacity: 1;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .param-section {
@@ -746,6 +847,45 @@
   letter-spacing: 0.04em;
 }
 
+/* Climatology percentile bar */
+.param-climo-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 2px;
+}
+.param-climo-track {
+  flex: 1;
+  height: 3px;
+  background: var(--border, #333);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.param-climo-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #3b82f6, #22c55e 40%, #eab308 70%, #ef4444);
+  transition: width 0.3s ease;
+}
+.param-climo-pct {
+  font-size: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  min-width: 22px;
+  text-align: right;
+}
+
+/* Parameter watch alert flash */
+.param-card--changed {
+  animation: param-flash 0.6s ease-in-out 3;
+  box-shadow: 0 0 8px 2px rgba(250, 204, 21, 0.5);
+}
+@keyframes param-flash {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(250, 204, 21, 0.5); }
+  50% { box-shadow: 0 0 16px 4px rgba(250, 204, 21, 0.9); }
+}
+
 /* Spin animation (shared) */
 .spin {
   animation: spin 1s linear infinite;
@@ -774,6 +914,9 @@
   }
   .param-grid--composites {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .param-row--thirds {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1111,4 +1254,57 @@
     font-size: 9px;
     padding: 1px 6px;
   }
+}
+
+/* ── Sounding Text Summary — Light theme overrides ───────── */
+[data-theme="light"] .rv-summary-toggle {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+[data-theme="light"] .rv-summary-toggle:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+[data-theme="light"] .rv-summary-body {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.01) 100%);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .rv-sum-banner {
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .rv-sum-station {
+  color: var(--text-primary);
+}
+[data-theme="light"] .rv-sum-date {
+  color: var(--text-muted);
+}
+[data-theme="light"] .rv-sum-callout {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] .rv-sum-callout-label {
+  color: var(--text-muted);
+}
+[data-theme="light"] .rv-sum-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: var(--border);
+}
+[data-theme="light"] .rv-sum-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+[data-theme="light"] .rv-sum-card-title {
+  color: var(--text-muted);
+}
+[data-theme="light"] .rv-sum-card-text {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .rv-sum-kv {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .rv-sum-kv-k {
+  color: var(--text-muted);
+}
+[data-theme="light"] .rv-sum-kv-v {
+  color: var(--text-primary);
 }

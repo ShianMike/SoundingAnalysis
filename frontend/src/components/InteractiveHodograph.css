@@ -1,0 +1,44 @@
+.hodo-container {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.hodo-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  justify-content: flex-end;
+}
+.hodo-btn {
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.hodo-btn:hover {
+  background: var(--card-hover, #252525);
+}
+.hodo-btn.active {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  border-color: var(--accent, #3b82f6);
+}
+.hodo-canvas-wrap {
+  position: relative;
+  line-height: 0;
+}
+.hodo-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+  cursor: crosshair;
+}

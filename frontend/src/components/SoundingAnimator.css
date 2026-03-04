@@ -1,0 +1,85 @@
+.animator-panel {
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.animator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.animator-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text, #ccc);
+}
+.animator-close {
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.animator-close:hover {
+  background: var(--card-hover, #252525);
+}
+.animator-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.animator-controls button {
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.animator-controls button:hover {
+  background: var(--card-hover, #252525);
+}
+.animator-slider {
+  flex: 1;
+  min-width: 100px;
+  accent-color: var(--accent, #3b82f6);
+}
+.animator-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #3b82f6);
+  min-width: 44px;
+  text-align: center;
+}
+.animator-speed {
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.animator-loading,
+.animator-empty,
+.animator-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  justify-content: center;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+}
+.animator-error {
+  color: #ef4444;
+}

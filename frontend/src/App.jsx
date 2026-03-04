@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import Header from "./components/Header";
 import ControlPanel from "./components/ControlPanel";
 import ResultsView from "./components/ResultsView";
-import HistoryPanel from "./components/HistoryPanel";
-import CustomUpload from "./components/CustomUpload";
-import EnsemblePlume from "./components/EnsemblePlume";
+
+const HistoryPanel   = lazy(() => import("./components/HistoryPanel"));
+const CustomUpload   = lazy(() => import("./components/CustomUpload"));
+const EnsemblePlume  = lazy(() => import("./components/EnsemblePlume"));
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
@@ -185,6 +186,22 @@ export default function App() {
     setSelectedStation(id);
   };
 
+  // ── Auto-refresh polling ──────────────────────────────────
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(300000); // 5 min default
+  const autoRefreshRef = useRef(null);
+
+  useEffect(() => {
+    clearInterval(autoRefreshRef.current);
+    if (autoRefresh && lastParams) {
+      autoRefreshRef.current = setInterval(() => {
+        handleSubmit(lastParams);
+      }, refreshInterval);
+    }
+    return () => clearInterval(autoRefreshRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh, refreshInterval, lastParams]);
+
   // ── Keyboard shortcuts ────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
@@ -233,19 +250,23 @@ export default function App() {
         </div>
       )}
       {page === "upload" ? (
-        <CustomUpload
-          onBack={() => setPage("main")}
-          theme={theme}
-          colorblind={colorblind}
-        />
+        <Suspense fallback={<div className="loading-placeholder">Loading…</div>}>
+          <CustomUpload
+            onBack={() => setPage("main")}
+            theme={theme}
+            colorblind={colorblind}
+          />
+        </Suspense>
       ) : page === "ensemble" ? (
-        <EnsemblePlume
-          station={selectedStation}
-          stations={stations}
-          onBack={() => setPage("main")}
-          theme={theme}
-          colorblind={colorblind}
-        />
+        <Suspense fallback={<div className="loading-placeholder">Loading…</div>}>
+          <EnsemblePlume
+            station={selectedStation}
+            stations={stations}
+            onBack={() => setPage("main")}
+            theme={theme}
+            colorblind={colorblind}
+          />
+        </Suspense>
       ) : (
         <main className="app-main">
           <ControlPanel
@@ -287,11 +308,13 @@ export default function App() {
             onNavigateUpload={() => setPage("upload")}
           />
           {showHistory && (
-            <HistoryPanel
-              onLoad={handleLoadHistory}
-              onLoadCompare={handleLoadCompareHistory}
-              onClose={() => setShowHistory(false)}
-            />
+            <Suspense fallback={null}>
+              <HistoryPanel
+                onLoad={handleLoadHistory}
+                onLoadCompare={handleLoadCompareHistory}
+                onClose={() => setShowHistory(false)}
+              />
+            </Suspense>
           )}
 
           <ResultsView
@@ -313,6 +336,11 @@ export default function App() {
             selectedStation={selectedStation}
             source={source}
             lastParams={lastParams}
+            autoRefresh={autoRefresh}
+            onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
+            refreshInterval={refreshInterval}
+            onRefreshIntervalChange={setRefreshInterval}
+            theme={theme}
             mapProps={{
               stations,
               riskData,

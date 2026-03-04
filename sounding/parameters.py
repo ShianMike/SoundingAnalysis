@@ -1190,6 +1190,42 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         print(f"  Warning: Temperature advection calc failed: {e}")
         params["temp_advection"] = []
 
+    # ── Bulk Richardson Number (BRN) & Convective Mode ──────────────────
+    try:
+        _brn_cape = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
+        _brn_shear = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        if _brn_shear > 0 and _brn_cape > 0:
+            _brn = _brn_cape / (0.5 * _brn_shear ** 2)
+        else:
+            _brn = None
+        params["brn"] = round(_brn, 1) if _brn is not None else None
+
+        # Convective mode estimate (Thompson et al. 2007 framework)
+        _bwd6_kt = float(params.get("bwd_6km", 0 * units.knot).magnitude)
+        _scp_val = float(params.get("scp", 0))
+        _srh1_val = float(params.get("srh_1km", 0 * units("m**2/s**2")).magnitude)
+
+        if _brn is not None and _brn < 10 and _bwd6_kt > 50:
+            _conv_mode = "Discrete Supercell"
+        elif _brn is not None and 10 <= _brn < 45 and _bwd6_kt >= 35:
+            _conv_mode = "Discrete / Supercell"
+        elif _bwd6_kt >= 30 and _scp_val >= 1:
+            _conv_mode = "Supercell likely"
+        elif _bwd6_kt >= 25 and _srh1_val >= 100:
+            _conv_mode = "Rotating Storms"
+        elif _bwd6_kt >= 20:
+            _conv_mode = "Multicell / Clusters"
+        elif _bwd6_kt >= 10:
+            _conv_mode = "Weak Multicell"
+        else:
+            _conv_mode = "Single Cell / Pulse"
+
+        params["convective_mode"] = _conv_mode
+    except Exception as e:
+        print(f"  Warning: BRN / convective mode calc failed: {e}")
+        params["brn"] = None
+        params["convective_mode"] = None
+
     return params
 
 

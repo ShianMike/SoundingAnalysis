@@ -41,6 +41,8 @@ def _serialize_params(params, data, station, dt, source):
         "sbCin": _fmt(params.get("sb_cin")),
         "sbLclM": round(params["sb_lcl_m"]) if params.get("sb_lcl_m") is not None else None,
         "sbLclP": _fmt(params.get("sb_lcl_p")),
+        "sbLfcP": _fmt(params.get("sb_lfc_p")),
+        "sbElP": _fmt(params.get("sb_el_p")),
         "muCape": _fmt(params.get("mu_cape")),
         "muCin": _fmt(params.get("mu_cin")),
         "muLclM": round(params["mu_lcl_m"]) if params.get("mu_lcl_m") is not None else None,
@@ -65,7 +67,9 @@ def _serialize_params(params, data, station, dt, source):
         "dcin": params.get("dcin", 0),
         "ncape": params.get("ncape", 0),
         "mlLfcM": round(params["ml_lfc_m"]) if params.get("ml_lfc_m") is not None else None,
+        "mlLfcP": _fmt(params.get("ml_lfc_p")),
         "mlElM": round(params["ml_el_m"]) if params.get("ml_el_m") is not None else None,
+        "mlElP": _fmt(params.get("ml_el_p")),
         "wcd": params.get("wcd"),
         "surfaceModified": params.get("surface_modified", False),
         "customStormMotion": params.get("custom_storm_motion", False),
@@ -108,4 +112,14 @@ def _serialize_params(params, data, station, dt, source):
         "ebwd": _fmt(params.get("ebwd")),
         "eilBot": round(params["eil_bot_h"]) if params.get("eil_bot_h") is not None else None,
         "eilTop": round(params["eil_top_h"]) if params.get("eil_top_h") is not None else None,
+        # Convective mode
+        "brn": params.get("brn"),
+        "convectiveMode": params.get("convective_mode"),
+        # Bunkers storm motion vectors (m/s)
+        "rmU": _fmt(params.get("rm_u")),
+        "rmV": _fmt(params.get("rm_v")),
+        "lmU": _fmt(params.get("lm_u")),
+        "lmV": _fmt(params.get("lm_v")),
+        "mwU": _fmt(params.get("mw_u")),
+        "mwV": _fmt(params.get("mw_v")),
     }

@@ -26,6 +26,7 @@ const PARAM_GROUPS = [
       { key: "ship", label: "SHIP" },
       { key: "dcp", label: "DCP" },
       { key: "ecape", label: "ECAPE", unit: "J/kg" },
+      { key: "brn", label: "BRN" },
     ],
   },
   {
@@ -344,6 +345,36 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
     }
   };
 
+  /* Export comparison table as CSV */
+  const handleCsvExport = () => {
+    if (!results || results.length === 0) return;
+    const validResults = results.filter((r) => !r.error && r.params);
+    if (validResults.length === 0) return;
+
+    const headers = ["Parameter", ...validResults.map((r) => r.meta?.station || "?")];
+    const rows = [headers.join(",")];
+
+    for (const group of PARAM_GROUPS) {
+      for (const p of group.params) {
+        const row = [p.label];
+        for (const r of validResults) {
+          const v = r.params[p.key];
+          row.push(v != null ? String(v) : "");
+        }
+        rows.push(row.map((c) => `"${c}"`).join(","));
+      }
+    }
+
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `comparison_${validResults.map((r) => r.meta?.station || "").join("_")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* Download comparison as a composite image */
   const handleDownload = () => {
     if (!results) return;
@@ -543,6 +574,11 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
           </div>
 
           {/* Parameter comparison table */}
+          <div className="cv-table-actions">
+            <button className="cv-csv-btn" onClick={() => handleCsvExport()} title="Download comparison as CSV">
+              <Download size={13} /> CSV
+            </button>
+          </div>
           <div className="cv-table-wrap">
             <table className="cv-table">
               <thead>
@@ -572,6 +608,20 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
                       const diff =
                         nums.length >= 2 ? (Math.max(...nums) - Math.min(...nums)).toFixed(1) : null;
 
+                      // Trend arrow: compare first vs last non-null value
+                      let trendArrow = "";
+                      let trendClass = "";
+                      if (nums.length >= 2) {
+                        const first = values.find((v) => v != null);
+                        const last = [...values].reverse().find((v) => v != null);
+                        if (first != null && last != null) {
+                          const delta = last - first;
+                          if (delta > 0) { trendArrow = "↑"; trendClass = "cv-trend-up"; }
+                          else if (delta < 0) { trendArrow = "↓"; trendClass = "cv-trend-down"; }
+                          else { trendArrow = "—"; trendClass = ""; }
+                        }
+                      }
+
                       return (
                         <tr key={p.key}>
                           <td className="cv-td-label">
@@ -590,7 +640,14 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
                             );
                           })}
                           {results.length >= 2 && results.every((r) => !r.error) && (
-                            <td className="cv-td-diff">{diff ?? "—"}</td>
+                            <td className="cv-td-diff">
+                              {diff != null ? (
+                                <>
+                                  <span className={`cv-trend-arrow ${trendClass}`}>{trendArrow}</span>
+                                  {" "}{diff}
+                                </>
+                              ) : "—"}
+                            </td>
                           )}
                         </tr>
                       );

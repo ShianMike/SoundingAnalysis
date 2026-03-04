@@ -32,6 +32,8 @@ import {
   Flame,
   CloudRain,
   ShieldAlert,
+  Play,
+  RefreshCw,
 } from "lucide-react";
 
 /* ── Icon map for summary section cards ─────────────── */
@@ -49,10 +51,14 @@ const SECTION_ICONS = {
   hail: Snowflake,
   mode: Target,
 };
-import StationMap from "./StationMap";
-import TimeSeriesChart from "./TimeSeriesChart";
-import ComparisonView from "./ComparisonView";
-import VwpDisplay from "./VwpDisplay";
+import { lazy, Suspense } from "react";
+const StationMap       = lazy(() => import("./StationMap"));
+const TimeSeriesChart  = lazy(() => import("./TimeSeriesChart"));
+const ComparisonView   = lazy(() => import("./ComparisonView"));
+const VwpDisplay       = lazy(() => import("./VwpDisplay"));
+const InteractiveSkewT = lazy(() => import("./InteractiveSkewT"));
+const InteractiveHodograph = lazy(() => import("./InteractiveHodograph"));
+const SoundingAnimator = lazy(() => import("./SoundingAnimator"));
 import "./ResultsView.css";
 
 /* ── Parameter severity thresholds ─────────────────────────── */
@@ -432,18 +438,70 @@ function generateSoundingSummary(params, meta) {
   };
 }
 
-function ParamCard({ label, value, unit, color, desc }) {
+/* ── Proximity climatology percentiles (SPC / Thompson et al.) ─── */
+const CLIMO = {
+  // [p10, p25, p50, p75, p90] — approximate supercell proximity sounding values
+  "SB CAPE":  [250, 750, 1500, 2750, 4000],
+  "ML CAPE":  [150, 500, 1200, 2200, 3500],
+  "MU CAPE":  [300, 900, 1800, 3000, 4500],
+  "SB CIN":   [-200, -80, -30, -10, 0],
+  "ML CIN":   [-150, -60, -25, -8, 0],
+  "SB LCL":   [400, 700, 1100, 1600, 2200],
+  "ML LCL":   [500, 800, 1200, 1800, 2500],
+  "0-1 SRH":  [50, 100, 200, 350, 500],
+  "0-3 SRH":  [80, 150, 250, 400, 600],
+  "0-6 BWD":  [20, 30, 40, 55, 70],
+  "0-1 BWD":  [5, 10, 15, 22, 30],
+  "LR 0-3":   [5.0, 6.0, 7.0, 7.8, 8.5],
+  "LR 3-6":   [5.5, 6.2, 7.0, 7.8, 8.5],
+  "PWAT":     [15, 25, 35, 45, 55],
+  "STP":      [0, 0.3, 1.0, 3.0, 8.0],
+  "STP (eff)":[0, 0.3, 1.0, 3.0, 8.0],
+  "SCP":      [0, 1, 4, 10, 20],
+  "SHIP":     [0, 0.5, 1.0, 2.0, 4.0],
+  "FRZ Level":[2500, 3200, 3800, 4400, 5000],
+  "WB Zero":  [2000, 2500, 3000, 3500, 4200],
+};
+
+function climoPercentile(label, value) {
+  const pcts = CLIMO[label];
+  if (!pcts || value == null) return null;
+  const v = Number(value);
+  if (isNaN(v)) return null;
+  // Interpolate between the 5 percentile bins [10,25,50,75,90]
+  const levels = [10, 25, 50, 75, 90];
+  if (v <= pcts[0]) return Math.max(0, 10 * (v / pcts[0]));
+  if (v >= pcts[4]) return Math.min(100, 90 + 10 * ((v - pcts[4]) / (pcts[4] * 0.3 || 1)));
+  for (let i = 0; i < 4; i++) {
+    if (v <= pcts[i + 1]) {
+      const frac = (v - pcts[i]) / (pcts[i + 1] - pcts[i]);
+      return levels[i] + frac * (levels[i + 1] - levels[i]);
+    }
+  }
+  return 50;
+}
+
+function ParamCard({ label, value, unit, color, desc, changed }) {
   const alertCls = getAlertClass(label, value);
   const badge = getSeverityLabel(alertCls);
   const badgeCls = getBadgeClass(alertCls);
+  const pctile = climoPercentile(label, value);
   return (
-    <div className={`param-card ${alertCls}`} title="">
+    <div className={`param-card ${alertCls}${changed ? " param-card--changed" : ""}`} title="">
       {badge && <span className={`param-severity-badge ${badgeCls}`}>{badge}</span>}
       <span className="param-label">{label}</span>
       <span className="param-value" style={!alertCls && color ? { color } : {}}>
         {value ?? "---"}
       </span>
       {unit && value != null && <span className="param-unit">{unit}</span>}
+      {pctile != null && (
+        <div className="param-climo-bar" title={`~${Math.round(pctile)}th percentile (supercell proximity)`}>
+          <div className="param-climo-track">
+            <div className="param-climo-fill" style={{ width: `${Math.min(100, Math.max(0, pctile))}%` }} />
+          </div>
+          <span className="param-climo-pct">{Math.round(pctile)}%</span>
+        </div>
+      )}
       {desc && <span className="param-tooltip">{desc}</span>}
     </div>
   );
@@ -461,12 +519,12 @@ function ParamSection({ title, icon, children }) {
   );
 }
 
-function CompositeCard({ label, thresholdKey, value, unit, color, highlight, desc }) {
+function CompositeCard({ label, thresholdKey, value, unit, color, highlight, desc, changed }) {
   const alertCls = getAlertClass(thresholdKey || label, value);
   const badge = getSeverityLabel(alertCls);
   const badgeCls = getBadgeClass(alertCls);
   return (
-    <div className={`composite-card${highlight ? " composite-card--highlight" : ""}`}>
+    <div className={`composite-card${highlight ? " composite-card--highlight" : ""}${changed ? " param-card--changed" : ""}`}>
       {badge && <span className={`param-severity-badge ${badgeCls}`}>{badge}</span>}
       <span className="composite-label">{label}</span>
       <span className={`composite-value ${alertCls}`} style={!alertCls && color ? { color } : {}}>
@@ -543,21 +601,25 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams }) {
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams, autoRefresh, onToggleAutoRefresh, refreshInterval, onRefreshIntervalChange, theme }) {
   if (error) {
     return (
       <div className="results-view">
-        {showMap && mapProps && <StationMap {...mapProps} />}
+        <Suspense fallback={null}>
+          {showMap && mapProps && <StationMap {...mapProps} />}
+        </Suspense>
         {showRisk && <RiskTable riskData={riskData} />}
-        {showTimeSeries && (
-          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
-        )}
-        {showCompare && (
-          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
-        )}
-        {showVwp && (
-          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
-        )}
+        <Suspense fallback={null}>
+          {showTimeSeries && (
+            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+          )}
+          {showCompare && (
+            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+          )}
+          {showVwp && (
+            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+          )}
+        </Suspense>
         <div className="rv-state rv-error">
           <AlertTriangle size={24} />
           <div>
@@ -572,17 +634,21 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   if (loading) {
     return (
       <div className="results-view">
-        {showMap && mapProps && <StationMap {...mapProps} />}
+        <Suspense fallback={null}>
+          {showMap && mapProps && <StationMap {...mapProps} />}
+        </Suspense>
         {showRisk && <RiskTable riskData={riskData} />}
-        {showTimeSeries && (
-          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
-        )}
-        {showCompare && (
-          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
-        )}
-        {showVwp && (
-          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
-        )}
+        <Suspense fallback={null}>
+          {showTimeSeries && (
+            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+          )}
+          {showCompare && (
+            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+          )}
+          {showVwp && (
+            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+          )}
+        </Suspense>
         <div className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
           <div>
@@ -600,17 +666,21 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   if (!result) {
     return (
       <div className="results-view">
-        {showMap && mapProps && <StationMap {...mapProps} />}
+        <Suspense fallback={null}>
+          {showMap && mapProps && <StationMap {...mapProps} />}
+        </Suspense>
         {showRisk && <RiskTable riskData={riskData} />}
-        {showTimeSeries && (
-          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
-        )}
-        {showCompare && (
-          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
-        )}
-        {showVwp && (
-          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
-        )}
+        <Suspense fallback={null}>
+          {showTimeSeries && (
+            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+          )}
+          {showCompare && (
+            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+          )}
+          {showVwp && (
+            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+          )}
+        </Suspense>
         {!riskData && (
           <div className="rv-state rv-empty">
             <Wind size={32} />
@@ -632,9 +702,39 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   const [linkCopied, setLinkCopied] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [interactiveMode, setInteractiveMode] = useState(false);
+  const [showAnimator, setShowAnimator] = useState(false);
   const exportRef = useRef(null);
   const plotRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+
+  // Parameter watch alerts — track previous params for change detection
+  const prevParamsRef = useRef(null);
+  const [changedParams, setChangedParams] = useState(new Set());
+
+  useEffect(() => {
+    if (!params || !prevParamsRef.current) {
+      prevParamsRef.current = params;
+      return;
+    }
+    const prev = prevParamsRef.current;
+    const changed = new Set();
+    const WATCH_KEYS = ["sbCape", "mlCape", "muCape", "sbCin", "mlCin", "stp", "stpEff", "scp", "ship", "dcp",
+      "bwd1km", "bwd3km", "bwd6km", "srh1km", "srh3km", "frzLevel", "wbo", "pwat", "ecape", "brn"];
+    for (const k of WATCH_KEYS) {
+      const oldV = prev[k], newV = params[k];
+      if (oldV == null || newV == null) continue;
+      const pctChange = Math.abs(newV - oldV) / (Math.abs(oldV) || 1);
+      if (pctChange > 0.15) changed.add(k); // >15% change
+    }
+    setChangedParams(changed);
+    prevParamsRef.current = params;
+    // Clear alerts after 5 seconds
+    if (changed.size > 0) {
+      const timer = setTimeout(() => setChangedParams(new Set()), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [params]);
 
   // Close export menu on outside click
   useEffect(() => {
@@ -814,6 +914,23 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
+  // ── JSON export ─────────────────────────────────────────────
+  const handleJsonExport = () => {
+    const payload = {
+      meta: { station: meta.station, date: meta.date, source: meta.source, stationName: meta.stationName },
+      params,
+      profile: result.profile,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `sounding_${meta.station || "analysis"}_${meta.date.replace(/\s/g, "_")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -835,23 +952,23 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   return (
     <div className="results-view">
       {/* Map + Risk scan table */}
-      {showMap && mapProps && <StationMap {...mapProps} />}
+      <Suspense fallback={null}>
+        {showMap && mapProps && <StationMap {...mapProps} />}
+      </Suspense>
       {showRisk && <RiskTable riskData={riskData} />}
 
-      {/* Time-Series Chart */}
-      {showTimeSeries && (
-        <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
-      )}
-
-      {/* Comparison View */}
-      {showCompare && (
-        <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
-      )}
-
-      {/* VWP Display */}
-      {showVwp && (
-        <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
-      )}
+      {/* Time-Series Chart / Comparison / VWP */}
+      <Suspense fallback={null}>
+        {showTimeSeries && (
+          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+        )}
+        {showCompare && (
+          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+        )}
+        {showVwp && (
+          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+        )}
+      </Suspense>
 
       {/* Meta bar — above the sounding plot */}
       <div className="rv-meta-bar">
@@ -910,6 +1027,13 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                     <span className="rv-export-desc">Profile for Cloud Model 1 simulations</span>
                   </div>
                 </button>
+                <button onClick={() => { handleJsonExport(); setExportOpen(false); }}>
+                  <FileText size={13} />
+                  <div>
+                    <span className="rv-export-title">JSON</span>
+                    <span className="rv-export-desc">Full params + profile data as JSON</span>
+                  </div>
+                </button>
               </div>
             )}
           </div>
@@ -922,10 +1046,82 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <button className="rv-btn" onClick={() => window.print()} title="Print multi-panel layout">
             <Printer size={14} />
           </button>
+          <button
+            className={`rv-btn ${interactiveMode ? "rv-btn-active" : ""}`}
+            onClick={() => setInteractiveMode((v) => !v)}
+            title={interactiveMode ? "Switch to static plot" : "Switch to interactive Skew-T"}
+          >
+            <BarChart3 size={14} />
+            <span className="rv-btn-label">{interactiveMode ? "Static" : "Interactive"}</span>
+          </button>
+          {(source === "bufkit" || source === "psu") && (
+            <button
+              className={`rv-btn ${showAnimator ? "rv-btn-active" : ""}`}
+              onClick={() => setShowAnimator((v) => !v)}
+              title="Animate through forecast hours"
+            >
+              <Play size={14} />
+              <span className="rv-btn-label">Animate</span>
+            </button>
+          )}
+          {onToggleAutoRefresh && (
+            <div className="rv-autorefresh-wrap">
+              <button
+                className={`rv-btn ${autoRefresh ? "rv-btn-active" : ""}`}
+                onClick={onToggleAutoRefresh}
+                title={autoRefresh ? `Auto-refreshing every ${refreshInterval / 60000} min` : "Enable auto-refresh"}
+              >
+                <RefreshCw size={14} className={autoRefresh ? "spin-slow" : ""} />
+              </button>
+              {autoRefresh && (
+                <select
+                  className="rv-autorefresh-sel"
+                  value={refreshInterval}
+                  onChange={(e) => onRefreshIntervalChange(Number(e.target.value))}
+                  title="Refresh interval"
+                >
+                  <option value={60000}>1 min</option>
+                  <option value={120000}>2 min</option>
+                  <option value={300000}>5 min</option>
+                  <option value={600000}>10 min</option>
+                  <option value={900000}>15 min</option>
+                </select>
+              )}
+            </div>
+          )}
         </div>
         </div>
       </div>
-      {/* Plot — supports drag-to-pan (desktop) and touch pan/pinch-zoom (mobile) */}
+      {/* Sounding Animator */}
+      {showAnimator && (
+        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading animator…</span></div>}>
+          <SoundingAnimator
+            station={lastParams?.station || selectedStation}
+            model={lastParams?.model}
+            source={lastParams?.source || source}
+            date={lastParams?.date}
+            theme={theme || "dark"}
+            onClose={() => setShowAnimator(false)}
+          />
+        </Suspense>
+      )}
+      {/* Plot — static PNG or interactive Skew-T */}
+      {interactiveMode ? (
+        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading interactive Skew-T…</span></div>}>
+          <InteractiveSkewT
+            profile={result.profile}
+            sbParcel={result.sbParcel}
+            mlParcel={result.mlParcel}
+            params={params}
+            theme={theme || "dark"}
+          />
+          <InteractiveHodograph
+            profile={result.profile}
+            params={params}
+            theme={theme || "dark"}
+          />
+        </Suspense>
+      ) : (
       <div
         ref={plotRef}
         className={`rv-plot-wrap ${zoomed ? "rv-plot-zoomed" : ""}`}
@@ -966,22 +1162,34 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           draggable={false}
         />
       </div>
+      )}
 
       {/* Parameters */}
+      {(() => {
+        // Label→key mapping for change detection
+        const L2K = {
+          "SB CAPE": "sbCape", "SB CIN": "sbCin", "MU CAPE": "muCape", "ML CAPE": "mlCape", "ML CIN": "mlCin",
+          "STP": "stp", "STP-Eff": "stpEff", "SCP": "scp", "SHIP": "ship", "DCP": "dcp",
+          "BWD 0-1 km": "bwd1km", "BWD 0-3 km": "bwd3km", "BWD 0-6 km": "bwd6km",
+          "SRH 0-1 km": "srh1km", "SRH 0-3 km": "srh3km", "FRZ Level": "frzLevel", "WB Zero": "wbo",
+          "PWAT": "pwat", "ECAPE": "ecape", "BRN": "brn",
+        };
+        const isChanged = (label) => changedParams.has(L2K[label]);
+        return (
       <div className="rv-params">
         {/* ── Row 1: Instability (SB/MU/ML parcels) + Lapse Rates & Moisture ── */}
         <ParamSection
           title="Thermodynamic"
           icon={<Thermometer size={14} />}
         >
-          <ParamCard label="SB CAPE" value={params.sbCape} unit="J/kg" color="#f97316" desc="Surface-Based CAPE — total buoyant energy for a parcel lifted from the surface. Higher values indicate stronger updraft potential. >1000 notable, >3000 extreme." />
-          <ParamCard label="SB CIN" value={params.sbCin} unit="J/kg" desc="Surface-Based CIN — energy needed to lift a surface parcel to its LFC. More negative = stronger cap. Values < -50 often inhibit convection initiation." />
+          <ParamCard label="SB CAPE" value={params.sbCape} unit="J/kg" color="#f97316" changed={isChanged("SB CAPE")} desc="Surface-Based CAPE — total buoyant energy for a parcel lifted from the surface. Higher values indicate stronger updraft potential. >1000 notable, >3000 extreme." />
+          <ParamCard label="SB CIN" value={params.sbCin} unit="J/kg" changed={isChanged("SB CIN")} desc="Surface-Based CIN — energy needed to lift a surface parcel to its LFC. More negative = stronger cap. Values < -50 often inhibit convection initiation." />
           <ParamCard label="SB LCL" value={params.sbLclM} unit="m AGL" desc="Surface-Based Lifted Condensation Level — height where a surface parcel reaches saturation. Lower LCL (<1000m) favors tornadoes." />
-          <ParamCard label="MU CAPE" value={params.muCape} unit="J/kg" desc="Most-Unstable CAPE — CAPE computed for the parcel with highest θe in the lowest 300 hPa. Represents the maximum buoyancy available." />
+          <ParamCard label="MU CAPE" value={params.muCape} unit="J/kg" changed={isChanged("MU CAPE")} desc="Most-Unstable CAPE — CAPE computed for the parcel with highest θe in the lowest 300 hPa. Represents the maximum buoyancy available." />
           <ParamCard label="MU CIN" value={params.muCin} unit="J/kg" desc="Most-Unstable CIN — inhibition for the most-unstable parcel. Useful when elevated convection is possible." />
           <ParamCard label="MU LCL" value={params.muLclM} unit="m AGL" desc="Most-Unstable LCL — condensation height for the MU parcel. May differ from SB LCL when the most unstable parcel is elevated." />
-          <ParamCard label="ML CAPE" value={params.mlCape} unit="J/kg" color="#d946ef" desc="Mixed-Layer CAPE — CAPE for a parcel representing the mean of the lowest 100 hPa. Best estimate for surface-based storms in a well-mixed boundary layer." />
-          <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" desc="Mixed-Layer CIN — inhibition for the ML parcel. More representative than SB CIN in the afternoon when the boundary layer is mixed." />
+          <ParamCard label="ML CAPE" value={params.mlCape} unit="J/kg" color="#d946ef" changed={isChanged("ML CAPE")} desc="Mixed-Layer CAPE — CAPE for a parcel representing the mean of the lowest 100 hPa. Best estimate for surface-based storms in a well-mixed boundary layer." />
+          <ParamCard label="ML CIN" value={params.mlCin} unit="J/kg" changed={isChanged("ML CIN")} desc="Mixed-Layer CIN — inhibition for the ML parcel. More representative than SB CIN in the afternoon when the boundary layer is mixed." />
           <ParamCard label="ML LCL" value={params.mlLclM} unit="m AGL" desc="Mixed-Layer LCL — cloud base height for the ML parcel. Lower values increase tornado probability; <1000m is favorable." />
         </ParamSection>
 
@@ -991,9 +1199,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         >
           <ParamCard label="LR 0-3 km" value={params.lr03} unit="C/km" desc="0–3 km Lapse Rate — temperature decrease per km in the lowest 3 km. Values >7°C/km are steep; >8°C/km nearly absolute unstable. Key for tornado environments." />
           <ParamCard label="LR 3-6 km" value={params.lr36} unit="C/km" desc="3–6 km Lapse Rate — mid-level lapse rate. Steeper values (>7°C/km) enhance CAPE and updraft strength. >8°C/km is extreme instability." />
-          <ParamCard label="PWAT" value={params.pwat} unit="mm" desc="Precipitable Water — total column water vapor. Higher values mean more moisture available for heavy rainfall. >50mm is extremely high for CONUS." />
-          <ParamCard label="FRZ Level" value={params.frzLevel} unit="m AGL" desc="Freezing Level — height of the 0°C isotherm AGL. Affects hail size (higher FRZ = more melting) and snow levels." />
-          <ParamCard label="WB Zero" value={params.wbo} unit="m AGL" desc="Wet-Bulb Zero Height — where the wet-bulb temperature crosses 0°C. Better predictor of hail reaching the surface than the freezing level. <2500m favors large hail." />
+          <ParamCard label="PWAT" value={params.pwat} unit="mm" changed={isChanged("PWAT")} desc="Precipitable Water — total column water vapor. Higher values mean more moisture available for heavy rainfall. >50mm is extremely high for CONUS." />
+          <ParamCard label="FRZ Level" value={params.frzLevel} unit="m AGL" changed={isChanged("FRZ Level")} desc="Freezing Level — height of the 0°C isotherm AGL. Affects hail size (higher FRZ = more melting) and snow levels." />
+          <ParamCard label="WB Zero" value={params.wbo} unit="m AGL" changed={isChanged("WB Zero")} desc="Wet-Bulb Zero Height — where the wet-bulb temperature crosses 0°C. Better predictor of hail reaching the surface than the freezing level. <2500m favors large hail." />
           <ParamCard label="WCD" value={params.wcd} unit="m" color="#22d3ee" desc="Warm Cloud Depth — distance from LCL to freezing level. Critical for hail melting: shallow WCD (<2000m) means hail survives to surface; deep WCD (>3000m) favors complete melting. Also affects precipitation efficiency." />
           <ParamCard label="ML LFC" value={params.mlLfcM} unit="m AGL" color="#fb923c" desc="Mixed-Layer LFC height — how much lifting is needed to trigger convection from the mixed-layer parcel. Lower LFC = easier initiation. Standard for CI assessment." />
           <ParamCard label="ML EL" value={params.mlElM} unit="m AGL" color="#c084fc" desc="Mixed-Layer Equilibrium Level — top of the buoyant layer for the ML parcel. Indicates maximum cloud top height and depth of the convective updraft." />
@@ -1002,17 +1210,18 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="RH 3-6 km" value={params.rh36} unit="%" desc="Relative Humidity 3–6 km — mid-level moisture. Dry air here entrains into storms, increasing evaporative cooling and downdraft strength." />
         </ParamSection>
 
-        {/* ── Row 2: Kinematic + Downburst & Microburst ── */}
+        {/* ── Row 2: Kinematic (full-width) ── */}
+        <div className="param-section--full">
         <ParamSection
           title="Kinematic"
           icon={<ArrowUpDown size={14} />}
         >
-          <ParamCard label="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" desc="0–1 km Bulk Wind Difference — magnitude of the wind shear vector over the lowest 1 km. >15 kt supports organized storms; >20 kt favors tornadoes." />
-          <ParamCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" desc="0–3 km Bulk Wind Difference — shear in the low-to-mid levels. Important for mesocyclone development. >30 kt favors supercells." />
-          <ParamCard label="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" desc="0–6 km Bulk Wind Difference — deep-layer shear. The primary discriminator between organized and disorganized convection. >40 kt strongly favors supercells." />
+          <ParamCard label="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" changed={isChanged("BWD 0-1 km")} desc="0–1 km Bulk Wind Difference — magnitude of the wind shear vector over the lowest 1 km. >15 kt supports organized storms; >20 kt favors tornadoes." />
+          <ParamCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" changed={isChanged("BWD 0-3 km")} desc="0–3 km Bulk Wind Difference — shear in the low-to-mid levels. Important for mesocyclone development. >30 kt favors supercells." />
+          <ParamCard label="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" changed={isChanged("BWD 0-6 km")} desc="0–6 km Bulk Wind Difference — deep-layer shear. The primary discriminator between organized and disorganized convection. >40 kt strongly favors supercells." />
           <ParamCard label="SRH 500m" value={params.srh500m} unit="m²/s²" desc="0–500m Storm-Relative Helicity — streamwise vorticity in the lowest 500m relative to storm motion. Key for tornado potential. >150 is significant." />
-          <ParamCard label="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" desc="0–1 km Storm-Relative Helicity — measures the rotational potential of a storm's updraft in the lowest 1 km. >100 favors mesocyclones; >300 strongly favors tornadoes." />
-          <ParamCard label="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" desc="0–3 km Storm-Relative Helicity — total low-level rotational potential. >200 favors strong mesocyclones; >400 is extreme. Used in STP and SCP composites." />
+          <ParamCard label="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" changed={isChanged("SRH 0-1 km")} desc="0–1 km Storm-Relative Helicity — measures the rotational potential of a storm's updraft in the lowest 1 km. >100 favors mesocyclones; >300 strongly favors tornadoes." />
+          <ParamCard label="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" changed={isChanged("SRH 0-3 km")} desc="0–3 km Storm-Relative Helicity — total low-level rotational potential. >200 favors strong mesocyclones; >400 is extreme. Used in STP and SCP composites." />
           <ParamCard label="Eff. SRH" value={params.esrh} unit="m²/s²" color="#2dd4bf" desc="Effective SRH — storm-relative helicity computed within the effective inflow layer (where CAPE ≥ 100 and CIN > -250). More physically meaningful than fixed-layer SRH." />
           <ParamCard label="Eff. BWD" value={params.ebwd} unit="kt" color="#34d399" desc="Effective Bulk Wind Difference — shear from the effective inflow base to half the MU EL height. Better discriminator for supercells than fixed 0-6 km shear." />
           <ParamCard label="EIL Base" value={params.eilBot} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer base — lowest level where CAPE ≥ 100 J/kg and CIN > -250 J/kg. Identifies the true inflow layer for storms." />
@@ -1020,15 +1229,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="Corfidi UPW" value={params.corfidiUpSpd} unit="kt" color="orange" desc="Corfidi Upwind vector speed (Corfidi 2003) — MCS upwind propagation component. Represents back-building tendency. Slower speeds favor training echoes and flash flooding." />
           <ParamCard label="Corfidi DNW" value={params.corfidiDnSpd} unit="kt" color="#ff4444" desc="Corfidi Downwind vector speed (Corfidi 2003) — MCS forward propagation. Faster speeds = fast-moving MCS; slower = quasi-stationary. Key for flash flood risk." />
         </ParamSection>
-
-        <ParamSection
-          title="Downburst & Microburst"
-          icon={<ArrowDown size={14} />}
-        >
-          <ParamCard label="WMSI" value={params.wmsi} unit="" color="#f97316" desc="Wet Microburst Severity Index — approximated as CAPE × Γ0-3 / 1000. Higher values indicate stronger potential for wet microbursts. >3 is significant." />
-          <ParamCard label="MDPI" value={params.mdpi} unit="" color="#fb923c" desc="Microburst Day Potential Index — θe deficit (surface minus minimum in 0-6 km) divided by 20. Values >1 indicate favorable conditions for microbursts." />
-          <ParamCard label="Max Gust" value={params.maxGust} unit="kt" color="#ef4444" desc="Maximum estimated downburst gust speed — derived from √(2×DCAPE). Simple theoretical maximum; actual gusts may differ. >58 kt = severe." />
-        </ParamSection>
+        </div>
 
         {/* ── Row 3: Composite Indices (full‑width, prominent) ── */}
         <div className="param-section param-section--composites">
@@ -1038,20 +1239,57 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           </div>
           <div className="param-grid param-grid--composites">
             <CompositeCard label="DCAPE" thresholdKey="DCAPE" value={params.dcape} unit="J/kg" desc="Downdraft CAPE — energy available for downdrafts. Higher values (>800) indicate strong outflow winds and potential for damaging gusts." />
-            <CompositeCard label="ECAPE" thresholdKey="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" desc="Entraining CAPE (Peters et al. 2023) — CAPE adjusted for entrainment. More physically realistic than standard CAPE." />
+            <CompositeCard label="ECAPE" thresholdKey="ECAPE" value={params.ecape} unit="J/kg" color="#06b6d4" changed={isChanged("ECAPE")} desc="Entraining CAPE (Peters et al. 2023) — CAPE adjusted for entrainment. More physically realistic than standard CAPE." />
             <CompositeCard label="3CAPE" thresholdKey="3CAPE" value={params.cape3km} unit="J/kg" color="#fb923c" desc="0–3 km CAPE — buoyant energy in the lowest 3 km. Key for tornado intensity." />
             <CompositeCard label="6CAPE" value={params.cape6km} unit="J/kg" color="#facc15" desc="0–6 km CAPE — indicates how quickly an updraft develops in the mid-levels." />
             <CompositeCard label="DCIN" value={params.dcin} unit="J/kg" color="#818cf8" desc="Downdraft CIN — inhibition of downdrafts reaching the surface. Near 0 means downdrafts easily penetrate." />
             <CompositeCard label="NCAPE" value={params.ncape} unit="J/kg/m" color="#38bdf8" desc="Normalized CAPE — buoyancy intensity per unit depth. >0.3 is very buoyant." />
-            <CompositeCard label="STP" thresholdKey="STP" value={params.stp} unit="Sig Tornado" color="#60a5fa" highlight desc="Significant Tornado Parameter (fixed-layer) — values ≥1 suggest significant (EF2+) tornado environment." />
-            <CompositeCard label="STP-Eff" thresholdKey="STP" value={params.stpEff} unit="Eff Tornado" color="#818cf8" highlight desc="Effective-Layer STP (Thompson et al. 2012) — SPC's operational version. Values ≥1 favor significant tornadoes." />
-            <CompositeCard label="SCP" thresholdKey="SCP" value={params.scp} unit="Supercell" color="#f59e0b" highlight desc="Supercell Composite Parameter — values ≥1 support supercells; >4 strongly favors discrete supercells." />
-            <CompositeCard label="SHIP" thresholdKey="SHIP" value={params.ship} unit="Sig Hail" color="#10b981" highlight desc="Significant Hail Parameter — values ≥1 indicate potential; >1.5 strongly favors significant hail." />
-            <CompositeCard label="DCP" thresholdKey="DCP" value={params.dcp} unit="Derecho" color="#a78bfa" highlight desc="Derecho Composite Parameter — values ≥2 suggest potential for long-lived wind events." />
+            <CompositeCard label="STP" thresholdKey="STP" value={params.stp} unit="Sig Tornado" color="#60a5fa" highlight changed={isChanged("STP")} desc="Significant Tornado Parameter (fixed-layer) — values ≥1 suggest significant (EF2+) tornado environment." />
+            <CompositeCard label="STP-Eff" thresholdKey="STP" value={params.stpEff} unit="Eff Tornado" color="#818cf8" highlight changed={isChanged("STP-Eff")} desc="Effective-Layer STP (Thompson et al. 2012) — SPC's operational version. Values ≥1 favor significant tornadoes." />
+            <CompositeCard label="SCP" thresholdKey="SCP" value={params.scp} unit="Supercell" color="#f59e0b" highlight changed={isChanged("SCP")} desc="Supercell Composite Parameter — values ≥1 support supercells; >4 strongly favors discrete supercells." />
+            <CompositeCard label="SHIP" thresholdKey="SHIP" value={params.ship} unit="Sig Hail" color="#10b981" highlight changed={isChanged("SHIP")} desc="Significant Hail Parameter — values ≥1 indicate potential; >1.5 strongly favors significant hail." />
+            <CompositeCard label="DCP" thresholdKey="DCP" value={params.dcp} unit="Derecho" color="#a78bfa" highlight changed={isChanged("DCP")} desc="Derecho Composite Parameter — values ≥2 suggest potential for long-lived wind events." />
+            <CompositeCard label="BRN" value={params.brn} unit="" color="#14b8a6" changed={isChanged("BRN")} desc="Bulk Richardson Number — CAPE / (½ × BWD²). Values <10 favor supercells; 10–45 transitional; >45 multicell or single cell." />
           </div>
         </div>
 
-        {/* ── Row 4: Winter / Fire / Hazard combined ── */}
+        {/* ── Convective Mode Card ── */}
+        {params.convectiveMode && (() => {
+          const modeSpectrum = [
+            { key: "Single Cell / Pulse",  short: "Pulse",       color: "#22c55e" },
+            { key: "Weak Multicell",       short: "Weak Multi",  color: "#84cc16" },
+            { key: "Multicell / Clusters", short: "Multicell",   color: "#eab308" },
+            { key: "Rotating Storms",      short: "Rotating",    color: "#f97316" },
+            { key: "Supercell likely",     short: "SC Likely",   color: "#ef4444" },
+            { key: "Discrete / Supercell", short: "Disc / SC",   color: "#dc2626" },
+            { key: "Discrete Supercell",   short: "Discrete SC", color: "#b91c1c" },
+          ];
+          const activeIdx = modeSpectrum.findIndex(m => m.key === params.convectiveMode);
+          return (
+          <div className="param-section param-section--mode">
+            <div className="param-section-header">
+              <Target size={14} />
+              <h3>Predicted Convective Mode</h3>
+            </div>
+            <div className="cm-spectrum">
+              {modeSpectrum.map((m, i) => (
+                <div
+                  key={m.key}
+                  className={`cm-spec-seg${i === activeIdx ? " cm-spec-seg--active" : ""}`}
+                  style={{ "--seg-color": m.color }}
+                  title={m.key}
+                >
+                  <span className="cm-spec-label">{m.short}</span>
+                </div>
+              ))}
+            </div>
+            <span className="param-tooltip cm-tooltip">Predicted convective mode using BRN, 0–6 km bulk shear, SCP, and 0–1 km SRH (Thompson et al. 2007). Discrete Supercell: BRN &lt; 10 + shear &gt; 50 kt. Supercell: BRN 10–45 + shear ≥ 35 kt. Supercell Likely: shear ≥ 30 kt + SCP ≥ 1. Rotating Storms: shear ≥ 25 kt + SRH ≥ 100. Multicell: shear ≥ 20 kt. Weak Multicell: shear ≥ 10 kt. Single Cell / Pulse: weak shear.</span>
+          </div>
+          );
+        })()}
+
+        {/* ── Row 4: Winter / Fire / Downburst combined ── */}
+        <div className="param-row--thirds">
         <ParamSection
           title="Winter Wx / Precip Type"
           icon={<CloudRain size={14} />}
@@ -1070,23 +1308,47 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="HDW" value={params.hdw} unit="" color="#fb923c" desc="Hot-Dry-Windy Index (Srock et al. 2018) — maximum VPD × wind speed in the lowest 500m. Higher values indicate conditions favorable for rapid fire spread." />
         </ParamSection>
 
-        {params.hazards && params.hazards.length > 0 && (
-          <ParamSection
-            title="Hazard Assessment"
-            icon={<ShieldAlert size={14} />}
-          >
-            {params.hazards.map((h, i) => (
-              <ParamCard
-                key={i}
-                label={h.type}
-                value={h.level}
-                unit=""
-                color={h.level === "HIGH" ? "#ef4444" : h.level === "MOD" ? "#f59e0b" : "#60a5fa"}
-                desc={`Sounding-derived ${h.type.toLowerCase()} threat level based on composite parameter analysis.`}
-              />
-            ))}
-          </ParamSection>
-        )}
+        <ParamSection
+          title="Downburst & Microburst"
+          icon={<ArrowDown size={14} />}
+        >
+          <ParamCard label="WMSI" value={params.wmsi} unit="" color="#f97316" desc="Wet Microburst Severity Index — approximated as CAPE × Γ0-3 / 1000. Higher values indicate stronger potential for wet microbursts. >3 is significant." />
+          <ParamCard label="MDPI" value={params.mdpi} unit="" color="#fb923c" desc="Microburst Day Potential Index — θe deficit (surface minus minimum in 0-6 km) divided by 20. Values >1 indicate favorable conditions for microbursts." />
+          <ParamCard label="Max Gust" value={params.maxGust} unit="kt" color="#ef4444" desc="Maximum estimated downburst gust speed — derived from √(2×DCAPE). Simple theoretical maximum; actual gusts may differ. >58 kt = severe." />
+        </ParamSection>
+        </div>
+
+        {(() => {
+          const hazardTypes = [
+            { type: "TORNADO", desc: "Sounding-derived tornado threat level based on STP, effective STP, SRH, ML LCL, and MUCAPE." },
+            { type: "HAIL",    desc: "Sounding-derived hail threat level based on SHIP, SCP, and MUCAPE." },
+            { type: "WIND",    desc: "Sounding-derived damaging wind threat level based on DCP, DCAPE, and 0–6 km bulk shear." },
+            { type: "FLOOD",   desc: "Sounding-derived flash flood threat level based on precipitable water and MUCAPE." },
+          ];
+          const hazardMap = {};
+          if (params.hazards) params.hazards.forEach(h => { hazardMap[h.type] = h.level; });
+          return (
+            <ParamSection
+              title="Hazard Assessment"
+              icon={<ShieldAlert size={14} />}
+            >
+              {hazardTypes.map(ht => {
+                const level = hazardMap[ht.type] || "NONE";
+                const color = level === "HIGH" ? "#ef4444" : level === "MOD" ? "#f59e0b" : level === "LOW" ? "#60a5fa" : "var(--text-secondary)";
+                return (
+                  <ParamCard
+                    key={ht.type}
+                    label={ht.type}
+                    value={level}
+                    unit=""
+                    color={color}
+                    desc={ht.desc}
+                  />
+                );
+              })}
+            </ParamSection>
+          );
+        })()}
 
         {params.tempAdvection && params.tempAdvection.length > 0 && (
           <ParamSection
@@ -1106,6 +1368,8 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           </ParamSection>
         )}
       </div>
+        ); // close IIFE return
+      })()}
 
       {/* Text Summary */}
       <div className="rv-summary-section">

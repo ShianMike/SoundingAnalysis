@@ -203,3 +203,16 @@ export async function fetchEnsemblePlume(params) {
   }
   return data;
 }
+/**
+ * Fetch raw profile data for multiple forecast hours (for sounding animation).
+ */
+export async function fetchForecastProfiles(params) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/forecast-profiles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  }, 300000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Forecast profiles request failed");
+  return data;
+}

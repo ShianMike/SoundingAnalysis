@@ -442,6 +442,27 @@
 }
 
 /* ── Parameter comparison table ─────────────────────────────── */
+.cv-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.cv-csv-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cv-csv-btn:hover {
+  background: var(--card-hover, #252525);
+}
 .cv-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border, #333);
@@ -522,6 +543,18 @@
   color: var(--text-muted, #666);
   font-size: 11px;
   font-style: italic;
+}
+
+.cv-trend-arrow {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 12px;
+}
+.cv-trend-up {
+  color: #ef4444;
+}
+.cv-trend-down {
+  color: #3b82f6;
 }
 
 /* Responsive */

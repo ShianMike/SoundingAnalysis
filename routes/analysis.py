@@ -259,6 +259,99 @@ def ensemble_plume():
     })
 
 
+# ─── Forecast Profiles (raw data for animation) ─────────────────────
+@bp.route("/api/forecast-profiles", methods=["POST", "OPTIONS"])
+def forecast_profiles():
+    """
+    Return raw profile + params data for multiple BUFKIT forecast hours.
+    Used by the client-side sounding animation feature.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    import math
+    body = request.get_json(force=True) if request.data else {}
+    station = body.get("station", "OUN")
+    model = body.get("model", "rap")
+    src = body.get("source", "psu")
+    date_str = body.get("date")
+    hours = body.get("hours", [0, 1, 2, 3, 6, 9, 12])
+
+    if date_str:
+        try:
+            dt = datetime.strptime(str(date_str), "%Y%m%d%H").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return jsonify({"error": f"Invalid date '{date_str}'."}), 400
+    else:
+        dt = get_latest_sounding_time()
+
+    results = []
+    errors = []
+
+    def _safe_round(val, decimals=1):
+        try:
+            v = float(val.magnitude) if hasattr(val, "magnitude") else float(val)
+            return None if (math.isnan(v) or math.isinf(v)) else round(v, decimals)
+        except Exception:
+            return None
+
+    for fh in hours:
+        try:
+            if src == "psu":
+                data = fetch_psu_bufkit(station, model=model, fhour=int(fh))
+            else:
+                data = fetch_bufkit_sounding(station, dt, model=model, fhour=int(fh))
+
+            params = compute_parameters(data)
+            n = len(data["pressure"])
+            profile_rows = []
+            for i in range(n):
+                profile_rows.append({
+                    "p": _safe_round(data["pressure"][i]),
+                    "h": _safe_round(data["height"][i]),
+                    "t": _safe_round(data["temperature"][i]),
+                    "td": _safe_round(data["dewpoint"][i]),
+                    "wd": _safe_round(data["wind_direction"][i]),
+                    "ws": _safe_round(data["wind_speed"][i]),
+                })
+
+            # Parcel profiles
+            def _parcel_arr(key):
+                prof = params.get(key)
+                if prof is None:
+                    return None
+                try:
+                    arr = prof.to("degC").magnitude if hasattr(prof, "magnitude") else prof
+                    return [round(float(v), 1) if not (math.isnan(v) or math.isinf(v)) else None for v in arr]
+                except Exception:
+                    return None
+
+            ser = _serialize_params(params, data, station, dt, "bufkit")
+            results.append({
+                "fhour": fh,
+                "profile": profile_rows,
+                "sbParcel": _parcel_arr("sb_profile"),
+                "mlParcel": _parcel_arr("ml_profile"),
+                "params": ser,
+            })
+        except Exception as e:
+            errors.append(f"f{fh:03d}: {e}")
+
+    if len(results) == 0:
+        return jsonify({"error": "No forecast profiles could be loaded.", "errors": errors}), 400
+
+    return _nan_safe(jsonify({
+        "frames": results,
+        "errors": errors if errors else None,
+        "meta": {
+            "station": station.upper(),
+            "model": model.upper(),
+            "source": src,
+            "date": dt.strftime("%Y-%m-%d %HZ") if dt else "latest",
+        },
+    }))
+
+
 # ── Compare endpoint ────────────────────────────────────────────────
 @bp.route("/api/compare", methods=["POST", "OPTIONS"])
 def compare_soundings():

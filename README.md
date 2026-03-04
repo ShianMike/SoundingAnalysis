@@ -108,14 +108,39 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 | Category | Parameters |
 |---|---|
 | **Thermodynamic** | SB/ML/MU CAPE & CIN, DCAPE, DCIN, ECAPE, 3CAPE, 6CAPE, MU NCAPE, LCL height, LFC, EL, Lapse rates (0–3 km, 3–6 km), Precipitable water, Freezing level, Wet-bulb zero height, RH by layer |
-| **Kinematic** | Bulk wind difference (500 m, 1 km, 3 km, 6 km), Effective BWD, Storm-relative helicity (500 m, 1 km, 3 km), Effective SRH, Storm-relative wind by layer, Bunkers storm motion, Critical angle |
-| **Composite** | Significant Tornado Parameter (STP), Supercell Composite Parameter (SCP), Significant Hail Parameter (SHIP), Derecho Composite Parameter (DCP) |
+| **Kinematic** | Bulk wind difference (500 m, 1 km, 3 km, 6 km), Effective BWD, Storm-relative helicity (500 m, 1 km, 3 km), Effective SRH, Storm-relative wind by layer, Bunkers storm motion, Critical angle, Corfidi Upwind/Downwind vectors |
+| **Composite** | STP (fixed & effective), SCP, SHIP, DCP, BRN, ECAPE, NCAPE |
+| **Hazard Assessment** | Tornado, Hail, Wind, Flood threat levels (HIGH / MOD / LOW / NONE) |
+| **Convective Mode** | Predicted storm mode (Discrete Supercell → Multicell → Single Cell) via BRN + Thompson et al. 2007 framework |
+| **Downburst** | WMSI, MDPI, Max Gust estimate |
+| **Fire Weather** | Fosberg FWI, Haines Index, Hot-Dry-Windy Index |
+| **Winter Wx** | Precip Type (Bourgouin 2000), Warm/Cold layer energy |
+| **Temperature Advection** | WAA/CAA classification in 1 km layers (0–6 km) |
+
+### Interactive Skew-T (Canvas)
+- Full interactive Canvas-based Skew-T Log-P diagram alongside the static plot
+- Pan, zoom, and hover with real-time readout of T, Td, pressure, and height
+- Significant level markers: LCL, LFC, EL, Freezing Level, Wet-Bulb Zero
+- Syncs with dark/light theme toggle
+
+### Interactive Hodograph (Canvas)
+- Canvas-based hodograph with height-colored wind trace (0–1, 1–3, 3–6, 6–9, 9–12 km)
+- Bunkers RM/LM/MW storm motion vectors
+- Hover readout showing wind speed, direction, and height at cursor
+- Storm-relative mode support
+
+### Sounding Animation
+- Animate through BUFKIT forecast hours with play/pause/step controls
+- Adjustable playback speed and timeline slider
+- Watches Skew-T and parameters update frame-by-frame
 
 ### Additional Panels
 - Storm-relative wind & streamwise vorticity profiles
 - **Theta (θ) / Theta-e (θe) profile** — potential temperature and equivalent potential temperature vs height, with moisture gap fill and key height markers
 - Comprehensive parameter text readout (thermodynamic + kinematic indices)
 - **Climatology percentile comparison** — horizontal bar chart ranking each parameter against SPC severe-weather proximity sounding climatology (color-coded: grey <50th, green 50th–75th, orange 75th–90th, red >95th)
+- **Predicted Convective Mode** — visual spectrum bar (Pulse → Multicell → Supercell) with active-mode highlight
+- **Hazard Assessment** — always displays all 4 threat types (Tornado, Hail, Wind, Flood) with level or NONE
 
 ### VAD Wind Profile (VWP) Time-Height Display
 - Standalone VWP panel showing wind barbs across time and height
@@ -183,8 +208,10 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 
 ### Export Formats
 - **CSV** — all computed parameters in spreadsheet-ready format
+- **JSON** — full sounding data and parameters in JSON format
 - **SHARPpy** — raw profile data in SHARPpy-compatible format
 - **CM1** — `input_sounding` format for Cloud Model 1 numerical simulations
+- **Comparison CSV** — side-by-side parameter comparison export
 - All exports available as one-click downloads from the results toolbar
 
 ### WRF / CM1 Data Ingestion
@@ -199,12 +226,21 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - Complementary to age-indexed Iowa State archive
 - Separate "PSU" data source option in the control panel
 
+### Auto-Refresh & Parameter Alerts
+- **Auto-refresh polling** — configurable interval to re-fetch sounding data automatically
+- **Parameter watch alerts** — highlight cards that changed since the last fetch with a yellow pulse animation
+
+### PWA / Offline Support
+- Installable as a Progressive Web App (manifest + service worker)
+- Caches static assets for offline access to previously loaded data
+
 ### Theme & Accessibility
 - **Dark theme** (default) and **Light theme** toggle with localStorage persistence
 - **Color-blind mode** — Okabe-Ito/Wong 2011 color-safe palette
 - **Keyboard shortcuts** — H=history, C=compare, M=map, T=trends, V=VWP, ?=help
 - **Print layout** — optimized `@media print` stylesheet with 4-column compact parameter grid
 - **Mobile-responsive** — breakpoints at 1024px, 768px, 480px; touch-friendly drag-to-pan on plots
+- **Skew-T theme sync** — interactive Canvas plots automatically match dark/light mode
 
 ### Feedback System
 - Built-in modal for Suggestion / Bug Report / Feature Request
@@ -275,9 +311,14 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
     │       ├── MesoPanel.jsx      # Mesoscale analysis table
     │       ├── EnsemblePlume.jsx   # Ensemble sounding plume
     │       ├── CustomUpload.jsx   # WRF/CSV/SHARPpy upload page
-    │       └── *.css              # Component styles (dark theme)
+    │       ├── InteractiveSkewT.jsx # Canvas interactive Skew-T
+    │       ├── InteractiveHodograph.jsx # Canvas interactive hodograph
+    │       ├── SoundingAnimator.jsx # BUFKIT forecast animation
+    │       └── *.css              # Component styles (dark/light theme)
     ├── public/
     │   ├── favicon.svg
+    │   ├── manifest.json        # PWA manifest
+    │   ├── sw.js                # Service worker for offline
     │   └── og-thumbnail.png     # Open Graph preview image
     ├── package.json
     └── vite.config.js

@@ -147,6 +147,20 @@ def get_sounding():
             }
             profile_rows.append(row)
 
+        # Parcel profiles for interactive Skew-T
+        def _parcel_array(key):
+            prof = params.get(key)
+            if prof is None:
+                return None
+            try:
+                arr = prof.to("degC").magnitude if hasattr(prof, "magnitude") else prof
+                return [round(float(v), 1) if not (math.isnan(v) or math.isinf(v)) else None for v in arr]
+            except Exception:
+                return None
+
+        sb_parcel = _parcel_array("sb_profile")
+        ml_parcel = _parcel_array("ml_profile")
+
         stn_info = data.get("station_info", {})
         sfc_elev = stn_info.get("elev", data["height"][0].magnitude if n > 0 else 0)
 
@@ -154,6 +168,8 @@ def get_sounding():
             "image": image_b64,
             "params": serialized,
             "profile": profile_rows,
+            "sbParcel": sb_parcel,
+            "mlParcel": ml_parcel,
             "meta": {
                 "station": station,
                 "stationName": STATIONS.get(station, (station or source.upper(),))[0],
@@ -513,10 +529,24 @@ def upload_file():
                          "t": round(t_arr[k],1), "td": round(td_arr[k],1),
                          "wd": round(wd_arr[k],1), "ws": round(ws_arr[k],1)} for k in range(n)]
 
-        return jsonify({
+        # Parcel profiles for interactive Skew-T
+        try:
+            _sp = params.get("sb_profile")
+            sb_parcel2 = [round(float(v.magnitude if hasattr(v, 'magnitude') else v), 1) for v in _sp.to("degC")] if _sp is not None else None
+        except Exception:
+            sb_parcel2 = None
+        try:
+            _mp = params.get("ml_profile")
+            ml_parcel2 = [round(float(v.magnitude if hasattr(v, 'magnitude') else v), 1) for v in _mp.to("degC")] if _mp is not None else None
+        except Exception:
+            ml_parcel2 = None
+
+        return jsonify(_nan_safe({
             "image": image_b64,
             "params": serialized,
             "profile": profile_rows,
+            "sbParcel": sb_parcel2,
+            "mlParcel": ml_parcel2,
             "meta": {
                 "station": label,
                 "stationName": f"WRF Output ({grid_lat:.2f}°N, {grid_lon:.2f}°E)" if fmt == "wrf" else "File Upload",
@@ -526,7 +556,7 @@ def upload_file():
                 "sfcPressure": round(p_arr[0]),
                 "topPressure": round(p_arr[-1]),
             },
-        })
+        }))
 
     except Exception as e:
         traceback.print_exc()
