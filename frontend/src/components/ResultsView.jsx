@@ -1210,25 +1210,26 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           <ParamCard label="RH 3-6 km" value={params.rh36} unit="%" desc="Relative Humidity 3–6 km — mid-level moisture. Dry air here entrains into storms, increasing evaporative cooling and downdraft strength." />
         </ParamSection>
 
-        {/* ── Row 2: Kinematic (full-width) ── */}
-        <div className="param-section--full">
-        <ParamSection
-          title="Kinematic"
-          icon={<ArrowUpDown size={14} />}
-        >
-          <ParamCard label="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" changed={isChanged("BWD 0-1 km")} desc="0–1 km Bulk Wind Difference — magnitude of the wind shear vector over the lowest 1 km. >15 kt supports organized storms; >20 kt favors tornadoes." />
-          <ParamCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" changed={isChanged("BWD 0-3 km")} desc="0–3 km Bulk Wind Difference — shear in the low-to-mid levels. Important for mesocyclone development. >30 kt favors supercells." />
-          <ParamCard label="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" changed={isChanged("BWD 0-6 km")} desc="0–6 km Bulk Wind Difference — deep-layer shear. The primary discriminator between organized and disorganized convection. >40 kt strongly favors supercells." />
-          <ParamCard label="SRH 500m" value={params.srh500m} unit="m²/s²" desc="0–500m Storm-Relative Helicity — streamwise vorticity in the lowest 500m relative to storm motion. Key for tornado potential. >150 is significant." />
-          <ParamCard label="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" changed={isChanged("SRH 0-1 km")} desc="0–1 km Storm-Relative Helicity — measures the rotational potential of a storm's updraft in the lowest 1 km. >100 favors mesocyclones; >300 strongly favors tornadoes." />
-          <ParamCard label="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" changed={isChanged("SRH 0-3 km")} desc="0–3 km Storm-Relative Helicity — total low-level rotational potential. >200 favors strong mesocyclones; >400 is extreme. Used in STP and SCP composites." />
-          <ParamCard label="Eff. SRH" value={params.esrh} unit="m²/s²" color="#2dd4bf" desc="Effective SRH — storm-relative helicity computed within the effective inflow layer (where CAPE ≥ 100 and CIN > -250). More physically meaningful than fixed-layer SRH." />
-          <ParamCard label="Eff. BWD" value={params.ebwd} unit="kt" color="#34d399" desc="Effective Bulk Wind Difference — shear from the effective inflow base to half the MU EL height. Better discriminator for supercells than fixed 0-6 km shear." />
-          <ParamCard label="EIL Base" value={params.eilBot} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer base — lowest level where CAPE ≥ 100 J/kg and CIN > -250 J/kg. Identifies the true inflow layer for storms." />
-          <ParamCard label="EIL Top" value={params.eilTop} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer top — highest contiguous level meeting the CAPE/CIN thresholds. Deeper EIL = deeper inflow available for storms." />
-          <ParamCard label="Corfidi UPW" value={params.corfidiUpSpd} unit="kt" color="orange" desc="Corfidi Upwind vector speed (Corfidi 2003) — MCS upwind propagation component. Represents back-building tendency. Slower speeds favor training echoes and flash flooding." />
-          <ParamCard label="Corfidi DNW" value={params.corfidiDnSpd} unit="kt" color="#ff4444" desc="Corfidi Downwind vector speed (Corfidi 2003) — MCS forward propagation. Faster speeds = fast-moving MCS; slower = quasi-stationary. Key for flash flood risk." />
-        </ParamSection>
+        {/* ── Row 2: Kinematic (full-width, composite-style) ── */}
+        <div className="param-section param-section--full">
+          <div className="param-section-header">
+            <ArrowUpDown size={14} />
+            <h3>Kinematic</h3>
+          </div>
+          <div className="param-grid param-grid--composites">
+            <CompositeCard label="BWD 0-1 km" thresholdKey="BWD 0-1 km" value={params.bwd1km} unit="kt" color="#ef4444" changed={isChanged("BWD 0-1 km")} desc="0–1 km Bulk Wind Difference — magnitude of the wind shear vector over the lowest 1 km. >15 kt supports organized storms; >20 kt favors tornadoes." />
+            <CompositeCard label="BWD 0-3 km" value={params.bwd3km} unit="kt" color="#f97316" changed={isChanged("BWD 0-3 km")} desc="0–3 km Bulk Wind Difference — shear in the low-to-mid levels. Important for mesocyclone development. >30 kt favors supercells." />
+            <CompositeCard label="BWD 0-6 km" thresholdKey="BWD 0-6 km" value={params.bwd6km} unit="kt" color="#eab308" changed={isChanged("BWD 0-6 km")} desc="0–6 km Bulk Wind Difference — deep-layer shear. The primary discriminator between organized and disorganized convection. >40 kt strongly favors supercells." />
+            <CompositeCard label="SRH 500m" value={params.srh500m} unit="m²/s²" desc="0–500m Storm-Relative Helicity — streamwise vorticity in the lowest 500m relative to storm motion. Key for tornado potential. >150 is significant." />
+            <CompositeCard label="SRH 0-1 km" thresholdKey="SRH 0-1 km" value={params.srh1km} unit="m²/s²" color="#ef4444" changed={isChanged("SRH 0-1 km")} desc="0–1 km Storm-Relative Helicity — measures the rotational potential of a storm's updraft in the lowest 1 km. >100 favors mesocyclones; >300 strongly favors tornadoes." />
+            <CompositeCard label="SRH 0-3 km" thresholdKey="SRH 0-3 km" value={params.srh3km} unit="m²/s²" color="#f97316" changed={isChanged("SRH 0-3 km")} desc="0–3 km Storm-Relative Helicity — total low-level rotational potential. >200 favors strong mesocyclones; >400 is extreme. Used in STP and SCP composites." />
+            <CompositeCard label="Eff. SRH" thresholdKey="Eff. SRH" value={params.esrh} unit="m²/s²" color="#2dd4bf" desc="Effective SRH — storm-relative helicity computed within the effective inflow layer (where CAPE ≥ 100 and CIN > -250). More physically meaningful than fixed-layer SRH." />
+            <CompositeCard label="Eff. BWD" value={params.ebwd} unit="kt" color="#34d399" desc="Effective Bulk Wind Difference — shear from the effective inflow base to half the MU EL height. Better discriminator for supercells than fixed 0-6 km shear." />
+            <CompositeCard label="EIL Base" value={params.eilBot} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer base — lowest level where CAPE ≥ 100 J/kg and CIN > -250 J/kg. Identifies the true inflow layer for storms." />
+            <CompositeCard label="EIL Top" value={params.eilTop} unit="m AGL" color="#a7f3d0" desc="Effective Inflow Layer top — highest contiguous level meeting the CAPE/CIN thresholds. Deeper EIL = deeper inflow available for storms." />
+            <CompositeCard label="Corfidi UPW" value={params.corfidiUpSpd} unit="kt" color="orange" desc="Corfidi Upwind vector speed (Corfidi 2003) — MCS upwind propagation component. Represents back-building tendency. Slower speeds favor training echoes and flash flooding." />
+            <CompositeCard label="Corfidi DNW" value={params.corfidiDnSpd} unit="kt" color="#ff4444" desc="Corfidi Downwind vector speed (Corfidi 2003) — MCS forward propagation. Faster speeds = fast-moving MCS; slower = quasi-stationary. Key for flash flood risk." />
+          </div>
         </div>
 
         {/* ── Row 3: Composite Indices (full‑width, prominent) ── */}
