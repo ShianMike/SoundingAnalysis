@@ -105,21 +105,53 @@ def _quick_tornado_score(station_id, dt):
             bwd_val = 0
             bwd_ms = 0
 
-        # STP-like composite
-        cape_term = min(cape_val / 1500.0, 3.0)
-        srh_term = min(srh_val / 150.0, 3.0)
-        bwd_term = min(bwd_val / 20.0, 3.0) if bwd_val >= 12 else 0
-        cin_term = min((200.0 + cin_val) / 150.0, 1.0) if cin_val > -250 else 0
-        stp_score = cape_term * srh_term * bwd_term * cin_term
+        # SB LCL height (meters AGL)
+        try:
+            sb_lcl_p, sb_lcl_t = mpcalc.lcl(p[0], T[0], Td[0])
+            # Interpolate height at LCL pressure
+            from scipy.interpolate import interp1d as _interp1d
+            _h_interp = _interp1d(
+                p.magnitude[::-1], h_agl.magnitude[::-1],
+                bounds_error=False, fill_value="extrapolate"
+            )
+            sb_lcl_m = float(_h_interp(float(sb_lcl_p.magnitude)))
+        except Exception:
+            sb_lcl_m = None
+
+        # ── STP — fixed-layer via MetPy (matches sounding plot) ────
+        # MetPy significant_tornado(CAPE, LCL_m, SRH_1km, BWD_6km_ms)
+        try:
+            if sb_lcl_m is not None:
+                _stp_result = mpcalc.significant_tornado(
+                    sb_cape,
+                    sb_lcl_m * units.meter,
+                    total_srh_1km,
+                    np.sqrt(bwd_u**2 + bwd_v**2).to("m/s")
+                )
+                stp_score = float(np.asarray(_stp_result.magnitude).flat[0])
+            else:
+                stp_score = 0.0
+        except Exception:
+            stp_score = 0.0
 
         # Additive raw score
         raw_score = (max(cape_val, 0) / 1500.0
                      + max(srh_val, 0) / 150.0
                      + bwd_val / 40.0)
 
-        # SCP = (muCAPE/1000) * (SRH_3km/50) * (BWD_6km_ms/20)
-        _scp_bwd = bwd_ms / 20.0 if bwd_ms >= 10.0 else 0.0
-        scp_score = (mu_cape_val / 1000.0) * (srh3_val / 50.0) * _scp_bwd
+        # ── Effective layer for SCP ────────────────────────────────
+        # Use 0-3km SRH and 0-6km BWD as proxy (full effective layer
+        # is too expensive for a multi-station scan).  MetPy's
+        # supercell_composite still applies proper caps/thresholds.
+        try:
+            _scp_result = mpcalc.supercell_composite(
+                mu_cape_val * units("J/kg"),
+                total_srh_3km,
+                np.sqrt(bwd_u**2 + bwd_v**2).to("m/s")
+            )
+            scp_score = float(np.asarray(_scp_result.magnitude).flat[0])
+        except Exception:
+            scp_score = 0.0
 
         # SHIP = (muCAPE * mixRatio * LR_7-5 * (-T500) * BWD_6km) / 42M
         try:
