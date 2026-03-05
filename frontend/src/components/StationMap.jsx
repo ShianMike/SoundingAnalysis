@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
@@ -186,6 +186,64 @@ function riskColor(stp) {
   if (stp >= 1)    return RISK_COLORS.high;
   if (stp >= 0.3)  return RISK_COLORS.med;
   return RISK_COLORS.low;
+}
+
+/* ── Velocity product definitions ─────────────────────────────── */
+/* IEM RIDGE only archives N0S (Storm-Relative Mean Velocity) for NEXRAD sites */
+const VELOCITY_PRODUCTS = [
+  { id: "N0S", label: "SRM 0.5°", desc: "Storm-Relative Mean Velocity (0.5° tilt) — removes storm motion, best for mesocyclone rotation couplets and tornado signatures" },
+];
+
+const VEL_ANIM_INTERVAL_MS = 800;
+const VEL_FRAME_HOURS = 1; // how many hours of scans to fetch
+
+/** Parse IEM scan timestamps → archive image URLs + bounds from world file.
+ *  World file format: pixelSizeX, 0, 0, -pixelSizeY, topLeftX, topLeftY */
+function parseWorldFile(text) {
+  const lines = text.trim().split(/\r?\n/).map(Number);
+  return { dx: lines[0], dy: lines[3], x0: lines[4], y0: lines[5] };
+}
+
+function velImageBounds(wld, width = 1000, height = 1000) {
+  // wld: {dx, dy, x0, y0} — dy is negative
+  const south = wld.y0 + wld.dy * height;
+  const north = wld.y0;
+  const west = wld.x0;
+  const east = wld.x0 + wld.dx * width;
+  return [[south, west], [north, east]];
+}
+
+/** Fetch velocity scan list + world file for a radar/product, return frames. */
+async function fetchVelFrames(radar, product, hours = VEL_FRAME_HOURS) {
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 3600_000);
+  const iso = (d) => d.toISOString().replace(/\.\d+Z/, "Z");
+
+  // 1. Get scan list first
+  const listRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=list&radar=${radar}&product=${product}&start=${iso(start)}&end=${iso(end)}`);
+  if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+  const listData = await listRes.json();
+  const scans = listData.scans || [];
+  if (!scans.length) return { frames: [], bounds: null };
+
+  // 2. Use the first actual scan's timestamp to fetch the world file (always exists)
+  const firstTs = scans[0].ts.replace(/[-:TZ]/g, "").slice(0, 12);
+  const firstDate = scans[0].ts.slice(0, 10).split("-");
+  const wldUrl = `https://mesonet.agron.iastate.edu/archive/data/${firstDate[0]}/${firstDate[1]}/${firstDate[2]}/GIS/ridge/${radar}/${product}/${radar}_${product}_${firstTs}.wld`;
+  const wldRes = await fetch(wldUrl).catch(() => null);
+  if (!wldRes || !wldRes.ok) return { frames: [], bounds: null };
+  const wld = parseWorldFile(await wldRes.text());
+  const bounds = velImageBounds(wld);
+
+  // 3. Build frame objects with archive image URLs
+  const frames = scans.map((s) => {
+    const ts = s.ts.replace(/[-:TZ]/g, "").slice(0, 12); // YYYYMMDDHHmm
+    const d = s.ts.slice(0, 10).split("-"); // [YYYY, MM, DD]
+    const url = `https://mesonet.agron.iastate.edu/archive/data/${d[0]}/${d[1]}/${d[2]}/GIS/ridge/${radar}/${product}/${radar}_${product}_${ts}.png`;
+    const time = Math.floor(new Date(s.ts.endsWith("Z") ? s.ts : s.ts + "Z").getTime() / 1000);
+    return { url, time, ts };
+  });
+  return { frames, bounds };
 }
 
 /* ── NEXRAD WSR-88D sites (CONUS) for velocity overlay ──────── */
@@ -440,6 +498,15 @@ export default function StationMap({
   const [velCacheBust, setVelCacheBust] = useState(() => Date.now());
   const [velScanTime, setVelScanTime] = useState(null);        // latest volume scan UTC string
   const [velProduct, setVelProduct] = useState("N0S");          // active velocity product
+  const [velAvailProducts, setVelAvailProducts] = useState([]);  // IEM available products for current radar
+
+  // Animated velocity state
+  const [velFrames, setVelFrames] = useState([]);     // [{url, time, ts}]
+  const [velBounds, setVelBounds] = useState(null);   // [[south,west],[north,east]]
+  const [velFrame, setVelFrame] = useState(0);
+  const [velPlaying, setVelPlaying] = useState(false);
+  const velTimerRef = useRef(null);
+  const velFrameCount = velFrames.length;
   const [baseMap, setBaseMap] = useState("dark");
   const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
 
@@ -535,37 +602,48 @@ export default function StationMap({
     return () => clearInterval(id);
   }, [showVelocity]);
 
-  // Query IEM for available products + latest scan time when velocity radar changes
+  // Fetch velocity animation frames from IEM archive
   useEffect(() => {
-    if (!showVelocity) { setVelScanTime(null); return; }
+    if (!showVelocity) {
+      setVelScanTime(null); setVelFrames([]); setVelFrame(0); setVelPlaying(false);
+      return;
+    }
     let cancelled = false;
+    setVelAvailProducts(VELOCITY_PRODUCTS);
     const load = async () => {
       try {
-        // Query available products for this radar
-        const pRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=${velocityRadar.id}`);
-        if (!pRes.ok) throw new Error(`HTTP ${pRes.status}`);
-        const pData = await pRes.json();
-        const products = (pData.products || []).map((p) => p.id);
-        // Prefer N0U (base velocity) if available, fall back to N0S (storm-relative)
-        const prod = products.includes("N0U") ? "N0U" : products.includes("N0S") ? "N0S" : "N0S";
-        if (!cancelled) setVelProduct(prod);
-        // Query latest volume scan time (operation=list returns recent scans)
-        const tRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=list&radar=${velocityRadar.id}&product=${prod}`);
-        if (!tRes.ok) throw new Error(`HTTP ${tRes.status}`);
-        const tData = await tRes.json();
-        if (!cancelled && tData.scans?.length) {
-          const ts = tData.scans[tData.scans.length - 1].ts;
-          setVelScanTime(ts ? ts.replace("T", " ").slice(0, 16) + "Z" : null);
+        const { frames, bounds } = await fetchVelFrames(velocityRadar.id, velProduct);
+        if (cancelled) return;
+        setVelFrames(frames);
+        setVelBounds(bounds);
+        setVelFrame(Math.max(0, frames.length - 1)); // default to latest
+        if (frames.length) {
+          const last = frames[frames.length - 1];
+          setVelScanTime(new Date(last.time * 1000).toISOString().slice(0, 16).replace("T", " ") + "Z");
+        } else {
+          setVelScanTime(null);
         }
       } catch (e) {
-        console.warn("IEM radar meta error:", e);
+        console.warn("IEM velocity frame error:", e);
         if (!cancelled) setVelScanTime(null);
       }
     };
     load();
-    const id = setInterval(load, 120_000);
+    const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
-  }, [showVelocity, velocityRadar.id, velCacheBust]);
+  }, [showVelocity, velocityRadar.id, velProduct, velCacheBust]);
+
+  // Advance velocity animation frame
+  useEffect(() => {
+    if (!velPlaying || !showVelocity || velFrameCount === 0) {
+      clearInterval(velTimerRef.current);
+      return;
+    }
+    velTimerRef.current = setInterval(() => {
+      setVelFrame((f) => (f + 1) % velFrameCount);
+    }, VEL_ANIM_INTERVAL_MS);
+    return () => clearInterval(velTimerRef.current);
+  }, [velPlaying, showVelocity, velFrameCount]);
 
   const handleCenterChange = useCallback((lat, lng) => {
     const nr = nearestNexrad(lat, lng);
@@ -816,11 +894,47 @@ export default function StationMap({
             <button
               className={`smap-tbtn ${showVelocity ? "active" : ""}`}
               onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
-              title="Toggle NEXRAD base velocity overlay (single-site)"
+              title="Toggle NEXRAD velocity overlay (single-site) — use SRM products to see tornado rotation signatures"
             >
               <Wind size={11} />
               Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
             </button>
+            {showVelocity && velAvailProducts.length > 0 && (
+              <div className="smap-day-btns smap-vel-product-btns">
+                {velAvailProducts.map((vp) => (
+                  <button
+                    key={vp.id}
+                    className={`smap-day-btn${velProduct === vp.id ? " active" : ""}${vp.id.endsWith("S") ? " smap-vel-srm" : ""}`}
+                    onClick={() => { setVelProduct(vp.id); setVelCacheBust(Date.now()); }}
+                    title={vp.desc}
+                  >
+                    {vp.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showVelocity && velFrameCount > 0 && (
+              <>
+                <button
+                  className={`smap-tbtn smap-anim-btn ${velPlaying ? "active" : ""}`}
+                  onClick={() => setVelPlaying((v) => !v)}
+                  title={velPlaying ? "Pause velocity animation" : "Animate velocity frames"}
+                >
+                  {velPlaying ? <Pause size={10} /> : <Play size={10} />}
+                  {velFrames[velFrame] ? fmtRadarTime(velFrames[velFrame].time) : "Animate"}
+                </button>
+                <input
+                  type="range"
+                  className="smap-radar-slider"
+                  min={0}
+                  max={velFrameCount - 1}
+                  step={1}
+                  value={velFrame}
+                  onChange={(e) => { setVelFrame(Number(e.target.value)); setVelPlaying(false); }}
+                  title="Scrub through velocity frames"
+                />
+              </>
+            )}
             <button
               className={`smap-tbtn ${showWarnings ? "active" : ""}`}
               onClick={() => setShowWarnings((v) => !v)}
@@ -986,15 +1100,13 @@ export default function StationMap({
             )}
           </Pane>
 
-          {/* NEXRAD Base Velocity overlay (RIDGE single-site) */}
-          {showVelocity && (
-            <TileLayer
-              pane="radar-tiles"
-              key={`vel-${velocityRadar.id}-${velProduct}-${velCacheBust}`}
-              url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${velocityRadar.id}-${velProduct}-0/{z}/{x}/{y}.png?_=${velCacheBust}`}
+          {/* NEXRAD Velocity overlay — animated archive images from IEM */}
+          {showVelocity && velFrames[velFrame] && velBounds && (
+            <ImageOverlay
+              url={velFrames[velFrame].url}
+              bounds={velBounds}
               opacity={0.65}
-              maxZoom={18}
-              attribution={`Velocity ${velocityRadar.id} via IEM`}
+              zIndex={300}
             />
           )}
 
@@ -1127,9 +1239,13 @@ export default function StationMap({
             <div className="smap-legend-float smap-legend-vel">
               <div className="smap-legend smap-legend-vel-row">
                 <span className="smap-legend-vel-title">
-                  {velocityRadar.id} {velProduct === "N0U" ? "Base" : "Storm-Rel"} Velocity
+                  {velocityRadar.id} {(() => { const vp = VELOCITY_PRODUCTS.find((p) => p.id === velProduct); return vp ? vp.label : velProduct; })()}
                 </span>
-                {velScanTime && <span className="smap-legend-vel-time">{velScanTime}</span>}
+                {velFrames[velFrame] ? (
+                  <span className="smap-legend-vel-time">{fmtRadarTime(velFrames[velFrame].time)}</span>
+                ) : velScanTime ? (
+                  <span className="smap-legend-vel-time">{velScanTime}</span>
+                ) : null}
               </div>
               <div className="smap-legend smap-legend-vel-bar">
                 <span className="smap-vel-neg">Toward</span>

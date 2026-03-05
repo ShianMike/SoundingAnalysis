@@ -1095,6 +1095,16 @@ body.smap-fullscreen-active {
   background: linear-gradient(to right, #00e676, #004d40, #1a237e, #311b92, #b71c1c, #ff1744);
   min-width: 80px;
 }
+
+/* Velocity product selector */
+.smap-vel-product-btns {
+  flex-wrap: wrap;
+}
+.smap-vel-product-btns .smap-vel-srm.active {
+  background: rgba(255, 64, 64, 0.2);
+  color: #ff6b6b;
+}
+
 [data-theme="light"] .smap-legend-vel-title {
   color: #0097a7;
 }
