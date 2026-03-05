@@ -1,17 +1,26 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw } from "lucide-react";
+import { MapContainer, TileLayer, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
 
-/* ── Wrapper to make TileLayer opacity reactive ──────────── */
+/* ── Wrapper that keeps a SINGLE TileLayer alive and swaps URL via
+   setUrl() instead of destroying / recreating the Leaflet layer.
+   This avoids re-fetching every visible tile on each frame change. ── */
 function RadarLayer({ url, opacity, ...rest }) {
   const ref = useRef(null);
+  const prevUrl = useRef(url);
   useEffect(() => {
     if (ref.current) ref.current.setOpacity(opacity);
   }, [opacity]);
+  useEffect(() => {
+    if (ref.current && url !== prevUrl.current) {
+      ref.current.setUrl(url);
+      prevUrl.current = url;
+    }
+  }, [url]);
   return <TileLayer ref={ref} url={url} opacity={opacity} {...rest} />;
 }
 
@@ -23,24 +32,145 @@ const BASE_MAPS = [
   { id: "terrain",   name: "Terrain",   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" },
 ];
 
-/* ── animated radar frame URLs (IEM n0q, up to 60 min back in 5-min steps) */
-const RADAR_INTERVAL_MS = 800; // ms between frames
+/* ── animated radar via RainViewer API (live composite, real timestamps) ──── */
+const RADAR_INTERVAL_MS = 1200;         // ms between animation frames (slower to avoid 429s)
+const RAINVIEWER_API    = "https://api.rainviewer.com/public/weather-maps.json";
+const RAINVIEWER_TILE   = "https://tilecache.rainviewer.com";
+const RAINVIEWER_OPTS   = "/256/{z}/{x}/{y}/1/1_1.png";   // size/color(1=transparent-bg)/smooth/snow
 
-/** Build URL list for the last `minutes` (must be multiple of 5, max 60). */
-function buildRadarUrls(minutes = 30) {
-  const steps = Math.min(12, Math.max(1, Math.round(minutes / 5)));
-  // offsets: e.g. 60,55,50…5,0  (0 = latest)
-  const offsets = [];
-  for (let i = steps; i >= 0; i--) offsets.push(i * 5);
-  return offsets.map((m) => {
-    const layer = m > 0
-      ? `nexrad-n0q-900913-m${String(m).padStart(2, "0")}m`
-      : "nexrad-n0q-900913";
-    return {
-      url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/{z}/{x}/{y}.png`,
-      label: m > 0 ? `-${m}m` : "Now",
-    };
-  });
+/** Fetch available radar frame paths from RainViewer (with retry). */
+async function fetchRadarFrames(retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(RAINVIEWER_API);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const past    = (data.radar?.past    || []).slice(-12);  // last 12 frames
+      const nowcast = (data.radar?.nowcast || []).slice(0, 3); // up to 3 forecast frames
+      return { past, nowcast, generated: data.generated };
+    } catch (e) {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1))); // back off
+        continue;
+      }
+      console.error("RainViewer API error:", e);
+      return { past: [], nowcast: [], generated: 0 };
+    }
+  }
+}
+
+/** Format a UNIX timestamp to a short UTC label like "14:05Z". */
+function fmtRadarTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toISOString().slice(11, 16) + "Z";
+}
+
+/** Build IEM mosaic frame list — last ~2 hours at 5-min intervals.
+ *  IEM RIDGE tiles accept timestamps as YYYYMMDDHHmm in the URL path.
+ *  Returns [{time (unix), ts (YYYYMMDDHHmm string)}] oldest→newest. */
+function buildMosaicFrames(count = 24) {
+  const now = new Date();
+  // Round down to nearest 5 minutes
+  now.setUTCSeconds(0, 0);
+  now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5);
+  const frames = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const t = new Date(now.getTime() - i * 5 * 60_000);
+    const ts = t.getUTCFullYear().toString()
+      + String(t.getUTCMonth() + 1).padStart(2, "0")
+      + String(t.getUTCDate()).padStart(2, "0")
+      + String(t.getUTCHours()).padStart(2, "0")
+      + String(t.getUTCMinutes()).padStart(2, "0");
+    frames.push({ time: Math.floor(t.getTime() / 1000), ts });
+  }
+  return frames;
+}
+
+/* ── NWS Active Warnings ─────────────────────────────────────── */
+const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual&message_type=alert,update";
+
+// Event → colour + short label
+const WARNING_STYLES = {
+  "Tornado Warning":              { color: "#ff0000", weight: 3, label: "TOR" },
+  "Particularly Dangerous Situation Tornado Warning": { color: "#ff0000", weight: 4, label: "PDS TOR" },
+  "Severe Thunderstorm Warning":   { color: "#ffa500", weight: 2.5, label: "SVR" },
+  "Flash Flood Warning":           { color: "#00ff00", weight: 2, label: "FFW" },
+  "Tornado Watch":                 { color: "#ffff00", weight: 2, label: "TOA", dash: "8 4" },
+  "Severe Thunderstorm Watch":     { color: "#ffa500", weight: 2, label: "SVA", dash: "8 4" },
+  "Special Weather Statement":     { color: "#ffe4b5", weight: 1.5, label: "SPS" },
+  "Flood Warning":                 { color: "#228b22", weight: 1.5, label: "FLW" },
+};
+// Ordered priority for display (highest first)
+const WARNING_PRIORITY = [
+  "Tornado Warning", "Particularly Dangerous Situation Tornado Warning",
+  "Severe Thunderstorm Warning", "Flash Flood Warning",
+  "Tornado Watch", "Severe Thunderstorm Watch",
+  "Special Weather Statement", "Flood Warning",
+];
+
+async function fetchNwsWarnings() {
+  try {
+    const res = await fetch(NWS_ALERTS_API, {
+      headers: { "Accept": "application/geo+json", "User-Agent": "SoundingAnalysis/1.0" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Keep only events we have styles for, and that have geometry
+    const validEvents = new Set(Object.keys(WARNING_STYLES));
+    const features = (data.features || []).filter(
+      (f) => f.geometry && validEvents.has(f.properties?.event)
+    );
+    return { type: "FeatureCollection", features };
+  } catch (e) {
+    console.error("NWS warnings fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+function warningStyle(feature) {
+  const ev = feature.properties?.event || "";
+  const s = WARNING_STYLES[ev] || { color: "#ccc", weight: 1 };
+  return {
+    color: s.color,
+    weight: s.weight,
+    fillColor: s.color,
+    fillOpacity: ev.includes("Watch") ? 0.08 : 0.18,
+    dashArray: s.dash || null,
+  };
+}
+
+function WarningsLayer({ data }) {
+  if (!data || !data.features || data.features.length === 0) return null;
+  return (
+    <Pane name="nws-warnings" style={{ zIndex: 420, pointerEvents: "auto" }}>
+      <GeoJSON
+        key={data.features.length + (data.features[0]?.properties?.id || "")}
+        data={data}
+        style={warningStyle}
+        onEachFeature={(feature, layer) => {
+          const p = feature.properties;
+          const ev = p.event || "Alert";
+          const s = WARNING_STYLES[ev];
+          const headline = p.headline || ev;
+          const areas = p.areaDesc || "";
+          const onset = p.onset ? new Date(p.onset).toLocaleString() : "";
+          const expires = p.expires ? new Date(p.expires).toLocaleString() : "";
+          layer.bindPopup(
+            `<div class="smap-warn-popup">
+              <div class="smap-warn-badge" style="background:${s?.color || '#ccc'}22;color:${s?.color || '#ccc'};border-color:${s?.color || '#ccc'}55">
+                ${s?.label || "WARN"}
+              </div>
+              <div class="smap-warn-headline">${headline}</div>
+              <div class="smap-warn-area">${areas}</div>
+              ${onset ? `<div class="smap-warn-time">Onset: ${onset}</div>` : ""}
+              ${expires ? `<div class="smap-warn-time">Expires: ${expires}</div>` : ""}
+            </div>`,
+            { className: "smap-popup smap-warn-popup-wrap", minWidth: 240, maxWidth: 340 }
+          );
+        }}
+      />
+    </Pane>
+  );
 }
 
 /* ── colours ────────────────────────────────────────────────── */
@@ -116,7 +246,7 @@ function nearestNexrad(lat, lon) {
     const d = (s[1] - lat) ** 2 + (s[2] - lon) ** 2;
     if (d < bestD) { bestD = d; best = s; }
   }
-  return best[0];
+  return { id: best[0], lat: best[1], lon: best[2] };
 }
 
 /* ── Track map center for nearest-radar selection ───────────── */
@@ -304,10 +434,20 @@ export default function StationMap({
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
   const [showRadar, setShowRadar] = useState(true);
+  const [radarSource, setRadarSource] = useState("mosaic"); // "composite" (RainViewer) | "mosaic" (IEM US national composite)
   const [showVelocity, setShowVelocity] = useState(false);
-  const [velocityRadar, setVelocityRadar] = useState("TLX");   // nearest NEXRAD ID
+  const [velocityRadar, setVelocityRadar] = useState({ id: "TLX", lat: 35.33, lon: -97.28 });   // nearest NEXRAD
+  const [velCacheBust, setVelCacheBust] = useState(() => Date.now());
+  const [velScanTime, setVelScanTime] = useState(null);        // latest volume scan UTC string
+  const [velProduct, setVelProduct] = useState("N0S");          // active velocity product
   const [baseMap, setBaseMap] = useState("dark");
   const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
+
+  // NWS active warnings overlay
+  const [showWarnings, setShowWarnings] = useState(true);
+  const [warningsData, setWarningsData] = useState(null);
+  const [warningsLoading, setWarningsLoading] = useState(false);
+  const warningCount = warningsData?.features?.length || 0;
 
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
@@ -325,17 +465,55 @@ export default function StationMap({
   const [outlookError, setOutlookError] = useState(null);
   const [popupStationId, setPopupStationId] = useState(null);
 
-  // Animated radar state
+  // Animated radar state — unified for both composite (RainViewer) and mosaic (IEM)
   const [radarPlaying, setRadarPlaying] = useState(false);
   const [radarFrame, setRadarFrame] = useState(0);
-  const [radarMinutes, setRadarMinutes] = useState(30); // 5-60
+  const [radarFrames, setRadarFrames] = useState([]);   // composite: [{time, path, forecast}]  mosaic: [{time, ts}]
   const radarTimerRef = useRef(null);
-  const radarUrls = useMemo(() => buildRadarUrls(radarMinutes), [radarMinutes]);
-  const radarFrameCount = radarUrls.length;
+  const radarFrameCount = radarFrames.length;
+
+  // Fetch radar frames — RainViewer for composite, generated timestamps for mosaic
+  useEffect(() => {
+    if (!showRadar) return;
+    let cancelled = false;
+    // Clear stale frames immediately so the wrong source type isn't rendered
+    setRadarFrames([]);
+    setRadarFrame(0);
+    setRadarPlaying(false);
+    if (radarSource === "composite") {
+      const load = async () => {
+        const { past, nowcast } = await fetchRadarFrames();
+        if (cancelled) return;
+        const frames = [
+          ...past.map((f) => ({ ...f, forecast: false })),
+          ...nowcast.map((f) => ({ ...f, forecast: true })),
+        ];
+        setRadarFrames(frames);
+        setRadarFrame(Math.max(0, past.length - 1));
+      };
+      load();
+      const id = setInterval(load, 300_000);
+      return () => { cancelled = true; clearInterval(id); };
+    } else {
+      // Mosaic: build frames from timestamps (last 2 hrs, 5-min intervals)
+      const frames = buildMosaicFrames(24);
+      setRadarFrames(frames);
+      setRadarFrame(frames.length - 1); // default to latest
+      // Rebuild every 5 min to pick up new data
+      const id = setInterval(() => {
+        if (cancelled) return;
+        const f = buildMosaicFrames(24);
+        setRadarFrames(f);
+        // Keep at latest if user hasn't scrubbed
+        setRadarFrame((prev) => prev >= f.length - 2 ? f.length - 1 : prev);
+      }, 300_000);
+      return () => { cancelled = true; clearInterval(id); };
+    }
+  }, [showRadar, radarSource]);
 
   // Advance radar frame
   useEffect(() => {
-    if (!radarPlaying || !showRadar) {
+    if (!radarPlaying || !showRadar || radarFrameCount === 0) {
       clearInterval(radarTimerRef.current);
       return;
     }
@@ -345,19 +523,68 @@ export default function StationMap({
     return () => clearInterval(radarTimerRef.current);
   }, [radarPlaying, showRadar, radarFrameCount]);
 
-  // Clamp frame when duration changes
-  useEffect(() => {
-    setRadarFrame((f) => Math.min(f, radarFrameCount - 1));
-  }, [radarFrameCount]);
-
   // Reset frame when radar is toggled off
   useEffect(() => {
-    if (!showRadar) { setRadarPlaying(false); setRadarFrame(0); }
+    if (!showRadar) { setRadarPlaying(false); setRadarFrame(0); setRadarFrames([]); }
   }, [showRadar]);
 
+  // Auto-refresh velocity tiles every 2 min (NEXRAD volume scan ~4-5 min)
+  useEffect(() => {
+    if (!showVelocity) return;
+    const id = setInterval(() => setVelCacheBust(Date.now()), 120_000);
+    return () => clearInterval(id);
+  }, [showVelocity]);
+
+  // Query IEM for available products + latest scan time when velocity radar changes
+  useEffect(() => {
+    if (!showVelocity) { setVelScanTime(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        // Query available products for this radar
+        const pRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=${velocityRadar.id}`);
+        if (!pRes.ok) throw new Error(`HTTP ${pRes.status}`);
+        const pData = await pRes.json();
+        const products = (pData.products || []).map((p) => p.id);
+        // Prefer N0U (base velocity) if available, fall back to N0S (storm-relative)
+        const prod = products.includes("N0U") ? "N0U" : products.includes("N0S") ? "N0S" : "N0S";
+        if (!cancelled) setVelProduct(prod);
+        // Query latest volume scan time (operation=list returns recent scans)
+        const tRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=list&radar=${velocityRadar.id}&product=${prod}`);
+        if (!tRes.ok) throw new Error(`HTTP ${tRes.status}`);
+        const tData = await tRes.json();
+        if (!cancelled && tData.scans?.length) {
+          const ts = tData.scans[tData.scans.length - 1].ts;
+          setVelScanTime(ts ? ts.replace("T", " ").slice(0, 16) + "Z" : null);
+        }
+      } catch (e) {
+        console.warn("IEM radar meta error:", e);
+        if (!cancelled) setVelScanTime(null);
+      }
+    };
+    load();
+    const id = setInterval(load, 120_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [showVelocity, velocityRadar.id, velCacheBust]);
+
   const handleCenterChange = useCallback((lat, lng) => {
-    setVelocityRadar(nearestNexrad(lat, lng));
+    const nr = nearestNexrad(lat, lng);
+    setVelocityRadar((prev) => prev.id === nr.id ? prev : nr);
   }, []);
+
+  // Fetch NWS active warnings on mount + every 2 min when toggle is on
+  useEffect(() => {
+    if (!showWarnings) { setWarningsData(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      setWarningsLoading(true);
+      const data = await fetchNwsWarnings();
+      if (!cancelled) { setWarningsData(data); setWarningsLoading(false); }
+    };
+    load();
+    const id = setInterval(load, 120_000); // refresh every 2 min
+    return () => { cancelled = true; clearInterval(id); };
+  }, [showWarnings]);
 
   // Fetch wind field when toggled on or level changes
   useEffect(() => {
@@ -539,12 +766,30 @@ export default function StationMap({
             <button
               className={`smap-tbtn ${showRadar ? "active" : ""}`}
               onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
-              title="Toggle NEXRAD radar reflectivity overlay"
+              title="Toggle radar reflectivity overlay"
             >
               <Crosshair size={11} />
               Radar
             </button>
             {showRadar && (
+              <div className="smap-day-btns smap-radar-source-btns">
+                <button
+                  className={`smap-day-btn${radarSource === "composite" ? " active" : ""}`}
+                  onClick={() => setRadarSource("composite")}
+                  title="RainViewer global composite — animated multi-frame"
+                >
+                  Composite
+                </button>
+                <button
+                  className={`smap-day-btn${radarSource === "mosaic" ? " active" : ""}`}
+                  onClick={() => { setRadarSource("mosaic"); }}
+                  title="IEM US national composite — CONUS-wide animated mosaic"
+                >
+                  US Mosaic
+                </button>
+              </div>
+            )}
+            {showRadar && radarFrameCount > 0 && (
               <>
                 <button
                   className={`smap-tbtn smap-anim-btn ${radarPlaying ? "active" : ""}`}
@@ -552,29 +797,39 @@ export default function StationMap({
                   title={radarPlaying ? "Pause radar animation" : "Animate radar frames"}
                 >
                   {radarPlaying ? <Pause size={10} /> : <Play size={10} />}
-                  {radarPlaying ? radarUrls[radarFrame]?.label : "Animate"}
+                  {radarFrames[radarFrame]
+                    ? (radarFrames[radarFrame].forecast ? "\u2601 " : "") + fmtRadarTime(radarFrames[radarFrame].time)
+                    : "Animate"}
                 </button>
-                <div className="smap-radar-slider-wrap" title={`Lookback: ${radarMinutes} min`}>
-                  <input
-                    type="range"
-                    className="smap-radar-slider"
-                    min={10}
-                    max={60}
-                    step={5}
-                    value={radarMinutes}
-                    onChange={(e) => setRadarMinutes(Number(e.target.value))}
-                  />
-                  <span className="smap-radar-slider-label">{radarMinutes}m</span>
-                </div>
+                <input
+                  type="range"
+                  className="smap-radar-slider"
+                  min={0}
+                  max={radarFrameCount - 1}
+                  step={1}
+                  value={radarFrame}
+                  onChange={(e) => { setRadarFrame(Number(e.target.value)); setRadarPlaying(false); }}
+                  title="Scrub through radar frames"
+                />
               </>
             )}
             <button
               className={`smap-tbtn ${showVelocity ? "active" : ""}`}
-              onClick={() => { setShowVelocity((v) => !v); setShowRadar(false); }}
-              title="Toggle NEXRAD storm-relative velocity overlay"
+              onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
+              title="Toggle NEXRAD base velocity overlay (single-site)"
             >
               <Wind size={11} />
-              Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar}</span>}
+              Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
+            </button>
+            <button
+              className={`smap-tbtn ${showWarnings ? "active" : ""}`}
+              onClick={() => setShowWarnings((v) => !v)}
+              title="Toggle NWS active warnings — tornado, severe, flash flood, watches"
+            >
+              <AlertTriangle size={11} />
+              Warnings
+              {warningsLoading && <span className="smap-outlook-loading-dot">...</span>}
+              {warningCount > 0 && <span className="smap-radar-badge smap-warn-count">{warningCount}</span>}
             </button>
             <button
               className={`smap-tbtn ${showWind ? "active" : ""}`}
@@ -703,33 +958,71 @@ export default function StationMap({
             maxZoom={18}
           />
 
-          {/* NEXRAD Radar reflectivity overlay (IEM) — animated frames */}
-          {showRadar && radarUrls.map((r, i) => (
-            <RadarLayer
-              key={`radar-${baseMap}-${radarMinutes}-${i}`}
-              url={r.url}
-              opacity={i === radarFrame ? 0.55 : 0}
-              maxZoom={12}
-              attribution="NEXRAD via IEM"
-            />
-          ))}
+          {/* Animated wind particle field — lowest overlay (z-index 250, below tiles/SPC) */}
+          {showWind && windData && <WindCanvas data={windData} />}
 
-          {/* NEXRAD Storm-Relative Velocity overlay (RIDGE single-site) */}
+          {/* Radar reflectivity — Pane z-index 300 renders ABOVE SPC outlook (250) */}
+          <Pane name="radar-tiles" style={{ zIndex: 300 }}>
+            {/* Composite (RainViewer) — single persistent layer
+                whose URL is swapped via setUrl() to avoid tile-request floods. */}
+            {showRadar && radarSource === "composite" && radarFrames[radarFrame] && (
+              <RadarLayer
+                pane="radar-tiles"
+                url={`${RAINVIEWER_TILE}${radarFrames[radarFrame].path}${RAINVIEWER_OPTS}`}
+                opacity={0.6}
+                maxNativeZoom={7}
+                maxZoom={18}
+                attribution="Radar via RainViewer"
+              />
+            )}
+            {showRadar && radarSource === "mosaic" && radarFrames[radarFrame] && (
+              <RadarLayer
+                pane="radar-tiles"
+                url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${radarFrames[radarFrame].ts}/{z}/{x}/{y}.png`}
+                opacity={0.6}
+                maxZoom={18}
+                attribution="US National Composite via IEM"
+              />
+            )}
+          </Pane>
+
+          {/* NEXRAD Base Velocity overlay (RIDGE single-site) */}
           {showVelocity && (
             <TileLayer
-              key={`vel-${velocityRadar}`}
-              url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${velocityRadar}-N0U-0/{z}/{x}/{y}.png`}
-              opacity={0.55}
-              maxZoom={12}
-              attribution={`SRV ${velocityRadar} via IEM`}
+              pane="radar-tiles"
+              key={`vel-${velocityRadar.id}-${velProduct}-${velCacheBust}`}
+              url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${velocityRadar.id}-${velProduct}-0/{z}/{x}/{y}.png?_=${velCacheBust}`}
+              opacity={0.65}
+              maxZoom={18}
+              attribution={`Velocity ${velocityRadar.id} via IEM`}
             />
+          )}
+
+          {/* Range ring + site marker for velocity radar */}
+          {showVelocity && (
+            <Pane name="vel-range" style={{ zIndex: 310, pointerEvents: "none" }}>
+              <Circle
+                center={[velocityRadar.lat, velocityRadar.lon]}
+                radius={230000}
+                pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+              />
+              <CircleMarker
+                center={[velocityRadar.lat, velocityRadar.lon]}
+                radius={4}
+                pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
+              >
+                <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
+                  {velocityRadar.id}
+                </Tooltip>
+              </CircleMarker>
+            </Pane>
           )}
 
           {/* SPC outlook polygons (render first so stations sit on top) */}
           {showOutlook && outlookData && <OutlookLayer data={outlookData} outlookType={effectiveType} />}
 
-          {/* Animated wind particle field */}
-          {showWind && windData && <WindCanvas data={windData} />}
+          {/* NWS active warnings (tornado, severe, flash flood, watches) */}
+          {showWarnings && warningsData && <WarningsLayer data={warningsData} />}
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />
@@ -830,6 +1123,21 @@ export default function StationMap({
 
         {/* Floating legend overlays — each in its own container */}
         <div className="smap-legend-stack">
+          {showVelocity && (
+            <div className="smap-legend-float smap-legend-vel">
+              <div className="smap-legend smap-legend-vel-row">
+                <span className="smap-legend-vel-title">
+                  {velocityRadar.id} {velProduct === "N0U" ? "Base" : "Storm-Rel"} Velocity
+                </span>
+                {velScanTime && <span className="smap-legend-vel-time">{velScanTime}</span>}
+              </div>
+              <div className="smap-legend smap-legend-vel-bar">
+                <span className="smap-vel-neg">Toward</span>
+                <span className="smap-vel-gradient" />
+                <span className="smap-vel-pos">Away</span>
+              </div>
+            </div>
+          )}
           {riskData && (
             <div className="smap-legend-float">
               <div className="smap-legend">

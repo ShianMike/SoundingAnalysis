@@ -33,8 +33,8 @@ Computed thermodynamic, kinematic, and composite parameters displayed as color-c
 
 ![Parameters & Climatology](docs/screenshots/parameters-and-climo.png)
 
-### Station Map with NEXRAD Radar
-Interactive dark-themed Leaflet map with station markers, NEXRAD reflectivity mosaic overlay, SPC convective outlook polygons, and click-to-select functionality:
+### Station Map with Radar & Warnings
+Interactive dark-themed Leaflet map with station markers, animated radar overlays (composite + mosaic), NWS active weather warnings, SPC convective outlook polygons, and click-to-select functionality:
 
 ![Station Map with Radar](docs/screenshots/station-map-radar.png)
 
@@ -162,9 +162,11 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - Click station markers to select them
 - Click anywhere on map to set lat/lon for RAP source
 - Fly-to animation on station selection
-- **NEXRAD radar overlay:** base reflectivity mosaic (n0q) from IEM
-- **Velocity overlay:** storm-relative velocity (N0U) from nearest WSR-88D
-- **SPC outlook overlays:** Day 1/2/3 convective outlook GeoJSON with color-coded risk categories and legend
+- **Animated radar overlay:** composite reflectivity (RainViewer) and IEM US mosaic (N0Q) with play/pause/step controls and frame scrubbing (24 frames, 2-hour window)
+- **Velocity overlay:** storm-relative velocity from nearest WSR-88D with dynamic product detection (prefers N0U, falls back to N0S), color legend (green toward / red away), radar site marker, 230 km range ring, and IEM scan timestamp display
+- **NWS active warnings:** real-time Tornado/Severe Thunderstorm/Flash Flood/Special Weather warnings from the NWS API, rendered as color-coded polygons with click-for-details popups
+- **SPC outlook overlays:** Day 1 through Day 8 convective outlook GeoJSON with color-coded risk categories and legend
+- **Wind flow animation:** surface streamlines and 500 hPa steering flow overlays powered by Open-Meteo forecast data, rendered on a Canvas layer with animated particle trails
 
 ### Multi-Sounding Comparison
 - Compare up to 4 soundings side-by-side
@@ -424,11 +426,23 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 
 ---
 
+## Security
+
+- **HTTPS:** forced in production via Flask-Talisman (HSTS 2-year preload)
+- **Content Security Policy:** restrictive CSP with nonce-based script-src
+- **CORS:** locked to production origins only (localhost allowed when `FLASK_DEBUG` is set)
+- **Rate limiting:** Flask-Limiter — 200 req/min global, 30 req/sec burst, 10/min on feedback, 30/min on sounding
+- **Security headers:** X-Content-Type-Options, X-Frame-Options DENY, COOP, CORP, Permissions-Policy, Referrer-Policy
+- **Input validation:** path-traversal blocking, 16 MB request-size limit
+- **Cloud Armor:** optional WAF setup script with OWASP CRS rules and IP rate limiting
+
+---
+
 ## Dependencies
 
-- **Python:** Flask, MetPy, Matplotlib, NumPy, Requests
-- **Frontend:** React 18, Vite, Lucide React, Leaflet, React-Leaflet, Recharts
-- **Optional:** siphon (RAP)
+- **Python:** Flask, Flask-Talisman, Flask-Limiter, Flask-CORS, MetPy, Matplotlib, NumPy, Requests
+- **Frontend:** React 18, Vite, Leaflet, React-Leaflet, Recharts, D3, Lucide React
+- **Optional:** siphon (RAP source)
 
 ---
 

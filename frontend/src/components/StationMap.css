@@ -1057,6 +1057,130 @@ body.smap-fullscreen-active {
   margin-bottom: 2px;
 }
 
+/* ── Velocity legend & range ring label ──────────────────────── */
+.smap-legend-vel {
+  pointer-events: none;
+}
+.smap-legend-vel-row {
+  flex-direction: column;
+  gap: 2px;
+}
+.smap-legend-vel-title {
+  font-weight: 700;
+  font-size: 10px;
+  color: #00e5ff;
+  letter-spacing: 0.3px;
+}
+.smap-legend-vel-time {
+  font-size: 9px;
+  color: var(--text-muted, #999);
+}
+.smap-legend-vel-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 600;
+}
+.smap-vel-neg {
+  color: #00e676;
+}
+.smap-vel-pos {
+  color: #ff1744;
+}
+.smap-vel-gradient {
+  flex: 1;
+  height: 8px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #00e676, #004d40, #1a237e, #311b92, #b71c1c, #ff1744);
+  min-width: 80px;
+}
+[data-theme="light"] .smap-legend-vel-title {
+  color: #0097a7;
+}
+/* Velocity site label */
+.smap-vel-site-label {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border: 1px solid rgba(0, 229, 255, 0.4) !important;
+  color: #00e5ff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 1px 5px !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+.smap-vel-site-label::before {
+  border-top-color: rgba(0, 229, 255, 0.4) !important;
+}
+
+/* ── NWS Warning popups & badges ────────────────────────────── */
+.smap-warn-popup-wrap .leaflet-popup-content {
+  min-width: 220px !important;
+  padding: 10px 12px !important;
+}
+.smap-warn-popup {
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  word-wrap: break-word;
+}
+.smap-warn-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  border: 1px solid;
+  margin-bottom: 5px;
+}
+.smap-warn-headline {
+  font-weight: 600;
+  font-size: 11px;
+  margin-bottom: 3px;
+  color: #f1f1f1;
+}
+.smap-warn-area {
+  font-size: 10px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+.smap-warn-time {
+  font-size: 9px;
+  color: #888;
+}
+.smap-warn-count {
+  background: rgba(255, 0, 0, 0.2) !important;
+  color: #ff6b6b !important;
+}
+
+/* ── NWS Warning legend ─────────────────────────────────────── */
+.smap-warn-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  padding: 4px 8px;
+  background: var(--bg-secondary, rgba(0,0,0,0.5));
+  border-radius: var(--radius-sm, 4px);
+  font-size: 9px;
+  margin-top: 2px;
+}
+.smap-warn-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.smap-warn-legend-swatch {
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+[data-theme=\"light\"] .smap-warn-headline { color: #222; }
+[data-theme=\"light\"] .smap-warn-area { color: #555; }
+[data-theme=\"light\"] .smap-warn-time { color: #777; }
+
 /* Responsive */
 @media (max-width: 1024px) {
   .smap-container {

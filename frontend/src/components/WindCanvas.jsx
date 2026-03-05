@@ -1,37 +1,33 @@
 /**
  * WindCanvas – animated wind-particle overlay for a Leaflet map.
  *
- * Particles are stored in **geographic coordinates** (lat/lon) and
- * projected to screen pixels each frame via Leaflet's latLngToContainerPoint.
- * This makes the animation fully interactive with zoom and pan — particles
- * stay geographically anchored as the map moves.
+ * Particles live in geographic (lat/lon) space and project to screen
+ * pixels each frame via a cached Mercator mapping.
  *
- * Optimisations:
- *  • map.getBounds() + project cached ONCE per frame
- *  • Pre-allocated Float64Array draw buffers — zero per-frame GC
- *  • Bucket draw uses 3 batched paths instead of per-particle styles
- *  • `desynchronized` canvas context skips compositor sync
- *  • Bilinear interpolation with pre-computed row offsets
+ * The canvas is inserted into `.leaflet-map-pane` with z-index 250
+ * (between tile-pane at 200 and overlay-pane at 400), so wind renders
+ * behind SPC outlooks, radar, and markers.  We counter-translate for
+ * the map-pane's CSS transform each frame.
  */
 import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
 
 /* ── tunables ────────────────────────────────────────────────── */
-const N_PARTICLES   = 3500;
+const N_PARTICLES   = 800;
 const MAX_AGE       = 100;
 const FADE          = 0.96;
-const LINE_W        = 0.8;
-const BASE_SPEED    = 0.012;   // degrees per frame per (m/s) at zoom 4
-const SPD_THRESH_SQ = 0.04;   // 0.2² — ignore wind below this
-const SPD_SQ_SLOW   = 25;     // 5²
-const SPD_SQ_MED    = 144;    // 12²
+const LINE_W        = 0.7;
+const BASE_SPEED    = 0.012;
+const SPD_THRESH_SQ = 0.04;
+const SPD_SQ_SLOW   = 25;
+const SPD_SQ_MED    = 144;
 const DEG2RAD       = Math.PI / 180;
 const mercY = (lat) => Math.log(Math.tan(Math.PI * 0.25 + lat * DEG2RAD * 0.5));
 
 const BUCKET_STYLES = [
-  "rgba(140,180,255,0.45)",   // slow
-  "rgba(200,220,255,0.6)",    // med
-  "rgba(255,220,120,0.7)",    // fast
+  "rgba(140,180,255,0.25)",
+  "rgba(200,220,255,0.35)",
+  "rgba(255,220,120,0.45)",
 ];
 
 export default function WindCanvas({ data }) {
@@ -47,21 +43,24 @@ export default function WindCanvas({ data }) {
       return;
     }
 
-    /* Speed bucket thresholds adapt to level */
-    const isUpper = data.level && data.level !== "surface";
-    const spdSqSlow = isUpper ? 100 : SPD_SQ_SLOW;   // 10² vs 5²
-    const spdSqMed  = isUpper ? 625 : SPD_SQ_MED;     // 25² vs 12²
+    const isUpper  = data.level && data.level !== "surface";
+    const spdSqSlow = isUpper ? 100 : SPD_SQ_SLOW;
+    const spdSqMed  = isUpper ? 625 : SPD_SQ_MED;
 
     const container = map.getContainer();
+    const mapPane   = map.getPane("mapPane");          // .leaflet-map-pane
+
     let canvas = canvasRef.current;
     if (!canvas) {
       canvas = document.createElement("canvas");
       canvas.className = "wind-overlay-canvas";
       Object.assign(canvas.style, {
         position: "absolute", top: "0", left: "0",
-        pointerEvents: "none", zIndex: "450",
+        pointerEvents: "none",
+        /* Between tile-pane (200) and overlay-pane (400) */
+        zIndex: "250",
       });
-      container.appendChild(canvas);
+      mapPane.appendChild(canvas);
       canvasRef.current = canvas;
     }
 
@@ -163,8 +162,16 @@ export default function WindCanvas({ data }) {
     /* ── animation frame ───────────────────────────────────── */
     const frame = () => {
       const zoom = map.getZoom();
-      // Speed in degrees — shrink as we zoom in so particles don't fly off
       const speed = BASE_SPEED / Math.pow(2, (zoom - 4) * 0.5);
+
+      /* Counteract the mapPane's CSS transform so the canvas stays
+         aligned with the container (lat/lon→containerPoint coords). */
+      const t = mapPane.style.transform;
+      let px = 0, py = 0;
+      let m = t.match(/translate3d\(([^,]+),\s*([^,]+)/);
+      if (!m) m = t.match(/translate\(([^,]+),\s*([^,]+)/);
+      if (m) { px = parseFloat(m[1]); py = parseFloat(m[2]); }
+      canvas.style.transform = `translate(${-px}px, ${-py}px)`;
 
       cacheProjection();
 

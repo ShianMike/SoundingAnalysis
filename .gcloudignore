@@ -23,3 +23,15 @@ __pycache__/
 *.pyc
 .env
 docs/
+
+# Logs
+*.log
+backend*.log
+
+# Security/deploy scripts
+audit-security.ps1
+setup-cloud-armor.ps1
+
+# Test artifacts
+test_improved_plot.png
+Images/

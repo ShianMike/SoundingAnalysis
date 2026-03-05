@@ -12,6 +12,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# ── Security: run as non-root user ──────────────────────────────
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+    && chown -R appuser:appgroup /app
+USER appuser
+
 EXPOSE 8000
 
 # gunicorn.conf.py is auto-discovered and handles PORT env var
