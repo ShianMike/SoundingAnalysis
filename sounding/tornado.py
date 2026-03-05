@@ -139,15 +139,64 @@ def _quick_tornado_score(station_id, dt):
                      + max(srh_val, 0) / 150.0
                      + bwd_val / 40.0)
 
-        # ── Effective layer for SCP ────────────────────────────────
-        # Use 0-3km SRH and 0-6km BWD as proxy (full effective layer
-        # is too expensive for a multi-station scan).  MetPy's
-        # supercell_composite still applies proper caps/thresholds.
+        # ── Effective inflow layer (Thompson et al. 2007) ──────────
+        # Find contiguous layer where parcel CAPE >= 100 and CIN >= -250.
+        # Only check lowest 3 km and skip levels for speed.
+        _esrh = 0 * units("m^2/s^2")
+        _ebwd_mag = 0 * units("m/s")
+        try:
+            _eff_base_i = None
+            _eff_top_i = None
+            _max_idx = int(np.searchsorted(h_agl.magnitude, 3000.0))
+            _step = max(1, _max_idx // 20)  # ~20 checks max
+            for _i in range(0, min(_max_idx + 1, len(p)), _step):
+                _prof_i = mpcalc.parcel_profile(p[_i:], T[_i], Td[_i]).to("degC")
+                _cape_i, _cin_i = mpcalc.cape_cin(p[_i:], T[_i:], Td[_i:], _prof_i)
+                if float(_cape_i.magnitude) >= 100 and float(_cin_i.magnitude) >= -250:
+                    if _eff_base_i is None:
+                        _eff_base_i = _i
+                    _eff_top_i = _i
+                elif _eff_base_i is not None:
+                    break
+            if _eff_base_i is not None and _eff_top_i is not None:
+                _eb_h = h_agl.magnitude[_eff_base_i]
+                _et_h = h_agl.magnitude[_eff_top_i]
+                # Effective SRH
+                _, _, _esrh = mpcalc.storm_relative_helicity(
+                    h_agl, u_wind, v_wind,
+                    _et_h * units.meter,
+                    bottom=_eb_h * units.meter,
+                    storm_u=rm_u, storm_v=rm_v
+                )
+                # Effective BWD: from EIL base to 50% of MU EL height
+                # (SPC convention, same as parameters.py)
+                _mu_prof = mpcalc.parcel_profile(p[mu_idx:], T[mu_idx], Td[mu_idx]).to("degC")
+                _mu_el_p = mpcalc.el(p[mu_idx:], T[mu_idx:], Td[mu_idx:], _mu_prof)
+                _el_h = None
+                if _mu_el_p[0] is not None and not np.isnan(_mu_el_p[0].magnitude):
+                    _el_idx = int(np.argmin(np.abs(p.magnitude - _mu_el_p[0].magnitude)))
+                    _el_h = h_agl.magnitude[_el_idx]
+                if _el_h is not None and _el_h > 0:
+                    _ebwd_top = max(min(_el_h * 0.5, 10000.0), 1500.0)
+                else:
+                    _ebwd_top = 6000.0  # fallback
+                # Interpolate winds at exact EBWD endpoints for accuracy
+                from scipy.interpolate import interp1d as _interp1d
+                _h_m = h_agl.magnitude
+                _u_interp = _interp1d(_h_m, u_wind.to("m/s").magnitude,
+                                      bounds_error=False, fill_value="extrapolate")
+                _v_interp = _interp1d(_h_m, v_wind.to("m/s").magnitude,
+                                      bounds_error=False, fill_value="extrapolate")
+                _ebwd_u = _u_interp(_ebwd_top) - _u_interp(_eb_h)
+                _ebwd_v = _v_interp(_ebwd_top) - _v_interp(_eb_h)
+                _ebwd_mag = np.sqrt(_ebwd_u**2 + _ebwd_v**2) * units("m/s")
+        except Exception:
+            pass
+
+        # ── SCP via MetPy (effective layer, matches sounding plot) ─
         try:
             _scp_result = mpcalc.supercell_composite(
-                mu_cape_val * units("J/kg"),
-                total_srh_3km,
-                np.sqrt(bwd_u**2 + bwd_v**2).to("m/s")
+                mu_cape_val * units("J/kg"), _esrh, _ebwd_mag
             )
             scp_score = float(np.asarray(_scp_result.magnitude).flat[0])
         except Exception:
