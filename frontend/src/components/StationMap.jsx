@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
@@ -564,21 +564,8 @@ export default function StationMap({
       const id = setInterval(load, 300_000);
       return () => { cancelled = true; clearInterval(id); };
     } else if (radarSource === "singlesite") {
-      // Single-site N0B via IEM archive (same approach as velocity)
-      const load = async () => {
-        try {
-          const { frames, bounds } = await fetchVelFrames(velocityRadar.id, "N0B");
-          if (cancelled) return;
-          setRadarFrames(frames);
-          setSsRadarBounds(bounds);
-          setRadarFrame(Math.max(0, frames.length - 1));
-        } catch (e) {
-          console.warn("IEM single-site radar error:", e);
-        }
-      };
-      load();
-      const id = setInterval(load, 120_000); // refresh every 2 min like velocity
-      return () => { cancelled = true; clearInterval(id); };
+      // Single-site via NWS WMS — no frames needed, layer is always live
+      return;
     } else {
       // Mosaic: build frames from timestamps (last 2 hrs, 5-min intervals)
       const frames = buildMosaicFrames(24);
@@ -886,7 +873,7 @@ export default function StationMap({
                 <button
                   className={`smap-day-btn${radarSource === "singlesite" ? " active" : ""}`}
                   onClick={() => setRadarSource("singlesite")}
-                  title="Single-site NEXRAD base reflectivity (N0B 0.5°) — highest detail for hook echoes and storm structure"
+                  title="Single-site NEXRAD super-res base reflectivity — gate-level detail for hook echoes and storm structure"
                 >
                   Single Site{radarSource === "singlesite" && <span className="smap-radar-badge">{velocityRadar.id}</span>}
                 </button>
@@ -919,7 +906,7 @@ export default function StationMap({
             <button
               className={`smap-tbtn ${showVelocity ? "active" : ""}`}
               onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
-              title="Toggle NEXRAD velocity overlay (single-site) — use SRM products to see tornado rotation signatures"
+              title="Toggle NEXRAD velocity overlay (single-site) — super-res base velocity for tornado rotation signatures"
             >
               <Wind size={11} />
               Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
@@ -1125,13 +1112,17 @@ export default function StationMap({
             )}
           </Pane>
 
-          {/* Single-site NEXRAD reflectivity (N0B) — IEM archive ImageOverlay */}
-          {showRadar && radarSource === "singlesite" && radarFrames[radarFrame] && ssRadarBounds && (
-            <ImageOverlay
-              url={radarFrames[radarFrame].url}
-              bounds={ssRadarBounds}
+          {/* Single-site NEXRAD super-res base reflectivity via NWS WMS */}
+          {showRadar && radarSource === "singlesite" && (
+            <WMSTileLayer
+              pane="radar-tiles"
+              url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bref/ows`}
+              layers={`k${velocityRadar.id.toLowerCase()}_sr_bref`}
+              format="image/png"
+              transparent={true}
               opacity={0.65}
-              zIndex={300}
+              maxZoom={18}
+              attribution="NWS NEXRAD"
             />
           )}
 
@@ -1155,13 +1146,17 @@ export default function StationMap({
             </Pane>
           )}
 
-          {/* NEXRAD Velocity overlay — animated archive images from IEM */}
-          {showVelocity && velFrames[velFrame] && velBounds && (
-            <ImageOverlay
-              url={velFrames[velFrame].url}
-              bounds={velBounds}
+          {/* NEXRAD Velocity overlay — NWS WMS super-res base velocity */}
+          {showVelocity && (
+            <WMSTileLayer
+              url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bvel/ows`}
+              layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
+              format="image/png"
+              transparent={true}
               opacity={0.65}
               zIndex={300}
+              maxZoom={18}
+              attribution="NWS NEXRAD"
             />
           )}
 
@@ -1294,11 +1289,8 @@ export default function StationMap({
             <div className="smap-legend-float smap-legend-vel">
               <div className="smap-legend smap-legend-vel-row">
                 <span className="smap-legend-vel-title">
-                  {velocityRadar.id} N0B 0.5°
+                  {velocityRadar.id} SR Bref
                 </span>
-                {radarFrames[radarFrame] ? (
-                  <span className="smap-legend-vel-time">{fmtRadarTime(radarFrames[radarFrame].time)}</span>
-                ) : null}
               </div>
             </div>
           )}
