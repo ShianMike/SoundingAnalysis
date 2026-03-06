@@ -471,6 +471,32 @@ body.smap-fullscreen-active {
   50% { stroke-opacity: 0.4; fill-opacity: 0.4; }
 }
 
+/* ── TVS / Meso custom icons ──────────────────────────────── */
+.smap-tvs-icon {
+  filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.8));
+  animation: smapTvsGlow 1s ease-in-out infinite;
+}
+.smap-tvs-icon svg {
+  display: block;
+}
+@keyframes smapTvsGlow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.8)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(255, 60, 60, 1)) drop-shadow(0 0 24px rgba(255, 0, 0, 0.5)); }
+}
+.smap-meso-icon {
+  filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.5));
+}
+.smap-meso-icon svg {
+  display: block;
+  animation: smapMesoSpin 6s linear infinite;
+}
+@keyframes smapMesoSpin {
+  /* Only spin the dashed inner ring, but since we animate the whole SVG,
+     use a subtle oscillating scale instead for a "breathing" effect */
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
 /* ── Hover tooltip ──────────────────────────────────────────── */
 .smap-tooltip {
   font-family: var(--font-sans, system-ui, sans-serif);

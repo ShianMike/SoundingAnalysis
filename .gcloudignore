@@ -35,3 +35,6 @@ setup-cloud-armor.ps1
 # Test artifacts
 test_improved_plot.png
 Images/
+
+# Deployment guide (for AI agents only)
+DEPLOYMENT_GUIDE.txt

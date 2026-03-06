@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import L from "leaflet";
 import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
@@ -171,6 +172,36 @@ function WarningsLayer({ data }) {
       />
     </Pane>
   );
+}
+
+/* ── TVS / Mesocyclone custom map icons ─────────────────────── */
+const TVS_ICON = L.divIcon({
+  className: "smap-tvs-icon",
+  iconSize: [28, 28],
+  iconAnchor: [14, 24],
+  html: `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="14,26 1,3 27,3" fill="#dc2626" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    <line x1="14" y1="8" x2="14" y2="17" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="14" cy="21" r="1.5" fill="#fff"/>
+  </svg>`,
+});
+
+function makeMesoIcon(color, rank) {
+  const sz = Math.max(22, 18 + rank * 2);
+  const half = sz / 2;
+  const r = half - 2;
+  const ir = r * 0.55;
+  const dash = Math.max(2.5, r * 0.28);
+  return L.divIcon({
+    className: "smap-meso-icon",
+    iconSize: [sz, sz],
+    iconAnchor: [half, half],
+    html: `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${half}" cy="${half}" r="${r}" fill="${color}" fill-opacity="0.55" stroke="#fff" stroke-width="2"/>
+      <circle cx="${half}" cy="${half}" r="${ir}" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="${dash},${dash * 0.9}" opacity="0.85"/>
+      <circle cx="${half}" cy="${half}" r="1.5" fill="#fff" opacity="0.9"/>
+    </svg>`,
+  });
 }
 
 /* ── NEXRAD storm attribute (TVS / Mesocyclone) feed ───────── */
@@ -1364,23 +1395,15 @@ export default function StationMap({
                 const [lng, lat] = f.geometry.coordinates;
                 const isTvs = p.tvs === "TVS";
                 const mesoRank = parseInt(p.meso, 10) || 0;
-                // TVS = red triangle marker, Meso = yellow-orange by rank
-                const color = isTvs ? "#ff0000" : mesoRank >= 5 ? "#ff4400" : mesoRank >= 3 ? "#ff8800" : "#ffcc00";
-                const radius = isTvs ? 10 : Math.max(5, 4 + mesoRank);
+                const color = isTvs ? "#dc2626" : mesoRank >= 5 ? "#ff4400" : mesoRank >= 3 ? "#ff8800" : "#ffcc00";
+                const icon = isTvs ? TVS_ICON : makeMesoIcon(color, mesoRank);
                 return (
-                  <CircleMarker
+                  <Marker
                     key={`storm-${p.nexrad}-${p.storm_id}-${i}`}
-                    center={[lat, lng]}
-                    radius={radius}
-                    pathOptions={{
-                      color,
-                      fillColor: color,
-                      fillOpacity: isTvs ? 0.9 : 0.6,
-                      weight: isTvs ? 3 : 2,
-                      className: isTvs ? "smap-tvs-pulse" : "",
-                    }}
+                    position={[lat, lng]}
+                    icon={icon}
                   >
-                    <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
+                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip">
                       <div className="smap-tt-inner">
                         <div className="smap-tt-header">
                           <span className="smap-tt-id" style={{ color }}>{isTvs ? "\u26a0 TVS" : `Meso ${mesoRank}`}</span>
@@ -1389,7 +1412,7 @@ export default function StationMap({
                         <span className="smap-tt-type">VIL {p.vil} · {p.max_dbz} dBZ · Top {p.top} kft</span>
                       </div>
                     </Tooltip>
-                  </CircleMarker>
+                  </Marker>
                 );
               })}
             </Pane>
