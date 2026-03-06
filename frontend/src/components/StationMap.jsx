@@ -1192,25 +1192,10 @@ export default function StationMap({
     <section className={`station-map-panel${isFullscreen ? " smap-fullscreen" : ""}`}>
       {/* Two-tier toolbar matching rv-meta-bar layout */}
       <div className="smap-toolbar">
-        <div className="smap-toolbar-top">
-          <span className="smap-title"><Crosshair size={12} /> Station Map</span>
-          {latLonMode && <span className="smap-tag">Click map to set coordinates</span>}
-          <div className="smap-toolbar-end">
-            <button
-              className={`smap-expand${isFullscreen ? " active" : ""}`}
-              onClick={() => setIsFullscreen((v) => !v)}
-              title={isFullscreen ? "Exit fullscreen (Esc)" : "Expand map fullscreen"}
-            >
-              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-            <button className="smap-expand" onClick={() => { setIsFullscreen(false); onClose(); }} title="Close map">
-              <X size={14} />
-            </button>
-          </div>
-        </div>
         <div className="smap-toolbar-bottom">
-          {/* ── Group header buttons ── */}
+          {/* ── Group header buttons + controls ── */}
           <div className="smap-groups">
+            {latLonMode && <span className="smap-tag">Click map to set coordinates</span>}
             <button
               className={`smap-group-btn${openGroup === "forecasts" ? " open" : ""}${showOutlook ? " has-active" : ""}`}
               onClick={() => toggleGroup("forecasts")}
@@ -1242,6 +1227,18 @@ export default function StationMap({
               {lightningStrikes.length > 0 && <span className="smap-radar-badge">{lightningStrikes.length}</span>}
               <ChevronDown size={10} className="smap-group-chevron" />
             </button>
+            <div className="smap-toolbar-end">
+              <button
+                className={`smap-expand${isFullscreen ? " active" : ""}`}
+                onClick={() => setIsFullscreen((v) => !v)}
+                title={isFullscreen ? "Exit fullscreen (Esc)" : "Expand map fullscreen"}
+              >
+                {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+              <button className="smap-expand" onClick={() => { setIsFullscreen(false); onClose(); }} title="Close map">
+                <X size={14} />
+              </button>
+            </div>
           </div>
 
           {/* ── Forecasts panel ── */}

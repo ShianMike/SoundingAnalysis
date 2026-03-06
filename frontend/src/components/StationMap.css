@@ -40,22 +40,13 @@
 }
 
 .smap-fullscreen .smap-toolbar {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
+  position: relative;
   z-index: 1001;
-  background: rgba(17, 17, 17, 0.88);
-  border: 1px solid var(--border, #333);
-  border-radius: 12px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  pointer-events: auto;
+  background: var(--bg-primary, #0a0a0f);
+  border-bottom: 1px solid var(--border, #333);
+  border-radius: 0;
+  flex-shrink: 0;
   overflow: hidden;
-}
-
-.smap-fullscreen .smap-toolbar-top {
-  padding: 10px 14px;
 }
 
 .smap-fullscreen .smap-toolbar-bottom {
@@ -69,10 +60,9 @@
 }
 
 .smap-fullscreen .smap-container {
-  position: absolute;
-  inset: 0;
-  min-height: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  height: 0;
   border-radius: 0;
   border: none;
 }
@@ -80,14 +70,6 @@
 .smap-fullscreen .smap-leaflet {
   min-height: 100% !important;
   height: 100% !important;
-}
-
-/* Move Leaflet zoom controls out from under floating panels */
-.smap-fullscreen .leaflet-top.leaflet-left {
-  top: 50%;
-  left: auto;
-  right: 16px;
-  transform: translateY(-50%);
 }
 
 /* Body scroll lock when fullscreen */
@@ -111,12 +93,12 @@ body.smap-fullscreen-active .control-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
@@ -125,34 +107,26 @@ body.smap-fullscreen-active .control-panel {
 .smap-expand:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
-  border-color: var(--border-focus);
+  border-color: var(--border);
 }
 
 .smap-expand.active {
-  color: #3b82f6;
-  border-color: #3b82f6;
+  color: var(--text-accent, #3b82f6);
+  border-color: rgba(59, 130, 246, 0.3);
   background: rgba(59, 130, 246, 0.1);
 }
 
 /* Light theme override for fullscreen toolbar */
 [data-theme="light"] .smap-fullscreen .smap-toolbar {
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--bg-primary, #ffffff);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* ── Unified toolbar — matches rv-meta-bar two-tier layout ──── */
+/* ── Unified toolbar ──────────────────────────────────────────── */
 .smap-toolbar {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.smap-toolbar-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
 }
 
 .smap-toolbar-bottom {
@@ -166,44 +140,48 @@ body.smap-fullscreen-active .control-panel {
 .smap-groups {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
+  gap: 6px;
+  padding: 8px 14px;
 }
 
 .smap-group-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 10px;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 .smap-group-btn:hover {
   color: var(--text-primary);
-  border-color: var(--border-focus);
+  background: var(--bg-hover);
+  border-color: var(--border);
 }
 .smap-group-btn.has-active {
   color: var(--text-primary);
-  border-color: rgba(250, 204, 21, 0.25);
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
 }
 .smap-group-btn.open {
-  color: #facc15;
-  background: rgba(250, 204, 21, 0.08);
-  border-color: rgba(250, 204, 21, 0.35);
+  color: var(--text-accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .smap-group-chevron {
   transition: transform 0.2s ease;
-  opacity: 0.5;
+  opacity: 0.4;
+  margin-left: -1px;
 }
+.smap-group-btn:hover .smap-group-chevron { opacity: 0.7; }
 .smap-group-btn.open .smap-group-chevron {
   transform: rotate(180deg);
   opacity: 1;
@@ -255,61 +233,49 @@ body.smap-fullscreen-active .control-panel {
 .smap-toolbar-end {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
 }
 
-.smap-title {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--text-accent);
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: var(--accent-muted);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
 .smap-tag {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.08);
+  padding: 4px 10px;
+  border-radius: 5px;
   white-space: nowrap;
 }
 
-/* ── Toolbar toggle buttons (matches rv-meta-chip sizing) ────── */
+/* ── Toolbar toggle buttons ────── */
 .smap-tbtn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .smap-tbtn:hover {
   color: var(--text-primary);
-  border-color: var(--border-focus);
+  background: var(--bg-hover);
+  border-color: var(--border);
 }
 
 .smap-tbtn.active {
-  color: #facc15;
-  background: rgba(250, 204, 21, 0.08);
-  border-color: rgba(250, 204, 21, 0.3);
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.25);
 }
 
 /* SPC refresh button — compact icon-only */
@@ -326,14 +292,15 @@ body.smap-fullscreen-active .control-panel {
 }
 
 .smap-radar-badge {
-  font-size: 0.6rem;
-  background: rgba(250, 204, 21, 0.25);
-  color: #facc15;
-  padding: 0 4px;
-  border-radius: 3px;
-  margin-left: 3px;
-  letter-spacing: 0.03em;
+  font-size: 9px;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text-accent, #3b82f6);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 2px;
+  letter-spacing: 0.02em;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .smap-day-btns {
@@ -527,6 +494,14 @@ body.smap-fullscreen-active .control-panel {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-sm) !important;
   overflow: hidden;
+}
+
+/* Position zoom controls at middle-right */
+.smap-leaflet .leaflet-top.leaflet-left {
+  top: 50%;
+  left: auto;
+  right: 12px;
+  transform: translateY(-50%);
 }
 
 .smap-leaflet .leaflet-control-zoom a {

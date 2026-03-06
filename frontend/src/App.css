@@ -160,29 +160,6 @@ html {
     color: #444;
   }
 
-  /* Param grid — compact 4-col for print */
-  .param-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
-    gap: 4px;
-    page-break-inside: avoid;
-  }
-  .param-card {
-    background: #f5f5f5;
-    border: 1px solid #ccc;
-    padding: 6px 8px;
-    break-inside: avoid;
-  }
-  .param-tooltip {
-    display: none !important;
-  }
-  .param-label {
-    color: #555;
-  }
-  .param-value {
-    color: #000;
-    font-size: 13px;
-  }
-
   /* Summary section shows in print */
   .rv-summary-body {
     display: block !important;

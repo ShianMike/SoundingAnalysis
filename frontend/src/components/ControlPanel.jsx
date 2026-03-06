@@ -230,13 +230,9 @@ export default function ControlPanel({
       if (active === wasFullscreen.current) return; // no change — ignore
       wasFullscreen.current = active;
       if (active) {
-        // Compute a vertically-centred initial Y, clamped below toolbar
-        const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
-        const minY = tb ? tb.getBoundingClientRect().bottom + 8 : 90;
-        const el = dragRef.current;
-        const h = el ? el.offsetHeight : 400;
-        const centredY = Math.max(minY, (window.innerHeight - h) / 2);
-        setDragPos({ x: 16, y: centredY });
+        // Position at absolute top-left corner
+        setDragPos({ x: 0, y: 0 });
+        setFloatCollapsed(true);
       } else {
         setDragPos({ x: 16, y: 16 });
         setFloatCollapsed(false);
@@ -245,6 +241,19 @@ export default function ControlPanel({
     obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);
+
+  // When a toolbar dropdown opens/closes, push sidebar below the toolbar
+  useEffect(() => {
+    const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
+    if (!tb) return;
+    const ro = new ResizeObserver(() => {
+      if (!document.body.classList.contains("smap-fullscreen-active")) return;
+      const bottom = tb.getBoundingClientRect().bottom;
+      setDragPos((prev) => ({ x: prev.x, y: (bottom > 0 ? bottom : 0) + 8 }));
+    });
+    ro.observe(tb);
+    return () => ro.disconnect();
+  });
 
   const [source, setSourceLocal] = useState(urlParams?.source || "obs");
   const [station, setStationLocal] = useState(urlParams?.station || "OUN");
