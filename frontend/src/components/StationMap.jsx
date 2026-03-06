@@ -1115,6 +1115,7 @@ export default function StationMap({
           {/* Single-site NEXRAD super-res base reflectivity via NWS WMS */}
           {showRadar && radarSource === "singlesite" && (
             <WMSTileLayer
+              key={`ss-bref-${velocityRadar.id}`}
               pane="radar-tiles"
               url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bref/ows`}
               layers={`k${velocityRadar.id.toLowerCase()}_sr_bref`}
@@ -1149,6 +1150,7 @@ export default function StationMap({
           {/* NEXRAD Velocity overlay — NWS WMS super-res base velocity */}
           {showVelocity && (
             <WMSTileLayer
+              key={`vel-bvel-${velocityRadar.id}`}
               url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bvel/ows`}
               layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
               format="image/png"
