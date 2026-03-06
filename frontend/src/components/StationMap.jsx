@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle } from "lucide-react";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
@@ -171,6 +171,25 @@ function WarningsLayer({ data }) {
       />
     </Pane>
   );
+}
+
+/* ── NEXRAD storm attribute (TVS / Mesocyclone) feed ───────── */
+const IEM_STORM_ATTR = "https://mesonet.agron.iastate.edu/geojson/nexrad_attr.geojson";
+
+async function fetchStormAttr() {
+  try {
+    const res = await fetch(IEM_STORM_ATTR);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Only keep features that have TVS or Meso detection
+    const features = (data.features || []).filter(
+      (f) => f.properties?.tvs !== "NONE" || f.properties?.meso !== "NONE"
+    );
+    return { type: "FeatureCollection", features };
+  } catch (e) {
+    console.error("Storm attr fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
 }
 
 /* ── colours ────────────────────────────────────────────────── */
@@ -517,6 +536,13 @@ export default function StationMap({
   const [warningsLoading, setWarningsLoading] = useState(false);
   const warningCount = warningsData?.features?.length || 0;
 
+  // TVS / Mesocyclone storm attributes overlay
+  const [showStorms, setShowStorms] = useState(true);
+  const [stormData, setStormData] = useState(null);
+  const [stormsLoading, setStormsLoading] = useState(false);
+  const tvsCount = stormData?.features?.filter((f) => f.properties?.tvs === "TVS").length || 0;
+  const mesoCount = stormData?.features?.length || 0;
+
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
   const [windLevel, setWindLevel] = useState("500");  // "500" = steering, "surface" = 10m
@@ -668,6 +694,20 @@ export default function StationMap({
     const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
   }, [showWarnings]);
+
+  // Fetch storm attributes (TVS/Meso) every 60s when toggle is on
+  useEffect(() => {
+    if (!showStorms) { setStormData(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      setStormsLoading(true);
+      const data = await fetchStormAttr();
+      if (!cancelled) { setStormData(data); setStormsLoading(false); }
+    };
+    load();
+    const id = setInterval(load, 60_000); // refresh every 1 min
+    return () => { cancelled = true; clearInterval(id); };
+  }, [showStorms]);
 
   // Fetch wind field when toggled on or level changes
   useEffect(() => {
@@ -948,6 +988,17 @@ export default function StationMap({
               </>
             )}
             <button
+              className={`smap-tbtn ${showStorms ? "active" : ""}`}
+              onClick={() => setShowStorms((v) => !v)}
+              title="Toggle TVS (Tornado Vortex Signature) and Mesocyclone detections from NEXRAD storm attributes"
+            >
+              <Tornado size={11} />
+              TVS/Meso
+              {stormsLoading && <span className="smap-outlook-loading-dot">...</span>}
+              {tvsCount > 0 && <span className="smap-radar-badge smap-warn-count">{tvsCount} TVS</span>}
+              {mesoCount > 0 && <span className="smap-radar-badge">{mesoCount}</span>}
+            </button>
+            <button
               className={`smap-tbtn ${showWarnings ? "active" : ""}`}
               onClick={() => setShowWarnings((v) => !v)}
               title="Toggle NWS active warnings — tornado, severe, flash flood, watches"
@@ -1187,6 +1238,45 @@ export default function StationMap({
 
           {/* NWS active warnings (tornado, severe, flash flood, watches) */}
           {showWarnings && warningsData && <WarningsLayer data={warningsData} />}
+
+          {/* TVS / Mesocyclone storm attribute markers */}
+          {showStorms && stormData && stormData.features.length > 0 && (
+            <Pane name="storm-attr" style={{ zIndex: 430 }}>
+              {stormData.features.map((f, i) => {
+                const p = f.properties;
+                const [lng, lat] = f.geometry.coordinates;
+                const isTvs = p.tvs === "TVS";
+                const mesoRank = parseInt(p.meso, 10) || 0;
+                // TVS = red triangle marker, Meso = yellow-orange by rank
+                const color = isTvs ? "#ff0000" : mesoRank >= 5 ? "#ff4400" : mesoRank >= 3 ? "#ff8800" : "#ffcc00";
+                const radius = isTvs ? 10 : Math.max(5, 4 + mesoRank);
+                return (
+                  <CircleMarker
+                    key={`storm-${p.nexrad}-${p.storm_id}-${i}`}
+                    center={[lat, lng]}
+                    radius={radius}
+                    pathOptions={{
+                      color,
+                      fillColor: color,
+                      fillOpacity: isTvs ? 0.9 : 0.6,
+                      weight: isTvs ? 3 : 2,
+                      className: isTvs ? "smap-tvs-pulse" : "",
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
+                      <div className="smap-tt-inner">
+                        <div className="smap-tt-header">
+                          <span className="smap-tt-id" style={{ color }}>{isTvs ? "\u26a0 TVS" : `Meso ${mesoRank}`}</span>
+                          <span className="smap-tt-name">{p.nexrad} {p.storm_id}</span>
+                        </div>
+                        <span className="smap-tt-type">VIL {p.vil} · {p.max_dbz} dBZ · Top {p.top} kft</span>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                );
+              })}
+            </Pane>
+          )}
 
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />

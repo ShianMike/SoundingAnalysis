@@ -463,6 +463,13 @@ body.smap-fullscreen-active {
 .smap-marker-pulse {
   animation: smapPulse 1.8s ease-in-out infinite;
 }
+.smap-tvs-pulse {
+  animation: smapTvsPulse 0.8s ease-in-out infinite;
+}
+@keyframes smapTvsPulse {
+  0%, 100% { stroke-opacity: 1; fill-opacity: 0.9; }
+  50% { stroke-opacity: 0.4; fill-opacity: 0.4; }
+}
 
 /* ── Hover tooltip ──────────────────────────────────────────── */
 .smap-tooltip {
