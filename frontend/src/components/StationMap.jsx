@@ -492,7 +492,8 @@ export default function StationMap({
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
   const [showRadar, setShowRadar] = useState(true);
-  const [radarSource, setRadarSource] = useState("mosaic"); // "composite" (RainViewer) | "mosaic" (IEM US national composite)
+  const [radarSource, setRadarSource] = useState("mosaic"); // "composite" | "mosaic" | "singlesite"
+  const [ssRadarBounds, setSsRadarBounds] = useState(null); // [[south,west],[north,east]] for single-site ImageOverlay
   const [showVelocity, setShowVelocity] = useState(false);
   const [velocityRadar, setVelocityRadar] = useState({ id: "TLX", lat: 35.33, lon: -97.28 });   // nearest NEXRAD
   const [velCacheBust, setVelCacheBust] = useState(() => Date.now());
@@ -535,11 +536,11 @@ export default function StationMap({
   // Animated radar state — unified for both composite (RainViewer) and mosaic (IEM)
   const [radarPlaying, setRadarPlaying] = useState(false);
   const [radarFrame, setRadarFrame] = useState(0);
-  const [radarFrames, setRadarFrames] = useState([]);   // composite: [{time, path, forecast}]  mosaic: [{time, ts}]
+  const [radarFrames, setRadarFrames] = useState([]);   // composite: [{time, path, forecast}]  mosaic: [{time, ts}]  singlesite: [{url, time, ts}]
   const radarTimerRef = useRef(null);
   const radarFrameCount = radarFrames.length;
 
-  // Fetch radar frames — RainViewer for composite, generated timestamps for mosaic
+  // Fetch radar frames — RainViewer for composite, generated timestamps for mosaic, IEM archive for singlesite
   useEffect(() => {
     if (!showRadar) return;
     let cancelled = false;
@@ -547,6 +548,7 @@ export default function StationMap({
     setRadarFrames([]);
     setRadarFrame(0);
     setRadarPlaying(false);
+    setSsRadarBounds(null);
     if (radarSource === "composite") {
       const load = async () => {
         const { past, nowcast } = await fetchRadarFrames();
@@ -560,6 +562,22 @@ export default function StationMap({
       };
       load();
       const id = setInterval(load, 300_000);
+      return () => { cancelled = true; clearInterval(id); };
+    } else if (radarSource === "singlesite") {
+      // Single-site N0B via IEM archive (same approach as velocity)
+      const load = async () => {
+        try {
+          const { frames, bounds } = await fetchVelFrames(velocityRadar.id, "N0B");
+          if (cancelled) return;
+          setRadarFrames(frames);
+          setSsRadarBounds(bounds);
+          setRadarFrame(Math.max(0, frames.length - 1));
+        } catch (e) {
+          console.warn("IEM single-site radar error:", e);
+        }
+      };
+      load();
+      const id = setInterval(load, 120_000); // refresh every 2 min like velocity
       return () => { cancelled = true; clearInterval(id); };
     } else {
       // Mosaic: build frames from timestamps (last 2 hrs, 5-min intervals)
@@ -576,7 +594,7 @@ export default function StationMap({
       }, 300_000);
       return () => { cancelled = true; clearInterval(id); };
     }
-  }, [showRadar, radarSource]);
+  }, [showRadar, radarSource, velocityRadar.id]);
 
   // Advance radar frame
   useEffect(() => {
@@ -865,6 +883,13 @@ export default function StationMap({
                 >
                   US Mosaic
                 </button>
+                <button
+                  className={`smap-day-btn${radarSource === "singlesite" ? " active" : ""}`}
+                  onClick={() => setRadarSource("singlesite")}
+                  title="Single-site NEXRAD base reflectivity (N0B 0.5°) — highest detail for hook echoes and storm structure"
+                >
+                  Single Site{radarSource === "singlesite" && <span className="smap-radar-badge">{velocityRadar.id}</span>}
+                </button>
               </div>
             )}
             {showRadar && radarFrameCount > 0 && (
@@ -1100,6 +1125,36 @@ export default function StationMap({
             )}
           </Pane>
 
+          {/* Single-site NEXRAD reflectivity (N0B) — IEM archive ImageOverlay */}
+          {showRadar && radarSource === "singlesite" && radarFrames[radarFrame] && ssRadarBounds && (
+            <ImageOverlay
+              url={radarFrames[radarFrame].url}
+              bounds={ssRadarBounds}
+              opacity={0.65}
+              zIndex={300}
+            />
+          )}
+
+          {/* Range ring + site marker for single-site radar */}
+          {showRadar && radarSource === "singlesite" && (
+            <Pane name="ss-range" style={{ zIndex: 310, pointerEvents: "none" }}>
+              <Circle
+                center={[velocityRadar.lat, velocityRadar.lon]}
+                radius={230000}
+                pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+              />
+              <CircleMarker
+                center={[velocityRadar.lat, velocityRadar.lon]}
+                radius={4}
+                pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
+              >
+                <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
+                  {velocityRadar.id}
+                </Tooltip>
+              </CircleMarker>
+            </Pane>
+          )}
+
           {/* NEXRAD Velocity overlay — animated archive images from IEM */}
           {showVelocity && velFrames[velFrame] && velBounds && (
             <ImageOverlay
@@ -1235,6 +1290,18 @@ export default function StationMap({
 
         {/* Floating legend overlays — each in its own container */}
         <div className="smap-legend-stack">
+          {showRadar && radarSource === "singlesite" && (
+            <div className="smap-legend-float smap-legend-vel">
+              <div className="smap-legend smap-legend-vel-row">
+                <span className="smap-legend-vel-title">
+                  {velocityRadar.id} N0B 0.5°
+                </span>
+                {radarFrames[radarFrame] ? (
+                  <span className="smap-legend-vel-time">{fmtRadarTime(radarFrames[radarFrame].time)}</span>
+                ) : null}
+              </div>
+            </div>
+          )}
           {showVelocity && (
             <div className="smap-legend-float smap-legend-vel">
               <div className="smap-legend smap-legend-vel-row">
