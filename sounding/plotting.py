@@ -2,7 +2,7 @@
 Sounding analysis plot generation (Skew-T, hodograph, parameter tables).
 """
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import matplotlib
 matplotlib.use("Agg")
@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore")
 
 def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False,
                   theme="dark", colorblind=False, boundary_orientation=None,
-                  map_zoom=1.0):
+                  map_zoom=1.0, source="obs", model=None, fhour=0):
     """Create a comprehensive sounding analysis figure.
 
     Parameters
@@ -143,10 +143,31 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     if sr_hodograph:
         title_tags.append("SR HODO")
     tag_str = f" [{', '.join(title_tags)}]" if title_tags else ""
-    title_str = (
-        f"OBSERVED UPPER-AIR SOUNDING | {station_id} | "
-        f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
-    )
+    # Build title based on data source
+    _src = (source or "obs").lower()
+    if _src in ("bufkit", "psu") and model:
+        _valid_dt = dt + timedelta(hours=int(fhour or 0))
+        _src_label = f"{model.upper()} FORECAST"
+        title_str = (
+            f"{_src_label} | {station_id} | "
+            f"INIT: {dt.strftime('%m/%d/%Y %HZ')} F{int(fhour):03d} | "
+            f"VALID: {_valid_dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
+        )
+    elif _src == "rap":
+        title_str = (
+            f"RAP ANALYSIS | {station_id} | "
+            f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
+        )
+    elif _src == "acars":
+        title_str = (
+            f"ACARS AIRCRAFT OBS | {station_id} | "
+            f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
+        )
+    else:
+        title_str = (
+            f"OBSERVED UPPER-AIR SOUNDING | {station_id} | "
+            f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
+        )
     fig.suptitle(title_str, fontsize=20, fontweight="bold",
                  color=FG, y=0.985, x=0.36, ha="center",
                  fontfamily="monospace")

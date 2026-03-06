@@ -5,7 +5,7 @@ import base64
 import io
 import math
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -117,7 +117,8 @@ def get_sounding():
                             sr_hodograph=sr_hodograph, theme=theme,
                             colorblind=colorblind,
                             boundary_orientation=boundary_orientation,
-                            map_zoom=map_zoom)
+                            map_zoom=map_zoom,
+                            source=source, model=model, fhour=fhour)
 
         _facecolor = "#f5f5f5" if theme == "light" else "#0d0d0d"
         buf = io.BytesIO()
@@ -174,7 +175,7 @@ def get_sounding():
                 "station": station,
                 "stationName": STATIONS.get(station, (station or source.upper(),))[0],
                 "source": source,
-                "date": dt.strftime("%Y-%m-%d %HZ"),
+                "date": (dt + timedelta(hours=int(fhour or 0))).strftime("%Y-%m-%d %HZ") if source in ("bufkit", "psu") else dt.strftime("%Y-%m-%d %HZ"),
                 "levels": len(data["pressure"]),
                 "sfcPressure": round(float(data["pressure"][0].magnitude)),
                 "topPressure": round(float(data["pressure"][-1].magnitude)),

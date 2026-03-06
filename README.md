@@ -73,6 +73,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ## Features
 
 ### Skew-T Log-P Diagram
+- **Source-aware plot titles** — "OBSERVED UPPER-AIR SOUNDING", "HRRR FORECAST (INIT + FHOUR → VALID)", "RAP ANALYSIS", or "ACARS AIRCRAFT OBS" depending on data source
 - **Temperature** & **Dewpoint** profiles
 - **Wet-bulb temperature** trace
 - **Virtual temperature** trace

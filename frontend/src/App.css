@@ -1,3 +1,7 @@
+html {
+  scroll-behavior: smooth;
+}
+
 .app {
   min-height: 100vh;
   display: flex;
@@ -226,9 +230,9 @@
 /* ── Floating sidebar when map is fullscreen ─────────────── */
 body.smap-fullscreen-active .control-panel {
   z-index: 1100;
-  width: 270px;
+  width: 290px;
   height: auto;
-  max-height: min(480px, calc(100vh - 32px));
+  max-height: min(560px, calc(100vh - 32px));
   top: 16px;
   bottom: auto;
   left: 16px;
@@ -240,13 +244,28 @@ body.smap-fullscreen-active .control-panel {
   -webkit-backdrop-filter: blur(16px);
   background: rgba(17, 17, 17, 0.92);
   transition: box-shadow 0.3s, background 0.3s;
-  padding: 0 10px 8px;
-  font-size: 11px;
-  overflow-y: auto;
+  padding: 0;
+  font-size: 12px;
+  overflow: hidden;
 }
 
 body.smap-fullscreen-active .control-panel .cp-brand {
   display: none;
+}
+
+body.smap-fullscreen-active .control-panel .cp-nav {
+  padding: 6px 10px;
+  gap: 2px;
+}
+
+body.smap-fullscreen-active .control-panel .cp-nav-tab {
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+body.smap-fullscreen-active .control-panel .cp-tab-content {
+  overflow-y: auto;
+  padding: 8px 12px 10px;
 }
 
 body.smap-fullscreen-active .control-panel .cp-drag-handle {
@@ -255,33 +274,31 @@ body.smap-fullscreen-active .control-panel .cp-drag-handle {
   top: 0;
   z-index: 3;
   background: inherit;
-  margin: 0 -10px;
-  padding: 10px 10px 12px;
+  padding: 10px 12px;
   border-radius: 14px 14px 0 0;
   border-bottom: 1px solid var(--border, #333);
-  margin-bottom: 10px;
 }
 
 /* Compact sizing overrides */
 body.smap-fullscreen-active .control-panel .cp-label {
-  font-size: 10px;
+  font-size: 11px;
 }
 body.smap-fullscreen-active .control-panel .cp-source-btn {
-  padding: 4px 6px;
-  font-size: 9px;
+  padding: 5px 8px;
+  font-size: 11px;
 }
 body.smap-fullscreen-active .control-panel .cp-section {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 body.smap-fullscreen-active .control-panel .cp-form {
-  gap: 4px;
+  gap: 6px;
 }
 body.smap-fullscreen-active .control-panel .cp-tool-btn {
-  padding: 5px 8px;
-  font-size: 10px;
+  padding: 6px 10px;
+  font-size: 11px;
 }
 body.smap-fullscreen-active .control-panel .cp-bottom {
-  padding-top: 6px;
+  padding-top: 8px;
 }
 
 /* Collapsed state — hide everything except the drag handle */

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio } from "lucide-react";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
@@ -27,10 +27,10 @@ function RadarLayer({ url, opacity, ...rest }) {
 
 /* ── base-map tile options ───────────────────────────────────── */
 const BASE_MAPS = [
-  { id: "dark",      name: "Dark",      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" },
-  { id: "light",     name: "Light",     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" },
-  { id: "satellite", name: "Satellite", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" },
-  { id: "terrain",   name: "Terrain",   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" },
+  { id: "dark",      name: "Dark",      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",  labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
+  { id: "light",     name: "Light",     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", labels: "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png" },
+  { id: "satellite", name: "Satellite", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
+  { id: "terrain",   name: "Terrain",   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
 ];
 
 /* ── animated radar via RainViewer API (live composite, real timestamps) ──── */
@@ -91,8 +91,8 @@ function buildMosaicFrames(count = 24) {
 const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual&message_type=alert,update";
 
 /* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
-const SPC_MD_URL = "https://www.spc.noaa.gov/products/md/md.geojson";
-const SPC_WATCH_URL = "https://www.spc.noaa.gov/products/watch/ww.geojson";
+const SPC_MD_URL = "https://mesonet.agron.iastate.edu/geojson/spc_mcd.geojson";
+const SPC_WATCH_URL = "https://mesonet.agron.iastate.edu/geojson/spc_watch.geojson";
 
 const WATCH_STYLES = {
   "Tornado Watch":           { color: "#ff0000", fill: "#ff000022", label: "TOR" },
@@ -812,7 +812,7 @@ export default function StationMap({
   const [outlookData, setOutlookData] = useState(null);
   const [outlookLoading, setOutlookLoading] = useState(false);
   const [showOutlook, setShowOutlook] = useState(true);
-  const [showRadar, setShowRadar] = useState(true);
+  const [showRadar, setShowRadar] = useState(false);
   const [radarSource, setRadarSource] = useState("mosaic"); // "composite" | "mosaic" | "singlesite"
   const [ssRadarBounds, setSsRadarBounds] = useState(null); // [[south,west],[north,east]] for single-site ImageOverlay
   const [showVelocity, setShowVelocity] = useState(false);
@@ -833,13 +833,13 @@ export default function StationMap({
   const [showBaseMapPicker, setShowBaseMapPicker] = useState(false);
 
   // NWS active warnings overlay
-  const [showWarnings, setShowWarnings] = useState(true);
+  const [showWarnings, setShowWarnings] = useState(false);
   const [warningsData, setWarningsData] = useState(null);
   const [warningsLoading, setWarningsLoading] = useState(false);
   const warningCount = warningsData?.features?.length || 0;
 
   // TVS / Mesocyclone storm attributes overlay
-  const [showStorms, setShowStorms] = useState(true);
+  const [showStorms, setShowStorms] = useState(false);
   const [stormData, setStormData] = useState(null);
   const [stormsLoading, setStormsLoading] = useState(false);
   const tvsCount = stormData?.features?.filter((f) => f.properties?.tvs === "TVS").length || 0;
@@ -859,7 +859,7 @@ export default function StationMap({
   const [windLoading, setWindLoading] = useState(false);
 
   // SPC Mesoscale Discussions & Watches overlay
-  const [showMdWatch, setShowMdWatch] = useState(true);
+  const [showMdWatch, setShowMdWatch] = useState(false);
   const [mdData, setMdData] = useState(null);
   const [watchData, setWatchData] = useState(null);
   const [mdWatchLoading, setMdWatchLoading] = useState(false);
@@ -872,6 +872,10 @@ export default function StationMap({
 
   // SPC outlook refresh counter
   const [outlookRefresh, setOutlookRefresh] = useState(0);
+
+  // Toolbar group dropdown (only one open at a time)
+  const [openGroup, setOpenGroup] = useState(null); // "forecasts" | "radar" | "overlays" | null
+  const toggleGroup = useCallback((g) => setOpenGroup((prev) => (prev === g ? null : g)), []);
 
   // Outlook stations (stations within SPC outlook polygons)
   const [outlookStations, setOutlookStations] = useState(null);
@@ -1205,274 +1209,330 @@ export default function StationMap({
           </div>
         </div>
         <div className="smap-toolbar-bottom">
-          <div className="smap-controls">
+          {/* ── Group header buttons ── */}
+          <div className="smap-groups">
             <button
-              className={`smap-tbtn ${showOutlook ? "active" : ""}`}
-              onClick={() => setShowOutlook((v) => !v)}
-              title="Toggle SPC outlook overlay"
+              className={`smap-group-btn${openGroup === "forecasts" ? " open" : ""}${showOutlook ? " has-active" : ""}`}
+              onClick={() => toggleGroup("forecasts")}
             >
               <CloudLightning size={11} />
-              SPC Outlook
+              Forecasts
+              {showOutlook && <span className="smap-group-dot" />}
+              {showOutlookStations && outlookStations && <span className="smap-radar-badge">{outlookStations.count}</span>}
+              <ChevronDown size={10} className="smap-group-chevron" />
             </button>
-            {showOutlook && (
-              <button
-                className="smap-tbtn smap-refresh-btn"
-                onClick={() => setOutlookRefresh((r) => r + 1)}
-                title="Refresh SPC outlook data"
-              >
-                <RefreshCw size={10} />
-              </button>
-            )}
-            {showOutlook && (
-              <button
-                className={`smap-tbtn ${showOutlookStations ? "active" : ""}`}
-                onClick={() => setShowOutlookStations((v) => !v)}
-                title="Highlight stations within outlook area — click to fetch forecast soundings"
-              >
-                <Zap size={11} />
-                Outlook Sndgs
-                {outlookStationsLoading && <span className="smap-outlook-loading-dot">...</span>}
-                {outlookStations && <span className="smap-radar-badge">{outlookStations.count}</span>}
-              </button>
-            )}
             <button
-              className={`smap-tbtn ${showRadar ? "active" : ""}`}
-              onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
-              title="Toggle radar reflectivity overlay"
+              className={`smap-group-btn${openGroup === "radar" ? " open" : ""}${showRadar || showVelocity ? " has-active" : ""}`}
+              onClick={() => toggleGroup("radar")}
             >
               <Crosshair size={11} />
               Radar
-            </button>
-            {showRadar && (
-              <div className="smap-day-btns smap-radar-source-btns">
-                <button
-                  className={`smap-day-btn${radarSource === "composite" ? " active" : ""}`}
-                  onClick={() => setRadarSource("composite")}
-                  title="RainViewer global composite — animated multi-frame"
-                >
-                  Composite
-                </button>
-                <button
-                  className={`smap-day-btn${radarSource === "mosaic" ? " active" : ""}`}
-                  onClick={() => { setRadarSource("mosaic"); }}
-                  title="IEM US national composite — CONUS-wide animated mosaic"
-                >
-                  US Mosaic
-                </button>
-                <button
-                  className={`smap-day-btn${radarSource === "singlesite" ? " active" : ""}`}
-                  onClick={() => setRadarSource("singlesite")}
-                  title="Single-site NEXRAD super-res base reflectivity — gate-level detail for hook echoes and storm structure"
-                >
-                  Single Site{radarSource === "singlesite" && <span className="smap-radar-badge">{velocityRadar.id}</span>}
-                </button>
-              </div>
-            )}
-            {showRadar && radarFrameCount > 0 && (
-              <>
-                <button
-                  className={`smap-tbtn smap-anim-btn ${radarPlaying ? "active" : ""}`}
-                  onClick={() => setRadarPlaying((v) => !v)}
-                  title={radarPlaying ? "Pause radar animation" : "Animate radar frames"}
-                >
-                  {radarPlaying ? <Pause size={10} /> : <Play size={10} />}
-                  {radarFrames[radarFrame]
-                    ? (radarFrames[radarFrame].forecast ? "\u2601 " : "") + fmtRadarTime(radarFrames[radarFrame].time)
-                    : "Animate"}
-                </button>
-                <input
-                  type="range"
-                  className="smap-radar-slider"
-                  min={0}
-                  max={radarFrameCount - 1}
-                  step={1}
-                  value={radarFrame}
-                  onChange={(e) => { setRadarFrame(Number(e.target.value)); setRadarPlaying(false); }}
-                  title="Scrub through radar frames"
-                />
-              </>
-            )}
-            <button
-              className={`smap-tbtn ${showVelocity ? "active" : ""}`}
-              onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
-              title="Toggle NEXRAD velocity overlay (single-site) — super-res base velocity for tornado rotation signatures"
-            >
-              <Wind size={11} />
-              Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
-            </button>
-            {showVelocity && velAvailProducts.length > 0 && (
-              <div className="smap-day-btns smap-vel-product-btns">
-                {velAvailProducts.map((vp) => (
-                  <button
-                    key={vp.id}
-                    className={`smap-day-btn${velProduct === vp.id ? " active" : ""}${vp.id.endsWith("S") ? " smap-vel-srm" : ""}`}
-                    onClick={() => { setVelProduct(vp.id); setVelCacheBust(Date.now()); }}
-                    title={vp.desc}
-                  >
-                    {vp.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {showVelocity && velFrameCount > 0 && (
-              <>
-                <button
-                  className={`smap-tbtn smap-anim-btn ${velPlaying ? "active" : ""}`}
-                  onClick={() => setVelPlaying((v) => !v)}
-                  title={velPlaying ? "Pause velocity animation" : "Animate velocity frames"}
-                >
-                  {velPlaying ? <Pause size={10} /> : <Play size={10} />}
-                  {velFrames[velFrame] ? fmtRadarTime(velFrames[velFrame].time) : "Animate"}
-                </button>
-                <input
-                  type="range"
-                  className="smap-radar-slider"
-                  min={0}
-                  max={velFrameCount - 1}
-                  step={1}
-                  value={velFrame}
-                  onChange={(e) => { setVelFrame(Number(e.target.value)); setVelPlaying(false); }}
-                  title="Scrub through velocity frames"
-                />
-              </>
-            )}
-            <button
-              className={`smap-tbtn ${showStorms ? "active" : ""}`}
-              onClick={() => setShowStorms((v) => !v)}
-              title="Toggle TVS (Tornado Vortex Signature) and Mesocyclone detections from NEXRAD storm attributes"
-            >
-              <Tornado size={11} />
-              TVS/Meso
-              {stormsLoading && <span className="smap-outlook-loading-dot">...</span>}
-              {tvsCount > 0 && <span className="smap-radar-badge smap-warn-count">{tvsCount} TVS</span>}
-              {mesoCount > 0 && <span className="smap-radar-badge">{mesoCount}</span>}
+              {showRadar && <span className="smap-group-dot" />}
+              {showVelocity && <span className="smap-group-dot smap-dot-vel" />}
+              <ChevronDown size={10} className="smap-group-chevron" />
             </button>
             <button
-              className={`smap-tbtn ${showSpotters ? "active" : ""}`}
-              onClick={() => setShowSpotters((v) => !v)}
-              title="Toggle Spotter Network — live storm chaser positions and field reports (tornado, hail, funnel cloud)"
+              className={`smap-group-btn${openGroup === "overlays" ? " open" : ""}${(showStorms || showWarnings || showMdWatch || showSpotters || showLightning || showWind) ? " has-active" : ""}`}
+              onClick={() => toggleGroup("overlays")}
             >
-              <Binoculars size={11} />
-              Spotters
-              {spottersLoading && <span className="smap-outlook-loading-dot">...</span>}
-              {spotterReportCount > 0 && <span className="smap-radar-badge smap-warn-count">{spotterReportCount}</span>}
-              {spotterCount > 0 && <span className="smap-radar-badge">{spotterCount}</span>}
-            </button>
-            <button
-              className={`smap-tbtn ${showWarnings ? "active" : ""}`}
-              onClick={() => setShowWarnings((v) => !v)}
-              title="Toggle NWS active warnings — tornado, severe, flash flood, watches"
-            >
-              <AlertTriangle size={11} />
-              Warnings
-              {warningsLoading && <span className="smap-outlook-loading-dot">...</span>}
+              <Layers size={11} />
+              Overlays
               {warningCount > 0 && <span className="smap-radar-badge smap-warn-count">{warningCount}</span>}
-            </button>
-            <button
-              className={`smap-tbtn ${showMdWatch ? "active" : ""}`}
-              onClick={() => setShowMdWatch((v) => !v)}
-              title="Toggle SPC Mesoscale Discussions and active Tornado/Severe Thunderstorm Watches"
-            >
-              <FileWarning size={11} />
-              MDs/Watch
-              {mdWatchLoading && <span className="smap-outlook-loading-dot">...</span>}
-              {watchCount > 0 && <span className="smap-radar-badge smap-warn-count">{watchCount}</span>}
-              {mdCount > 0 && <span className="smap-radar-badge">{mdCount} MD</span>}
-            </button>
-            <button
-              className={`smap-tbtn ${showLightning ? "active" : ""}`}
-              onClick={() => setShowLightning((v) => !v)}
-              title="Toggle real-time lightning strikes (Blitzortung network)"
-            >
-              <Zap size={11} />
-              Lightning
+              {tvsCount > 0 && <span className="smap-radar-badge smap-warn-count">{tvsCount} TVS</span>}
               {lightningStrikes.length > 0 && <span className="smap-radar-badge">{lightningStrikes.length}</span>}
+              <ChevronDown size={10} className="smap-group-chevron" />
             </button>
-            <button
-              className={`smap-tbtn ${showWind ? "active" : ""}`}
-              onClick={() => setShowWind((v) => !v)}
-              title="Toggle animated wind flow overlay"
-            >
-              <Wind size={11} />
-              Wind Flow
-              {windLoading && <span className="smap-outlook-loading-dot">...</span>}
-            </button>
-            {showWind && (
-              <div className="smap-day-btns smap-wind-level-btns">
-                <button
-                  className={`smap-day-btn${windLevel === "500" ? " active" : ""}`}
-                  onClick={() => setWindLevel("500")}
-                  title="500 hPa steering flow — matches radar echo motion"
-                >
-                  Steering
-                </button>
-                <button
-                  className={`smap-day-btn${windLevel === "surface" ? " active" : ""}`}
-                  onClick={() => setWindLevel("surface")}
-                  title="10 m surface wind"
-                >
-                  Surface
-                </button>
-              </div>
-            )}
-            {showOutlook && (
-              <>
-                <div className="smap-day-btns">
-                  {[1, 2, 3].map((d) => (
-                    <button
-                      key={d}
-                      className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
-                      onClick={() => setOutlookDay(d)}
-                    >
-                      D{d}
-                    </button>
-                  ))}
-                  <span className="smap-day-sep">|</span>
-                  {[4, 5, 6, 7, 8].map((d) => (
-                    <button
-                      key={d}
-                      className={`smap-day-btn smap-day-ext ${outlookDay === d ? "active" : ""}`}
-                      onClick={() => setOutlookDay(d)}
-                      title={`Day ${d} extended-range outlook (probability only)`}
-                    >
-                      D{d}
-                    </button>
-                  ))}
-                </div>
-                {outlookDay <= 3 && (
-                <div className="smap-day-btns smap-type-btns">
-                  {OUTLOOK_TYPES.map((t) => {
-                    // Day 3 disables traditional prob types (but CI is available for all days)
-                    const isDisabledD3 = outlookDay === 3 && ["torn", "wind", "hail"].includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${isDisabledD3 ? " smap-btn-disabled" : ""}`}
-                        onClick={() => { if (!isDisabledD3) setOutlookType(t.id); }}
-                        title={isDisabledD3 ? "Day 3: only categorical available" : (t.title || t.name)}
-                      >
-                        {t.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                )}
-                {outlookDay >= 4 && (
-                  <span className="smap-ext-label">Extended Range – Probability Only</span>
-                )}
-              </>
-            )}
           </div>
-          {showOutlook && outlookLoading && (
-            <span className="smap-outlook-loading">Loading…</span>
+
+          {/* ── Forecasts panel ── */}
+          {openGroup === "forecasts" && (
+            <div className="smap-group-panel">
+              <div className="smap-controls">
+                <button
+                  className={`smap-tbtn ${showOutlook ? "active" : ""}`}
+                  onClick={() => setShowOutlook((v) => !v)}
+                  title="Toggle SPC outlook overlay"
+                >
+                  <CloudLightning size={11} />
+                  SPC Outlook
+                </button>
+                {showOutlook && (
+                  <button
+                    className="smap-tbtn smap-refresh-btn"
+                    onClick={() => setOutlookRefresh((r) => r + 1)}
+                    title="Refresh SPC outlook data"
+                  >
+                    <RefreshCw size={10} />
+                  </button>
+                )}
+                {showOutlook && (
+                  <button
+                    className={`smap-tbtn ${showOutlookStations ? "active" : ""}`}
+                    onClick={() => setShowOutlookStations((v) => !v)}
+                    title="Highlight stations within outlook area — click to fetch forecast soundings"
+                  >
+                    <Zap size={11} />
+                    Outlook Sndgs
+                    {outlookStationsLoading && <span className="smap-outlook-loading-dot">...</span>}
+                    {outlookStations && <span className="smap-radar-badge">{outlookStations.count}</span>}
+                  </button>
+                )}
+                {showOutlook && (
+                  <>
+                    <div className="smap-day-btns">
+                      {[1, 2, 3].map((d) => (
+                        <button
+                          key={d}
+                          className={`smap-day-btn ${outlookDay === d ? "active" : ""}`}
+                          onClick={() => setOutlookDay(d)}
+                        >
+                          D{d}
+                        </button>
+                      ))}
+                      <span className="smap-day-sep">|</span>
+                      {[4, 5, 6, 7, 8].map((d) => (
+                        <button
+                          key={d}
+                          className={`smap-day-btn smap-day-ext ${outlookDay === d ? "active" : ""}`}
+                          onClick={() => setOutlookDay(d)}
+                          title={`Day ${d} extended-range outlook (probability only)`}
+                        >
+                          D{d}
+                        </button>
+                      ))}
+                    </div>
+                    {outlookDay <= 3 && (
+                    <div className="smap-day-btns smap-type-btns">
+                      {OUTLOOK_TYPES.map((t) => {
+                        const isDisabledD3 = outlookDay === 3 && ["torn", "wind", "hail"].includes(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            className={`smap-day-btn ${effectiveType === t.id ? "active" : ""}${isDisabledD3 ? " smap-btn-disabled" : ""}`}
+                            onClick={() => { if (!isDisabledD3) setOutlookType(t.id); }}
+                            title={isDisabledD3 ? "Day 3: only categorical available" : (t.title || t.name)}
+                          >
+                            {t.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    )}
+                    {outlookDay >= 4 && (
+                      <span className="smap-ext-label">Extended Range – Probability Only</span>
+                    )}
+                  </>
+                )}
+              </div>
+              {showOutlook && outlookLoading && (
+                <span className="smap-outlook-loading">Loading…</span>
+              )}
+              {showOutlook && outlookMeta && !outlookLoading && (
+                <span className="smap-outlook-meta">
+                  {outlookMeta.forecaster} · {outlookMeta.valid}
+                </span>
+              )}
+              {showOutlook && outlookError && !outlookLoading && (
+                <span className="smap-outlook-error">{outlookError}</span>
+              )}
+            </div>
           )}
-          {showOutlook && outlookMeta && !outlookLoading && (
-            <span className="smap-outlook-meta">
-              {outlookMeta.forecaster} · {outlookMeta.valid}
-            </span>
+
+          {/* ── Radar panel ── */}
+          {openGroup === "radar" && (
+            <div className="smap-group-panel">
+              <div className="smap-controls">
+                <button
+                  className={`smap-tbtn ${showRadar ? "active" : ""}`}
+                  onClick={() => { setShowRadar((v) => !v); setShowVelocity(false); }}
+                  title="Toggle radar reflectivity overlay"
+                >
+                  <Crosshair size={11} />
+                  Radar
+                </button>
+                {showRadar && (
+                  <div className="smap-day-btns smap-radar-source-btns">
+                    <button
+                      className={`smap-day-btn${radarSource === "composite" ? " active" : ""}`}
+                      onClick={() => setRadarSource("composite")}
+                      title="RainViewer global composite — animated multi-frame"
+                    >
+                      Composite
+                    </button>
+                    <button
+                      className={`smap-day-btn${radarSource === "mosaic" ? " active" : ""}`}
+                      onClick={() => { setRadarSource("mosaic"); }}
+                      title="IEM US national composite — CONUS-wide animated mosaic"
+                    >
+                      US Mosaic
+                    </button>
+                    <button
+                      className={`smap-day-btn${radarSource === "singlesite" ? " active" : ""}`}
+                      onClick={() => setRadarSource("singlesite")}
+                      title="Single-site NEXRAD super-res base reflectivity — gate-level detail for hook echoes and storm structure"
+                    >
+                      Single Site{radarSource === "singlesite" && <span className="smap-radar-badge">{velocityRadar.id}</span>}
+                    </button>
+                  </div>
+                )}
+                {showRadar && radarFrameCount > 0 && (
+                  <>
+                    <button
+                      className={`smap-tbtn smap-anim-btn ${radarPlaying ? "active" : ""}`}
+                      onClick={() => setRadarPlaying((v) => !v)}
+                      title={radarPlaying ? "Pause radar animation" : "Animate radar frames"}
+                    >
+                      {radarPlaying ? <Pause size={10} /> : <Play size={10} />}
+                      {radarFrames[radarFrame]
+                        ? (radarFrames[radarFrame].forecast ? "\u2601 " : "") + fmtRadarTime(radarFrames[radarFrame].time)
+                        : "Animate"}
+                    </button>
+                    <input
+                      type="range"
+                      className="smap-radar-slider"
+                      min={0}
+                      max={radarFrameCount - 1}
+                      step={1}
+                      value={radarFrame}
+                      onChange={(e) => { setRadarFrame(Number(e.target.value)); setRadarPlaying(false); }}
+                      title="Scrub through radar frames"
+                    />
+                  </>
+                )}
+                <span className="smap-group-sep" />
+                <button
+                  className={`smap-tbtn ${showVelocity ? "active" : ""}`}
+                  onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
+                  title="Toggle NEXRAD velocity overlay (single-site) — super-res base velocity for tornado rotation signatures"
+                >
+                  <Wind size={11} />
+                  Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
+                </button>
+                {showVelocity && velAvailProducts.length > 0 && (
+                  <div className="smap-day-btns smap-vel-product-btns">
+                    {velAvailProducts.map((vp) => (
+                      <button
+                        key={vp.id}
+                        className={`smap-day-btn${velProduct === vp.id ? " active" : ""}${vp.id.endsWith("S") ? " smap-vel-srm" : ""}`}
+                        onClick={() => { setVelProduct(vp.id); setVelCacheBust(Date.now()); }}
+                        title={vp.desc}
+                      >
+                        {vp.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showVelocity && velFrameCount > 0 && (
+                  <>
+                    <button
+                      className={`smap-tbtn smap-anim-btn ${velPlaying ? "active" : ""}`}
+                      onClick={() => setVelPlaying((v) => !v)}
+                      title={velPlaying ? "Pause velocity animation" : "Animate velocity frames"}
+                    >
+                      {velPlaying ? <Pause size={10} /> : <Play size={10} />}
+                      {velFrames[velFrame] ? fmtRadarTime(velFrames[velFrame].time) : "Animate"}
+                    </button>
+                    <input
+                      type="range"
+                      className="smap-radar-slider"
+                      min={0}
+                      max={velFrameCount - 1}
+                      step={1}
+                      value={velFrame}
+                      onChange={(e) => { setVelFrame(Number(e.target.value)); setVelPlaying(false); }}
+                      title="Scrub through velocity frames"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
           )}
-          {showOutlook && outlookError && !outlookLoading && (
-            <span className="smap-outlook-error">{outlookError}</span>
+
+          {/* ── Overlays panel ── */}
+          {openGroup === "overlays" && (
+            <div className="smap-group-panel">
+              <div className="smap-controls">
+                <button
+                  className={`smap-tbtn ${showStorms ? "active" : ""}`}
+                  onClick={() => setShowStorms((v) => !v)}
+                  title="Toggle TVS (Tornado Vortex Signature) and Mesocyclone detections from NEXRAD storm attributes"
+                >
+                  <Tornado size={11} />
+                  TVS/Meso
+                  {stormsLoading && <span className="smap-outlook-loading-dot">...</span>}
+                  {tvsCount > 0 && <span className="smap-radar-badge smap-warn-count">{tvsCount} TVS</span>}
+                  {mesoCount > 0 && <span className="smap-radar-badge">{mesoCount}</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showWarnings ? "active" : ""}`}
+                  onClick={() => setShowWarnings((v) => !v)}
+                  title="Toggle NWS active warnings — tornado, severe, flash flood, watches"
+                >
+                  <AlertTriangle size={11} />
+                  Warnings
+                  {warningsLoading && <span className="smap-outlook-loading-dot">...</span>}
+                  {warningCount > 0 && <span className="smap-radar-badge smap-warn-count">{warningCount}</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showMdWatch ? "active" : ""}`}
+                  onClick={() => setShowMdWatch((v) => !v)}
+                  title="Toggle SPC Mesoscale Discussions and active Tornado/Severe Thunderstorm Watches"
+                >
+                  <FileWarning size={11} />
+                  MDs/Watch
+                  {mdWatchLoading && <span className="smap-outlook-loading-dot">...</span>}
+                  {watchCount > 0 && <span className="smap-radar-badge smap-warn-count">{watchCount}</span>}
+                  {mdCount > 0 && <span className="smap-radar-badge">{mdCount} MD</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showSpotters ? "active" : ""}`}
+                  onClick={() => setShowSpotters((v) => !v)}
+                  title="Toggle Spotter Network — live storm chaser positions and field reports (tornado, hail, funnel cloud)"
+                >
+                  <Binoculars size={11} />
+                  Spotters
+                  {spottersLoading && <span className="smap-outlook-loading-dot">...</span>}
+                  {spotterReportCount > 0 && <span className="smap-radar-badge smap-warn-count">{spotterReportCount}</span>}
+                  {spotterCount > 0 && <span className="smap-radar-badge">{spotterCount}</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showLightning ? "active" : ""}`}
+                  onClick={() => setShowLightning((v) => !v)}
+                  title="Toggle real-time lightning strikes (Blitzortung network)"
+                >
+                  <Zap size={11} />
+                  Lightning
+                  {lightningStrikes.length > 0 && <span className="smap-radar-badge">{lightningStrikes.length}</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showWind ? "active" : ""}`}
+                  onClick={() => setShowWind((v) => !v)}
+                  title="Toggle animated wind flow overlay"
+                >
+                  <Wind size={11} />
+                  Wind Flow
+                  {windLoading && <span className="smap-outlook-loading-dot">...</span>}
+                </button>
+                {showWind && (
+                  <div className="smap-day-btns smap-wind-level-btns">
+                    <button
+                      className={`smap-day-btn${windLevel === "500" ? " active" : ""}`}
+                      onClick={() => setWindLevel("500")}
+                      title="500 hPa steering flow — matches radar echo motion"
+                    >
+                      Steering
+                    </button>
+                    <button
+                      className={`smap-day-btn${windLevel === "surface" ? " active" : ""}`}
+                      onClick={() => setWindLevel("surface")}
+                      title="10 m surface wind"
+                    >
+                      Surface
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1676,6 +1736,15 @@ export default function StationMap({
               })}
             </Pane>
           )}
+
+          {/* Road / city labels on top of all weather overlays */}
+          <Pane name="top-labels" style={{ zIndex: 450, pointerEvents: "none" }}>
+            <TileLayer
+              url={BASE_MAPS.find((b) => b.id === baseMap)?.labels}
+              maxZoom={18}
+              opacity={0.9}
+            />
+          </Pane>
 
           {/* Spotter Network — live chaser positions + field reports */}
           {showSpotters && spotterData && (

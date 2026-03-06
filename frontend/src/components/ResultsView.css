@@ -494,11 +494,7 @@
   grid-column: 1 / -1;
   position: relative;
 }
-.param-section--mode:hover > .cm-tooltip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
+/* Spectrum bar (legacy class kept for tooltip) */
 .cm-tooltip {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -507,115 +503,199 @@
   z-index: 20;
 }
 
-/* Spectrum bar */
-.cm-spectrum {
+/* ═══ Storm Mode Prediction — Modern Redesign ═══════════════ */
+.param-section--stormmode {
+  grid-column: 1 / -1;
+  position: relative;
+  overflow: visible;
+}
+
+/* ── Header ── */
+.param-section--stormmode .param-section-header {
+  margin-bottom: 16px;
+}
+
+/* ── Primary badge ── */
+.sm-primary-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--badge-color) 10%, var(--bg-card, #1a1a2e));
+  border: 1px solid color-mix(in srgb, var(--badge-color) 30%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--badge-color) 15%, transparent);
+}
+.sm-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+.sm-badge-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--badge-color);
+  letter-spacing: 0.01em;
+}
+.sm-badge-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--badge-color);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Spectrum bar ── */
+.sm-spectrum {
   display: flex;
   gap: 3px;
-  border-radius: var(--radius);
+  border-radius: 8px;
   overflow: hidden;
+  margin-bottom: 16px;
 }
-.cm-spec-seg {
+.sm-spec-seg {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 4px;
-  background: color-mix(in srgb, var(--seg-color) 12%, transparent);
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s ease;
+  padding: 9px 2px;
+  background: color-mix(in srgb, var(--seg-color) 8%, transparent);
+  border-bottom: 2.5px solid transparent;
+  transition: all 0.25s ease;
   cursor: default;
 }
-.cm-spec-seg--active {
-  background: color-mix(in srgb, var(--seg-color) 25%, transparent);
+.sm-spec-active {
+  background: color-mix(in srgb, var(--seg-color) 20%, transparent);
   border-bottom-color: var(--seg-color);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--seg-color) 20%, transparent);
 }
-.cm-spec-label {
-  font-size: 11px;
+.sm-spec-label {
+  font-size: 10.5px;
   font-weight: 500;
-  color: var(--text-secondary);
-  opacity: 0.5;
+  color: var(--text-muted);
+  opacity: 0.45;
   text-align: center;
   line-height: 1.2;
+  transition: all 0.25s ease;
 }
-.cm-spec-seg--active .cm-spec-label {
+.sm-spec-active .sm-spec-label {
   color: var(--seg-color);
   opacity: 1;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
-/* ── Storm Mode Prediction Panel ─────────────────────────── */
-.param-section--stormmode {
-  grid-column: 1 / -1;
-}
-.sm-top-badge {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 99px;
-  border: 1px solid;
-  white-space: nowrap;
-}
-.sm-gauges {
+/* ── Confidence cards ── */
+.sm-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
 }
-.sm-gauge {
+.sm-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-color) 4%, var(--bg-tertiary, rgba(255,255,255,0.03)));
+  border: 1px solid color-mix(in srgb, var(--card-color) 10%, var(--border));
+  transition: all 0.2s ease;
 }
-.sm-gauge-header {
+.sm-card:hover {
+  background: color-mix(in srgb, var(--card-color) 8%, var(--bg-tertiary, rgba(255,255,255,0.03)));
+  border-color: color-mix(in srgb, var(--card-color) 25%, var(--border));
+}
+.sm-card:hover .param-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.sm-card--top {
+  border-color: color-mix(in srgb, var(--card-color) 35%, var(--border));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--card-color) 10%, transparent);
+}
+.sm-card-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 12px;
 }
-.sm-gauge-icon {
-  font-size: 14px;
-  line-height: 1;
+.sm-card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
-.sm-gauge-label {
+.sm-card--top .sm-card-dot {
+  box-shadow: 0 0 6px var(--card-color);
+}
+.sm-card-label {
   font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: -0.005em;
 }
-.sm-gauge-pct {
+.sm-card-pct {
   margin-left: auto;
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: 800;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
-.sm-gauge-track {
-  height: 6px;
+.sm-card-bar {
+  height: 5px;
   border-radius: 3px;
   background: var(--bg-hover, rgba(255,255,255,0.06));
   overflow: hidden;
 }
-.sm-gauge-fill {
+.sm-card-fill {
   height: 100%;
   border-radius: 3px;
-  transition: width 0.4s ease;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.sm-drivers {
+
+/* ── Driver parameter chips ── */
+.sm-params {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-top: 12px;
-  padding-top: 10px;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.sm-driver {
-  font-size: 11px;
-  color: var(--text-secondary);
+.sm-param {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-tertiary, rgba(255,255,255,0.04));
+  border: 1px solid var(--border);
   cursor: default;
+  transition: background 0.15s ease;
 }
-.sm-driver b {
-  color: var(--text-primary);
+.sm-param:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.08));
+}
+.sm-param-key {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sm-param-val {
+  font-size: 12px;
   font-weight: 600;
-  margin-right: 3px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.sm-param-val small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 1px;
 }
 
 .param-section {

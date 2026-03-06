@@ -606,18 +606,18 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     return (
       <div className="results-view">
         <Suspense fallback={null}>
-          {showMap && mapProps && <StationMap {...mapProps} />}
+          {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <RiskTable riskData={riskData} />}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
-            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+            <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
           )}
           {showCompare && (
-            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+            <div id="section-compare"><ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} /></div>
           )}
           {showVwp && (
-            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+            <div id="section-vwp"><VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} /></div>
           )}
         </Suspense>
         <div className="rv-state rv-error">
@@ -635,21 +635,21 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     return (
       <div className="results-view">
         <Suspense fallback={null}>
-          {showMap && mapProps && <StationMap {...mapProps} />}
+          {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <RiskTable riskData={riskData} />}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
-            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+            <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
           )}
           {showCompare && (
-            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+            <div id="section-compare"><ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} /></div>
           )}
           {showVwp && (
-            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+            <div id="section-vwp"><VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} /></div>
           )}
         </Suspense>
-        <div className="rv-state rv-loading">
+        <div id="section-sounding" className="rv-state rv-loading">
           <Loader2 size={24} className="spin" />
           <div>
             <h3>Fetching & Analyzing</h3>
@@ -667,18 +667,18 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     return (
       <div className="results-view">
         <Suspense fallback={null}>
-          {showMap && mapProps && <StationMap {...mapProps} />}
+          {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <RiskTable riskData={riskData} />}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
-            <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+            <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
           )}
           {showCompare && (
-            <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+            <div id="section-compare"><ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} /></div>
           )}
           {showVwp && (
-            <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+            <div id="section-vwp"><VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} /></div>
           )}
         </Suspense>
         {!riskData && (
@@ -931,6 +931,88 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
+  const [reportBusy, setReportBusy] = useState(false);
+  const handleFullReport = async () => {
+    if (reportBusy) return;
+    setReportBusy(true);
+    try {
+      // Load the sounding image
+      const img = new Image();
+      img.src = `data:image/png;base64,${image}`;
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+
+      // Build parameter summary rows
+      const rows = [
+        [`${meta.station || meta.source.toUpperCase()}  —  ${meta.stationName || ""}  —  ${meta.date}`, ""],
+        ["", ""],
+        ["THERMODYNAMIC", ""],
+        ["SB CAPE", `${params.sbCape ?? "---"} J/kg`], ["SB CIN", `${params.sbCin ?? "---"} J/kg`],
+        ["MU CAPE", `${params.muCape ?? "---"} J/kg`], ["ML CAPE", `${params.mlCape ?? "---"} J/kg`],
+        ["ML CIN", `${params.mlCin ?? "---"} J/kg`], ["DCAPE", `${params.dcape ?? "---"} J/kg`],
+        ["ECAPE", `${params.ecape ?? "---"} J/kg`],
+        ["", ""],
+        ["LAPSE RATES & MOISTURE", ""],
+        ["LR 0-3 km", `${params.lr03 ?? "---"} C/km`], ["LR 3-6 km", `${params.lr36 ?? "---"} C/km`],
+        ["PWAT", `${params.pwat ?? "---"} mm`], ["FRZ Level", `${params.frzLevel ?? "---"} m`],
+        ["", ""],
+        ["KINEMATIC", ""],
+        ["BWD 0-1 km", `${params.bwd1km ?? "---"} kt`], ["BWD 0-6 km", `${params.bwd6km ?? "---"} kt`],
+        ["SRH 0-1 km", `${params.srh1km ?? "---"} m²/s²`], ["SRH 0-3 km", `${params.srh3km ?? "---"} m²/s²`],
+        ["", ""],
+        ["COMPOSITE INDICES", ""],
+        ["STP", `${params.stp ?? "---"}`], ["SCP", `${params.scp ?? "---"}`],
+        ["SHIP", `${params.ship ?? "---"}`], ["DCP", `${params.dcp ?? "---"}`],
+        ["BRN", `${params.brn ?? "---"}`],
+      ];
+
+      const pad = 40;
+      const lineH = 20;
+      const panelW = 420;
+      const panelH = rows.length * lineH + pad * 2;
+      const totalW = img.width + panelW;
+      const totalH = Math.max(img.height, panelH);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = totalW;
+      canvas.height = totalH;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#0a0a14";
+      ctx.fillRect(0, 0, totalW, totalH);
+
+      // Draw sounding image
+      ctx.drawImage(img, 0, 0);
+
+      // Draw parameter panel
+      let y = pad;
+      for (const [label, val] of rows) {
+        if (val === "" && label !== "") {
+          // Section header
+          ctx.fillStyle = "#60a5fa";
+          ctx.font = "bold 13px monospace";
+          ctx.fillText(label, img.width + pad, y);
+        } else if (label !== "") {
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "12px monospace";
+          ctx.fillText(label, img.width + pad, y);
+          ctx.fillStyle = "#e2e8f0";
+          ctx.font = "bold 12px monospace";
+          ctx.fillText(val, img.width + pad + 180, y);
+        }
+        y += lineH;
+      }
+
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `report_${meta.station || "analysis"}_${meta.date.replace(/\s/g, "_")}.png`;
+      link.click();
+    } catch (err) {
+      console.error("Report export failed:", err);
+    }
+    setReportBusy(false);
+  };
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -953,25 +1035,25 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     <div className="results-view">
       {/* Map + Risk scan table */}
       <Suspense fallback={null}>
-        {showMap && mapProps && <StationMap {...mapProps} />}
+        {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
       </Suspense>
-      {showRisk && <RiskTable riskData={riskData} />}
+      {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
 
       {/* Time-Series Chart / Comparison / VWP */}
       <Suspense fallback={null}>
         {showTimeSeries && (
-          <TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} />
+          <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
         )}
         {showCompare && (
-          <ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} />
+          <div id="section-compare"><ComparisonView stations={stations || []} onClose={onCloseCompare} historyData={compareHistoryData} onHistoryConsumed={onCompareHistoryConsumed} /></div>
         )}
         {showVwp && (
-          <VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} />
+          <div id="section-vwp"><VwpDisplay stations={stations || []} selectedStation={selectedStation} onClose={onCloseVwp} /></div>
         )}
       </Suspense>
 
       {/* Meta bar — above the sounding plot */}
-      <div className="rv-meta-bar">
+      <div id="section-sounding" className="rv-meta-bar">
         <div className="rv-meta-row-top">
           <span className="rv-meta-station">{meta.station || meta.source.toUpperCase()}</span>
           <span className="rv-meta-name">{meta.stationName}</span>
@@ -1032,6 +1114,13 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                   <div>
                     <span className="rv-export-title">JSON</span>
                     <span className="rv-export-desc">Full params + profile data as JSON</span>
+                  </div>
+                </button>
+                <button onClick={() => { handleFullReport(); setExportOpen(false); }} disabled={reportBusy}>
+                  <Printer size={13} />
+                  <div>
+                    <span className="rv-export-title">{reportBusy ? "Generating…" : "Full Report PNG"}</span>
+                    <span className="rv-export-desc">Screenshot of sounding + all parameters</span>
                   </div>
                 </button>
               </div>
@@ -1334,11 +1423,11 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           );
 
           const modes = [
-            { label: "Discrete SC",  conf: scDisc, color: "#dc2626", icon: "🌪️" },
-            { label: "QLCS / Bow",   conf: qlcs,   color: "#f97316", icon: "🏹" },
-            { label: "Multicell",    conf: multi,   color: "#eab308", icon: "⛈️" },
-            { label: "Tornadic",     conf: torConf, color: "#ef4444", icon: "🔴" },
-            { label: "Elevated",     conf: elevated,color: "#818cf8", icon: "☁️" },
+            { label: "Discrete SC",  conf: scDisc, color: "#dc2626", desc: "Discrete Supercell — isolated rotating storms favored when BRN < 45, 0–6 km shear > 30 kt, and SCP ≥ 1. Strong updraft-downdraft separation supports long-lived supercells." },
+            { label: "QLCS / Bow",   conf: qlcs,   color: "#f97316", desc: "Quasi-Linear Convective System / Bow Echo — organized squall lines or bow segments favored when DCP ≥ 2, strong low-level shear, and DCAPE > 400 J/kg. Primary damaging wind threat." },
+            { label: "Multicell",    conf: multi,   color: "#eab308", desc: "Multicell Clusters — disorganized to loosely organized convection when BRN > 45 and shear is moderate (15–35 kt). Can still produce hail, brief tornadoes, and heavy rain." },
+            { label: "Tornadic",     conf: torConf, color: "#ef4444", desc: "Tornadic Potential — likelihood of tornado production based on STP ≥ 1, SRH > 100 m²/s², low LCL (< 1000 m), and strong low-level shear. Higher values indicate significant tornado risk." },
+            { label: "Elevated",     conf: elevated,color: "#818cf8", desc: "Elevated Convection — storms rooted above the boundary layer, favored when surface CIN is strong (< −50 J/kg) and MU CAPE significantly exceeds ML CAPE. Reduced tornado threat but hail and heavy rain remain possible." },
           ].sort((a, b) => b.conf - a.conf);
           const topMode = modes[0];
 
@@ -1349,55 +1438,77 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
             <div className="param-section-header">
               <Target size={14} />
               <h3>Storm Mode Prediction</h3>
-              {topMode.conf >= 40 && <span className="sm-top-badge" style={{ background: topMode.color + "22", color: topMode.color, borderColor: topMode.color + "55" }}>{topMode.icon} {topMode.label} ({topMode.conf}%)</span>}
+              {topMode.conf >= 40 && (
+                <div className="sm-primary-badge" style={{ "--badge-color": topMode.color }}>
+                  <span className="sm-badge-dot" style={{ background: topMode.color }} />
+                  <span className="sm-badge-label">{topMode.label}</span>
+                  <span className="sm-badge-pct">{topMode.conf}%</span>
+                </div>
+              )}
             </div>
 
             {/* Mode spectrum bar */}
             {hasConvMode && (
-            <div className="cm-spectrum">
+            <div className="sm-spectrum">
               {modeSpectrum.map((m, i) => (
                 <div
                   key={m.key}
-                  className={`cm-spec-seg${i === activeIdx ? " cm-spec-seg--active" : ""}`}
+                  className={`sm-spec-seg${i === activeIdx ? " sm-spec-active" : ""}`}
                   style={{ "--seg-color": m.color }}
                   title={m.key}
                 >
-                  <span className="cm-spec-label">{m.short}</span>
+                  <span className="sm-spec-label">{m.short}</span>
                 </div>
               ))}
             </div>
             )}
 
-            {/* Confidence gauges */}
-            <div className="sm-gauges">
-              {modes.map((m) => (
-                <div key={m.label} className="sm-gauge">
-                  <div className="sm-gauge-header">
-                    <span className="sm-gauge-icon">{m.icon}</span>
-                    <span className="sm-gauge-label">{m.label}</span>
-                    <span className="sm-gauge-pct" style={{ color: m.conf >= 50 ? m.color : "var(--text-secondary)" }}>{m.conf}%</span>
+            {/* Confidence cards */}
+            <div className="sm-cards">
+              {modes.map((m, i) => (
+                <div key={m.label} className={`sm-card${i === 0 && m.conf >= 40 ? " sm-card--top" : ""}`} style={{ "--card-color": m.color }}>
+                  <div className="sm-card-top">
+                    <span className="sm-card-dot" style={{ background: m.color }} />
+                    <span className="sm-card-label">{m.label}</span>
+                    <span className="sm-card-pct" style={{ color: m.conf >= 50 ? m.color : undefined }}>{m.conf}%</span>
                   </div>
-                  <div className="sm-gauge-track">
-                    <div
-                      className="sm-gauge-fill"
-                      style={{ width: `${m.conf}%`, background: m.color }}
-                    />
+                  <div className="sm-card-bar">
+                    <div className="sm-card-fill" style={{ width: `${m.conf}%`, background: `linear-gradient(90deg, ${m.color}cc, ${m.color})` }} />
                   </div>
+                  <span className="param-tooltip">{m.desc}</span>
                 </div>
               ))}
             </div>
 
             {/* Key driving parameters */}
-            <div className="sm-drivers">
-              <span className="sm-driver" title="Bulk Richardson Number"><b>BRN</b> {brn < 900 ? brn : "N/A"}</span>
-              <span className="sm-driver" title="0–6 km Bulk Wind Difference"><b>BWD6</b> {bwd6} kt</span>
-              <span className="sm-driver" title="Supercell Composite"><b>SCP</b> {scp?.toFixed?.(1) ?? scp}</span>
-              <span className="sm-driver" title="0–1 km SRH"><b>SRH1</b> {srh1} m²/s²</span>
-              <span className="sm-driver" title="SB LCL Height"><b>LCL</b> {sbLcl} m</span>
-              <span className="sm-driver" title="Derecho Composite"><b>DCP</b> {dcp?.toFixed?.(1) ?? dcp}</span>
+            <div className="sm-params">
+              <div className="sm-param" title="Bulk Richardson Number">
+                <span className="sm-param-key">BRN</span>
+                <span className="sm-param-val">{brn < 900 ? brn : "N/A"}</span>
+              </div>
+              <div className="sm-param" title="0-6 km Bulk Wind Difference">
+                <span className="sm-param-key">BWD6</span>
+                <span className="sm-param-val">{bwd6} <small>kt</small></span>
+              </div>
+              <div className="sm-param" title="Supercell Composite">
+                <span className="sm-param-key">SCP</span>
+                <span className="sm-param-val">{scp?.toFixed?.(1) ?? scp}</span>
+              </div>
+              <div className="sm-param" title="0-1 km SRH">
+                <span className="sm-param-key">SRH1</span>
+                <span className="sm-param-val">{srh1} <small>m\u00b2/s\u00b2</small></span>
+              </div>
+              <div className="sm-param" title="SB LCL Height">
+                <span className="sm-param-key">LCL</span>
+                <span className="sm-param-val">{sbLcl} <small>m</small></span>
+              </div>
+              <div className="sm-param" title="Derecho Composite">
+                <span className="sm-param-key">DCP</span>
+                <span className="sm-param-val">{dcp?.toFixed?.(1) ?? dcp}</span>
+              </div>
             </div>
 
-            <span className="param-tooltip cm-tooltip">Storm mode prediction using BRN, 0–6 km shear, SCP, SRH, DCP, DCAPE, LCL, and lapse rates. Confidence bars show relative likelihood of each mode based on Thompson et al. (2007) and Coniglio et al. (2012) parameter spaces. Discrete SC: BRN &lt; 45 + shear &gt; 30 kt + SCP ≥ 1. QLCS: DCP ≥ 2 + strong low-level shear + DCAPE &gt; 400. Tornadic: STP ≥ 1 + SRH &gt; 100 + low LCL. Elevated: strong surface CIN + elevated instability.</span>
+            <span className="param-tooltip cm-tooltip">Storm mode prediction using BRN, 0-6 km shear, SCP, SRH, DCP, DCAPE, LCL, and lapse rates. Confidence bars show relative likelihood of each mode based on Thompson et al. (2007) and Coniglio et al. (2012) parameter spaces. Discrete SC: BRN &lt; 45 + shear &gt; 30 kt + SCP &ge; 1. QLCS: DCP &ge; 2 + strong low-level shear + DCAPE &gt; 400. Tornadic: STP &ge; 1 + SRH &gt; 100 + low LCL. Elevated: strong surface CIN + elevated instability.</span>
           </div>
           );
         })()}

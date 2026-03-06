@@ -90,6 +90,19 @@ export default function App() {
   const toggleTheme = () => setThemeState((t) => (t === "dark" ? "light" : "dark"));
   const toggleColorblind = () => setColorblindState((v) => !v);
 
+  /** Scroll a section into view after React re-renders */
+  const scrollToSection = (id) => {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) {
+          const y = el.getBoundingClientRect().top + window.scrollY - 20;
+          window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+        }
+      }, 120);
+    });
+  };
+
   // URL-based initial params (parsed once on mount)
   const urlParamsRef = useRef(parseUrlParams());
 
@@ -131,10 +144,12 @@ export default function App() {
     setError(null);
     setLastParams(params);
     updateUrl(params);
+    scrollToSection("section-sounding");
     try {
       const data = await fetchSounding({ ...params, theme, colorblind });
       setResult(data);
       saveToHistory(params, data);
+      scrollToSection("section-sounding");
     } catch (e) {
       setError(e.message);
       setResult(null);
@@ -280,19 +295,19 @@ export default function App() {
             onRetry={loadInitialData}
             connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
             riskData={riskData}
-            onRiskDataChange={(data) => { setRiskData(data); if (data) setShowRisk(true); }}
+            onRiskDataChange={(data) => { setRiskData(data); if (data) { setShowRisk(true); scrollToSection("section-risk"); } }}
             showRisk={showRisk}
-            onToggleRisk={() => setShowRisk((v) => !v)}
+            onToggleRisk={() => setShowRisk((v) => { if (!v) scrollToSection("section-risk"); return !v; })}
             showHistory={showHistory}
             onToggleHistory={() => setShowHistory((v) => !v)}
             showMap={showMap}
-            onToggleMap={() => setShowMap((v) => !v)}
+            onToggleMap={() => setShowMap((v) => { if (!v) scrollToSection("section-map"); return !v; })}
             showTimeSeries={showTimeSeries}
-            onToggleTimeSeries={() => setShowTimeSeries((v) => !v)}
+            onToggleTimeSeries={() => setShowTimeSeries((v) => { if (!v) scrollToSection("section-timeseries"); return !v; })}
             showCompare={showCompare}
-            onToggleCompare={() => setShowCompare((v) => !v)}
+            onToggleCompare={() => setShowCompare((v) => { if (!v) scrollToSection("section-compare"); return !v; })}
             showVwp={showVwp}
-            onToggleVwp={() => setShowVwp((v) => !v)}
+            onToggleVwp={() => setShowVwp((v) => { if (!v) scrollToSection("section-vwp"); return !v; })}
             onNavigateEnsemble={() => setPage("ensemble")}
             selectedStation={selectedStation}
             onStationChange={handleStationChange}
@@ -306,6 +321,7 @@ export default function App() {
             colorblind={colorblind}
             onToggleColorblind={toggleColorblind}
             onNavigateUpload={() => setPage("upload")}
+            onShowShortcuts={() => setShowShortcuts(true)}
           />
           {showHistory && (
             <Suspense fallback={null}>

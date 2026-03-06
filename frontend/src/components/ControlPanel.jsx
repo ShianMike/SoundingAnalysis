@@ -22,6 +22,7 @@ import {
   Wind,
   RotateCcw,
   Crosshair,
+  Keyboard,
   Waves,
   Radio,
   Sun,
@@ -33,6 +34,8 @@ import {
   GripVertical,
   ChevronUp,
   PanelLeftClose,
+  Sliders,
+  Wrench,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -173,6 +176,7 @@ export default function ControlPanel({
   colorblind,
   onToggleColorblind,
   onNavigateUpload,
+  onShowShortcuts,
 }) {
   /* ── Drag & collapse state for fullscreen-float mode ─────── */
   const [floatCollapsed, setFloatCollapsed] = useState(false);
@@ -290,6 +294,9 @@ export default function ControlPanel({
   // Boundary line state
   const [boundaryEnabled, setBoundaryEnabled] = useState(false);
   const [boundaryOrientation, setBoundaryOrientation] = useState("");
+
+  // Navigation tab state
+  const [navTab, setNavTab] = useState("data");
 
 
 
@@ -595,23 +602,79 @@ export default function ControlPanel({
         </div>
       </div>
 
-      {/* Brand */}
+      {/* Brand + Tab Navigation — compact single header */}
       <div className="cp-brand">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="2" width="24" height="24" rx="4" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth="1.5"/>
-          <path d="M8 22 L10 18 L11 16 L12 13 L14 10 L16 8 L19 5" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-          <path d="M6 22 L8 19 L9 17 L9.5 15 L10 13 L10 11 L10.5 9 L11 6" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-          <line x1="21" y1="10" x2="21" y2="22" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-          <line x1="21" y1="10" x2="24" y2="8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-          <line x1="21" y1="13" x2="24" y2="11" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round"/>
-        </svg>
-        <div>
-          <h1 className="cp-brand-title">Sounding Analysis</h1>
-          <p className="cp-brand-sub">Atmospheric Profile Tool</p>
+        <span className="cp-brand-title">Sounding Analysis</span>
+        <div className="cp-brand-actions">
+          <button
+            type="button"
+            className="cp-brand-icon-btn"
+            onClick={onToggleTheme}
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <nav className="cp-nav">
+        <button
+          type="button"
+          className={`cp-nav-tab${navTab === "data" ? " active" : ""}`}
+          onClick={() => setNavTab("data")}
+        >
+          <Database size={14} />
+          <span>Data</span>
+        </button>
+        <button
+          type="button"
+          className={`cp-nav-tab${navTab === "modify" ? " active" : ""}`}
+          onClick={() => setNavTab("modify")}
+        >
+          <Sliders size={14} />
+          <span>Modify</span>
+        </button>
+        <button
+          type="button"
+          className={`cp-nav-tab${navTab === "tools" ? " active" : ""}`}
+          onClick={() => setNavTab("tools")}
+        >
+          <Wrench size={14} />
+          <span>Tools</span>
+        </button>
+      </nav>
+
+      <div className="cp-tab-content">
+
+      {/* ═══ DATA TAB ═══ */}
+      {navTab === "data" && (
       <form onSubmit={handleSubmit} className="cp-form">
+        {/* Source */}
+        <div className="cp-section">
+          <label className="cp-label">
+            <Database size={14} />
+            Data Source
+          </label>
+          <div className="cp-source-grid">
+            {sources.map((s) => {
+              const meta = SOURCE_META[s.id];
+              return (
+                <div key={s.id} className="cp-source-btn-wrap">
+                  <button
+                    type="button"
+                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
+                    onClick={() => setSource(s.id)}
+                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
+                  >
+                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Station */}
         {needsStation && (
           <div className="cp-section">
@@ -629,12 +692,12 @@ export default function ControlPanel({
                 {scanning ? (
                   <>
                     <Loader2 size={14} className="spin" />
-                    Scanning stations...
+                    Analyzing...
                   </>
                 ) : (
                   <>
-                    <Zap size={14} />
-                    {riskData ? "Rescan Tornado Risk" : "Scan Tornado Risk"}
+                    <Search size={14} />
+                    {riskData ? "Rescan Severe Risk" : "Scan Severe Risk"}
                   </>
                 )}
               </button>
@@ -710,31 +773,6 @@ export default function ControlPanel({
             </div>
           </div>
         )}
-
-        {/* Source */}
-        <div className="cp-section">
-          <label className="cp-label">
-            <Database size={14} />
-            Data Source
-          </label>
-          <div className="cp-source-grid">
-            {sources.map((s) => {
-              const meta = SOURCE_META[s.id];
-              return (
-                <div key={s.id} className="cp-source-btn-wrap">
-                  <button
-                    type="button"
-                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
-                    onClick={() => setSource(s.id)}
-                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
-                  >
-                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Lat/Lon */}
         {needsLatLon && (
@@ -913,16 +951,42 @@ export default function ControlPanel({
             Date / Time (UTC)
           </label>
           {source === "obs" || source === "acars" ? (
-            <>
-              <div className="cp-date-row">
+            <div className="cp-dt-picker">
+              <div className="cp-dt-hours">
+                {[
+                  { id: "latest", label: "Latest" },
+                  { id: "00", label: "00Z" },
+                  { id: "12", label: "12Z" },
+                ].map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    className={`cp-dt-hour${soundingHour === h.id ? " active" : ""}`}
+                    onClick={() => {
+                      setSoundingHour(h.id);
+                      if (h.id === "latest") {
+                        setDate("");
+                      } else if (date) {
+                        setDate(`${date.slice(0, 10)}T${h.id}:00`);
+                      }
+                    }}
+                  >
+                    {soundingHour === h.id && <Clock size={11} />}
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+              <div className="cp-dt-date-wrap">
+                <Calendar size={13} className="cp-dt-date-icon" />
                 <input
                   type="date"
-                  className="cp-input cp-calendar-input"
+                  className="cp-dt-date-input"
                   value={date ? date.slice(0, 10) : ""}
                   onChange={(e) => {
                     const d = e.target.value;
                     if (d) {
                       const hour = soundingHour === "12" ? "12:00" : "00:00";
+                      if (soundingHour === "latest") setSoundingHour("00");
                       setDate(`${d}T${hour}`);
                     } else {
                       setDate("");
@@ -930,80 +994,60 @@ export default function ControlPanel({
                   }}
                 />
                 {date && (
-                  <button
-                    type="button"
-                    className="cp-date-clear"
-                    onClick={() => setDate("")}
-                    title="Clear date"
-                  >
-                    ✕
+                  <button type="button" className="cp-dt-clear" onClick={() => { setDate(""); setSoundingHour("latest"); }} title="Reset to latest">
+                    <X size={12} />
                   </button>
                 )}
               </div>
-              <div className="cp-sounding-hour-row">
-                <button
-                  type="button"
-                  className={`cp-hour-btn ${soundingHour === "latest" ? "active" : ""}`}
-                  onClick={() => {
-                    setSoundingHour("latest");
-                    setDate("");
-                  }}
-                >
-                  Latest
-                </button>
-                <button
-                  type="button"
-                  className={`cp-hour-btn ${soundingHour === "00" ? "active" : ""}`}
-                  onClick={() => {
-                    setSoundingHour("00");
-                    if (date) setDate(`${date.slice(0, 10)}T00:00`);
-                  }}
-                >
-                  00Z
-                </button>
-                <button
-                  type="button"
-                  className={`cp-hour-btn ${soundingHour === "12" ? "active" : ""}`}
-                  onClick={() => {
-                    setSoundingHour("12");
-                    if (date) setDate(`${date.slice(0, 10)}T12:00`);
-                  }}
-                >
-                  12Z
-                </button>
-              </div>
-              <p className="cp-hint">
-                Latest fetches the most recent available sounding
-              </p>
-            </>
+              {soundingHour === "latest" && (
+                <p className="cp-hint" style={{ margin: 0 }}>Auto-selects the most recent available sounding</p>
+              )}
+            </div>
           ) : (
-            <>
-              <div className="cp-date-row">
+            <div className="cp-dt-picker">
+              <div className="cp-dt-date-wrap">
+                <Clock size={13} className="cp-dt-date-icon" />
                 <input
                   type="datetime-local"
-                  className="cp-input cp-calendar-input"
+                  className="cp-dt-date-input"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
                 {date && (
-                  <button
-                    type="button"
-                    className="cp-date-clear"
-                    onClick={() => setDate("")}
-                    title="Clear date"
-                  >
-                    ✕
+                  <button type="button" className="cp-dt-clear" onClick={() => setDate("")} title="Clear date">
+                    <X size={12} />
                   </button>
                 )}
               </div>
-              <p className="cp-hint">
-                Leave blank to use the most recent time
-              </p>
-            </>
+              <p className="cp-hint" style={{ margin: 0 }}>Leave blank for the most recent time</p>
+            </div>
           )}
         </div>
 
-        {/* ── Modifications ── */}
+        {/* Submit */}
+        <button
+          type="submit"
+          className="cp-submit"
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <Loader2 size={16} className="spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <Search size={16} />
+              Generate Sounding
+            </>
+          )}
+        </button>
+      </form>
+      )}
+
+      {/* ═══ MODIFY TAB ═══ */}
+      {navTab === "modify" && (
+      <div className="cp-form">
         <div className="cp-section-group">
         <span className="cp-group-label">Modifications</span>
 
@@ -1229,30 +1273,17 @@ export default function ControlPanel({
 
         </div>{/* end Modifications */}
 
-        {/* Submit */}
-        <button
-          type="submit"
-          className="cp-submit"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 size={16} className="spin" />
-              Fetching & Analyzing...
-            </>
-          ) : (
-            <>
-              <Search size={16} />
-              Generate Sounding
-            </>
-          )}
-        </button>
-      </form>
+        <p className="cp-hint" style={{ marginTop: 4 }}>
+          These options modify the next sounding fetch. Go to Data tab and click Generate to apply.
+        </p>
+      </div>
+      )}
 
-      {/* ── Bottom group: toggles + settings + footer ── */}
-      <div className="cp-bottom">
+      {/* ═══ TOOLS TAB ═══ */}
+      {navTab === "tools" && (
+      <div className="cp-form">
         <div className="cp-section-group">
-          <span className="cp-group-label">Tools</span>
+          <span className="cp-group-label">Views</span>
           <div className="cp-tools-grid">
             <button
               type="button"
@@ -1315,36 +1346,38 @@ export default function ControlPanel({
           </div>
         </div>
 
-        <div className="cp-settings-row">
-          <button
-            type="button"
-            className="cp-settings-btn"
-            onClick={onToggleTheme}
-            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          >
-            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-            <span>{theme === "dark" ? "Light" : "Dark"}</span>
-          </button>
-          <button
-            type="button"
-            className={`cp-settings-btn ${colorblind ? "active" : ""}`}
-            onClick={onToggleColorblind}
-            title="Toggle color-blind safe palette"
-          >
-            <Eye size={14} />
-            <span>CB Mode</span>
-          </button>
-          <button
-            type="button"
-            className="cp-settings-btn"
-            onClick={onNavigateUpload}
-            title="Upload custom sounding data"
-          >
-            <Upload size={14} />
-            <span>Upload</span>
-          </button>
+        <div className="cp-section-group">
+          <span className="cp-group-label">Settings</span>
+          <div className="cp-settings-grid">
+            <button
+              type="button"
+              className={`cp-settings-btn ${colorblind ? "active" : ""}`}
+              onClick={onToggleColorblind}
+              title="Toggle color-blind safe palette"
+            >
+              <Eye size={14} />
+              <span>CB Mode</span>
+            </button>
+            <button
+              type="button"
+              className="cp-settings-btn"
+              onClick={onNavigateUpload}
+              title="Upload custom sounding data"
+            >
+              <Upload size={14} />
+              <span>Upload</span>
+            </button>
+          </div>
         </div>
 
+      </div>
+      )}
+
+      </div>{/* end cp-tab-content */}
+
+      {/* Links — always visible at bottom */}
+      <div className="cp-section-group cp-bottom-links">
+        <span className="cp-group-label">Links</span>
         <div className="cp-footer">
           <button
             type="button"
@@ -1365,6 +1398,17 @@ export default function ControlPanel({
             <Github size={14} />
             <span>GitHub</span>
           </a>
+          {onShowShortcuts && (
+            <button
+              type="button"
+              className="cp-footer-btn"
+              onClick={onShowShortcuts}
+              title="Keyboard shortcuts (?)"
+            >
+              <Keyboard size={14} />
+              <span>Shortcuts</span>
+            </button>
+          )}
         </div>
       </div>
     </aside>
