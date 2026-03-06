@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado } from "lucide-react";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
@@ -189,6 +189,91 @@ async function fetchStormAttr() {
   } catch (e) {
     console.error("Storm attr fetch error:", e);
     return { type: "FeatureCollection", features: [] };
+  }
+}
+
+/* ── Spotter Network live chaser positions + reports ─────── */
+const SN_POSITIONS = "https://www.spotternetwork.org/feeds/gr.txt";
+const SN_REPORTS   = "https://www.spotternetwork.org/feeds/reports.txt";
+
+// Report icon-index → type mapping (from SN sprite sheet)
+const SN_REPORT_TYPES = { 1: "Tornado", 2: "Funnel Cloud", 3: "Rotating Wall Cloud", 4: "Hail", 5: "Wind Damage", 6: "Flooding", 7: "Other" };
+const SN_REPORT_COLORS = {
+  Tornado:                "#ff0000",
+  "Funnel Cloud":         "#ff6600",
+  "Rotating Wall Cloud":  "#ff9900",
+  Hail:                   "#00ccff",
+  "Wind Damage":          "#ffaa00",
+  Flooding:               "#00ff66",
+  Other:                  "#cccccc",
+};
+
+/** Parse Spotter Network GR-format position feed → [{lat,lon,name,time,heading}] */
+function parseSpotterPositions(text) {
+  const lines = text.split(/\r?\n/);
+  const spotters = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line.startsWith("Object:")) continue;
+    const coords = line.slice(7).trim().split(",");
+    const lat = parseFloat(coords[0]), lon = parseFloat(coords[1]);
+    if (isNaN(lat) || isNaN(lon)) continue;
+    let name = "", time = "", heading = "";
+    // Look ahead for Icon line with tooltip
+    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+      const l = lines[j].trim();
+      if (l.startsWith("Icon:") && l.includes('"')) {
+        const m = l.match(/"([^"]*)"/); // tooltip in quotes
+        if (m) {
+          const parts = m[1].split("\\n");
+          name = parts[0] || "";
+          time = parts[1] || "";
+          heading = parts[2] || "";
+        }
+        break;
+      }
+    }
+    spotters.push({ lat, lon, name, time, heading });
+  }
+  return spotters;
+}
+
+/** Parse Spotter Network report feed → [{lat,lon,reporter,type,time,notes,sheet}] */
+function parseSpotterReports(text) {
+  const lines = text.split(/\r?\n/);
+  const reports = [];
+  for (const line of lines) {
+    const l = line.trim();
+    if (!l.startsWith("Icon:")) continue;
+    const m = l.match(/^Icon:\s*([\d.-]+),([\d.-]+),\d+,(\d+),(\d+),"(.+)"$/);
+    if (!m) continue;
+    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    const sheet = parseInt(m[3], 10);    // 3=recent, 4=older, 5=oldest
+    const idx = parseInt(m[4], 10);      // report type index
+    const tooltip = m[5];
+    const parts = tooltip.split("\\n");
+    const reporter = (parts[0] || "").replace(/^Reported By:\s*/, "");
+    const type = parts[1] || "Other";
+    const timePart = (parts[2] || "").replace(/^Time:\s*/, "");
+    // Remaining parts may have Size / Notes
+    const rest = parts.slice(3).join(" · ").replace(/^(Size:|Notes:)\s*/g, "");
+    reports.push({ lat, lon, reporter, type, time: timePart, notes: rest, sheet, idx });
+  }
+  return reports;
+}
+
+async function fetchSpotterNetwork() {
+  try {
+    const [posRes, repRes] = await Promise.all([
+      fetch(SN_POSITIONS),
+      fetch(SN_REPORTS),
+    ]);
+    const positions = posRes.ok ? parseSpotterPositions(await posRes.text()) : [];
+    const reports = repRes.ok ? parseSpotterReports(await repRes.text()) : [];
+    return { positions, reports };
+  } catch (e) {
+    console.error("Spotter Network fetch error:", e);
+    return { positions: [], reports: [] };
   }
 }
 
@@ -543,6 +628,13 @@ export default function StationMap({
   const tvsCount = stormData?.features?.filter((f) => f.properties?.tvs === "TVS").length || 0;
   const mesoCount = stormData?.features?.length || 0;
 
+  // Spotter Network live chasers
+  const [showSpotters, setShowSpotters] = useState(false);
+  const [spotterData, setSpotterData] = useState(null);    // {positions, reports}
+  const [spottersLoading, setSpottersLoading] = useState(false);
+  const spotterCount = spotterData?.positions?.length || 0;
+  const spotterReportCount = spotterData?.reports?.length || 0;
+
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
   const [windLevel, setWindLevel] = useState("500");  // "500" = steering, "surface" = 10m
@@ -694,6 +786,20 @@ export default function StationMap({
     const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
   }, [showWarnings]);
+
+  // Fetch Spotter Network positions + reports every 60s when toggle is on
+  useEffect(() => {
+    if (!showSpotters) { setSpotterData(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      setSpottersLoading(true);
+      const data = await fetchSpotterNetwork();
+      if (!cancelled) { setSpotterData(data); setSpottersLoading(false); }
+    };
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [showSpotters]);
 
   // Fetch storm attributes (TVS/Meso) every 60s when toggle is on
   useEffect(() => {
@@ -999,6 +1105,17 @@ export default function StationMap({
               {mesoCount > 0 && <span className="smap-radar-badge">{mesoCount}</span>}
             </button>
             <button
+              className={`smap-tbtn ${showSpotters ? "active" : ""}`}
+              onClick={() => setShowSpotters((v) => !v)}
+              title="Toggle Spotter Network — live storm chaser positions and field reports (tornado, hail, funnel cloud)"
+            >
+              <Binoculars size={11} />
+              Spotters
+              {spottersLoading && <span className="smap-outlook-loading-dot">...</span>}
+              {spotterReportCount > 0 && <span className="smap-radar-badge smap-warn-count">{spotterReportCount}</span>}
+              {spotterCount > 0 && <span className="smap-radar-badge">{spotterCount}</span>}
+            </button>
+            <button
               className={`smap-tbtn ${showWarnings ? "active" : ""}`}
               onClick={() => setShowWarnings((v) => !v)}
               title="Toggle NWS active warnings — tornado, severe, flash flood, watches"
@@ -1278,6 +1395,62 @@ export default function StationMap({
             </Pane>
           )}
 
+          {/* Spotter Network — live chaser positions + field reports */}
+          {showSpotters && spotterData && (
+            <Pane name="spotter-layer" style={{ zIndex: 435 }}>
+              {/* Chaser positions — small green dots */}
+              {spotterData.positions.map((s, i) => (
+                <CircleMarker
+                  key={`sp-${i}`}
+                  center={[s.lat, s.lon]}
+                  radius={4}
+                  pathOptions={{ color: "#00cc44", fillColor: "#00cc44", fillOpacity: 0.7, weight: 1 }}
+                >
+                  <Tooltip direction="top" offset={[0, -6]} className="smap-tooltip">
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id" style={{ color: "#00cc44" }}>&#x1f441; Spotter</span>
+                        <span className="smap-tt-name">{s.name}</span>
+                      </div>
+                      <span className="smap-tt-type">{s.time}{s.heading ? ` · ${s.heading}` : ""}</span>
+                    </div>
+                  </Tooltip>
+                </CircleMarker>
+              ))}
+              {/* Field reports — larger color-coded markers */}
+              {spotterData.reports.map((r, i) => {
+                const rColor = SN_REPORT_COLORS[r.type] || SN_REPORT_COLORS.Other;
+                const isTornado = r.type === "Tornado";
+                const age = r.sheet === 3 ? "Recent" : r.sheet === 4 ? "Older" : "Old";
+                return (
+                  <CircleMarker
+                    key={`sr-${i}`}
+                    center={[r.lat, r.lon]}
+                    radius={isTornado ? 11 : 8}
+                    pathOptions={{
+                      color: rColor,
+                      fillColor: rColor,
+                      fillOpacity: isTornado ? 0.9 : 0.7,
+                      weight: isTornado ? 3 : 2,
+                      className: isTornado ? "smap-tvs-pulse" : "",
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
+                      <div className="smap-tt-inner">
+                        <div className="smap-tt-header">
+                          <span className="smap-tt-id" style={{ color: rColor }}>{isTornado ? "\u26a0" : "\u25cf"} {r.type}</span>
+                          <span className="smap-tt-name">{r.reporter}</span>
+                        </div>
+                        <span className="smap-tt-type">{r.time} · {age}</span>
+                        {r.notes && <span className="smap-tt-type">{r.notes}</span>}
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                );
+              })}
+            </Pane>
+          )}
+
           <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
           <MapCenterTracker onCenterChange={handleCenterChange} />
           <FlyToStation station={selectedStation} stations={stations} />
@@ -1377,6 +1550,22 @@ export default function StationMap({
 
         {/* Floating legend overlays — each in its own container */}
         <div className="smap-legend-stack">
+          {showSpotters && spotterData && (
+            <div className="smap-legend-float">
+              <div className="smap-legend smap-legend-spotters">
+                <span className="smap-legend-item">
+                  <span className="smap-dot" style={{ background: "#00cc44" }} />
+                  {spotterCount} chaser{spotterCount !== 1 ? "s" : ""}
+                </span>
+                {spotterReportCount > 0 && (
+                  <span className="smap-legend-item">
+                    <span className="smap-dot" style={{ background: "#ff0000" }} />
+                    {spotterReportCount} report{spotterReportCount !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           {showRadar && radarSource === "singlesite" && (
             <div className="smap-legend-float smap-legend-vel">
               <div className="smap-legend smap-legend-vel-row">
