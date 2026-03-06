@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars } from "lucide-react";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
@@ -89,6 +89,192 @@ function buildMosaicFrames(count = 24) {
 
 /* ── NWS Active Warnings ─────────────────────────────────────── */
 const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual&message_type=alert,update";
+
+/* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
+const SPC_MD_URL = "https://www.spc.noaa.gov/products/md/md.geojson";
+const SPC_WATCH_URL = "https://www.spc.noaa.gov/products/watch/ww.geojson";
+
+const WATCH_STYLES = {
+  "Tornado Watch":           { color: "#ff0000", fill: "#ff000022", label: "TOR" },
+  "Severe Thunderstorm Watch": { color: "#ffa500", fill: "#ffa50022", label: "SVR" },
+};
+
+async function fetchSpcMds() {
+  try {
+    const res = await fetch(SPC_MD_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error("SPC MD fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+async function fetchSpcWatches() {
+  try {
+    const res = await fetch(SPC_WATCH_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error("SPC Watch fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+function mdStyle() {
+  return {
+    color: "#00e5ff",
+    weight: 2,
+    fillColor: "#00e5ff",
+    fillOpacity: 0.08,
+    dashArray: "6 4",
+  };
+}
+
+function watchStyle(feature) {
+  const ev = feature.properties?.type || feature.properties?.event || "";
+  const s = Object.entries(WATCH_STYLES).find(([k]) => ev.includes(k));
+  if (s) return { color: s[1].color, weight: 2.5, fillColor: s[1].color, fillOpacity: 0.1, dashArray: "10 5" };
+  return { color: "#ffa500", weight: 2, fillColor: "#ffa500", fillOpacity: 0.08, dashArray: "10 5" };
+}
+
+function MdWatchLayer({ mdData, watchData }) {
+  const hasMd = mdData?.features?.length > 0;
+  const hasWatch = watchData?.features?.length > 0;
+  if (!hasMd && !hasWatch) return null;
+  return (
+    <Pane name="spc-md-watch" style={{ zIndex: 415, pointerEvents: "auto" }}>
+      {hasWatch && (
+        <GeoJSON
+          key={"w-" + watchData.features.length + (watchData.features[0]?.properties?.number || "")}
+          data={watchData}
+          style={watchStyle}
+          onEachFeature={(feature, layer) => {
+            const p = feature.properties;
+            const ev = p.type || p.event || "Watch";
+            const isTor = ev.includes("Tornado");
+            const num = p.number || p.wn || "";
+            const expires = p.expires || p.expiration || "";
+            const expStr = expires ? new Date(expires).toLocaleString() : "";
+            layer.bindPopup(
+              `<div class="smap-warn-popup">
+                <div class="smap-warn-badge" style="background:${isTor ? '#ff000022' : '#ffa50022'};color:${isTor ? '#ff0000' : '#ffa500'};border-color:${isTor ? '#ff000055' : '#ffa50055'}">
+                  ${isTor ? 'TOR' : 'SVR'} WATCH ${num}
+                </div>
+                <div class="smap-warn-headline">${ev}${num ? ` #${num}` : ''}</div>
+                ${expStr ? `<div class="smap-warn-time">Expires: ${expStr}</div>` : ""}
+              </div>`,
+              { className: "smap-popup smap-warn-popup-wrap", minWidth: 220, maxWidth: 320 }
+            );
+          }}
+        />
+      )}
+      {hasMd && (
+        <GeoJSON
+          key={"md-" + mdData.features.length + (mdData.features[0]?.properties?.number || "")}
+          data={mdData}
+          style={mdStyle}
+          onEachFeature={(feature, layer) => {
+            const p = feature.properties;
+            const num = p.number || p.md_num || "";
+            const concerning = p.concerning || p.hazard || "";
+            const areas = p.areas || p.states || "";
+            layer.bindPopup(
+              `<div class="smap-warn-popup">
+                <div class="smap-warn-badge" style="background:#00e5ff22;color:#00e5ff;border-color:#00e5ff55">
+                  MD ${num}
+                </div>
+                <div class="smap-warn-headline">Mesoscale Discussion ${num}</div>
+                ${concerning ? `<div class="smap-warn-area">Concerning: ${concerning}</div>` : ""}
+                ${areas ? `<div class="smap-warn-area">${areas}</div>` : ""}
+              </div>`,
+              { className: "smap-popup smap-warn-popup-wrap", minWidth: 220, maxWidth: 320 }
+            );
+          }}
+        />
+      )}
+    </Pane>
+  );
+}
+
+/* ── Lightning overlay (Blitzortung) ─────────────────────────── */
+const BLITZ_WS_URL = "wss://ws1.blitzortung.org/";
+
+function useLightningData(enabled) {
+  const [strikes, setStrikes] = useState([]);
+  const wsRef = useRef(null);
+  const strikesRef = useRef([]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setStrikes([]);
+      strikesRef.current = [];
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      return;
+    }
+
+    let reconnectTimer = null;
+    const MAX_STRIKES = 2000;
+    const STRIKE_TTL = 300_000; // 5 min
+
+    function connect() {
+      if (wsRef.current) return;
+      try {
+        const ws = new WebSocket(BLITZ_WS_URL);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          // Subscribe to lightning data (global region)
+          ws.send(JSON.stringify({ west: -130, east: -60, north: 55, south: 20 }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const d = JSON.parse(event.data);
+            if (d.lat != null && d.lon != null) {
+              const now = Date.now();
+              const strike = { lat: d.lat, lon: d.lon, time: d.time || now, id: now + Math.random() };
+              strikesRef.current = [
+                strike,
+                ...strikesRef.current.filter((s) => now - s.time < STRIKE_TTL),
+              ].slice(0, MAX_STRIKES);
+            }
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          wsRef.current = null;
+          reconnectTimer = setTimeout(connect, 5000);
+        };
+        ws.onerror = () => ws.close();
+      } catch {
+        reconnectTimer = setTimeout(connect, 5000);
+      }
+    }
+
+    connect();
+
+    // Batch update the React state every 2s to avoid per-strike renders
+    const renderInterval = setInterval(() => {
+      setStrikes([...strikesRef.current]);
+    }, 2000);
+
+    // Prune old strikes every 30s
+    const pruneInterval = setInterval(() => {
+      const now = Date.now();
+      strikesRef.current = strikesRef.current.filter((s) => now - s.time < STRIKE_TTL);
+    }, 30_000);
+
+    return () => {
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      clearTimeout(reconnectTimer);
+      clearInterval(renderInterval);
+      clearInterval(pruneInterval);
+    };
+  }, [enabled]);
+
+  return strikes;
+}
 
 // Event → colour + short label
 const WARNING_STYLES = {
@@ -672,6 +858,18 @@ export default function StationMap({
   const [windData, setWindData] = useState(null);
   const [windLoading, setWindLoading] = useState(false);
 
+  // SPC Mesoscale Discussions & Watches overlay
+  const [showMdWatch, setShowMdWatch] = useState(true);
+  const [mdData, setMdData] = useState(null);
+  const [watchData, setWatchData] = useState(null);
+  const [mdWatchLoading, setMdWatchLoading] = useState(false);
+  const mdCount = mdData?.features?.length || 0;
+  const watchCount = watchData?.features?.length || 0;
+
+  // Lightning overlay (Blitzortung WebSocket)
+  const [showLightning, setShowLightning] = useState(false);
+  const lightningStrikes = useLightningData(showLightning);
+
   // SPC outlook refresh counter
   const [outlookRefresh, setOutlookRefresh] = useState(0);
 
@@ -845,6 +1043,20 @@ export default function StationMap({
     const id = setInterval(load, 60_000); // refresh every 1 min
     return () => { cancelled = true; clearInterval(id); };
   }, [showStorms]);
+
+  // Fetch SPC MDs & Watches every 2 min when toggle is on
+  useEffect(() => {
+    if (!showMdWatch) { setMdData(null); setWatchData(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      setMdWatchLoading(true);
+      const [mds, watches] = await Promise.all([fetchSpcMds(), fetchSpcWatches()]);
+      if (!cancelled) { setMdData(mds); setWatchData(watches); setMdWatchLoading(false); }
+    };
+    load();
+    const id = setInterval(load, 120_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [showMdWatch]);
 
   // Fetch wind field when toggled on or level changes
   useEffect(() => {
@@ -1157,6 +1369,26 @@ export default function StationMap({
               {warningCount > 0 && <span className="smap-radar-badge smap-warn-count">{warningCount}</span>}
             </button>
             <button
+              className={`smap-tbtn ${showMdWatch ? "active" : ""}`}
+              onClick={() => setShowMdWatch((v) => !v)}
+              title="Toggle SPC Mesoscale Discussions and active Tornado/Severe Thunderstorm Watches"
+            >
+              <FileWarning size={11} />
+              MDs/Watch
+              {mdWatchLoading && <span className="smap-outlook-loading-dot">...</span>}
+              {watchCount > 0 && <span className="smap-radar-badge smap-warn-count">{watchCount}</span>}
+              {mdCount > 0 && <span className="smap-radar-badge">{mdCount} MD</span>}
+            </button>
+            <button
+              className={`smap-tbtn ${showLightning ? "active" : ""}`}
+              onClick={() => setShowLightning((v) => !v)}
+              title="Toggle real-time lightning strikes (Blitzortung network)"
+            >
+              <Zap size={11} />
+              Lightning
+              {lightningStrikes.length > 0 && <span className="smap-radar-badge">{lightningStrikes.length}</span>}
+            </button>
+            <button
               className={`smap-tbtn ${showWind ? "active" : ""}`}
               onClick={() => setShowWind((v) => !v)}
               title="Toggle animated wind flow overlay"
@@ -1386,6 +1618,33 @@ export default function StationMap({
 
           {/* NWS active warnings (tornado, severe, flash flood, watches) */}
           {showWarnings && warningsData && <WarningsLayer data={warningsData} />}
+
+          {/* SPC Mesoscale Discussions & Watches */}
+          {showMdWatch && <MdWatchLayer mdData={mdData} watchData={watchData} />}
+
+          {/* Lightning strikes */}
+          {showLightning && lightningStrikes.length > 0 && (
+            <Pane name="lightning-layer" style={{ zIndex: 425 }}>
+              {lightningStrikes.map((s) => {
+                const age = Date.now() - s.time;
+                const opacity = Math.max(0.2, 1 - age / 300_000);
+                return (
+                  <CircleMarker
+                    key={s.id}
+                    center={[s.lat, s.lon]}
+                    radius={3}
+                    pathOptions={{
+                      color: "#fff",
+                      fillColor: age < 10_000 ? "#ffffff" : age < 60_000 ? "#ffe066" : "#ffaa00",
+                      fillOpacity: opacity,
+                      weight: age < 10_000 ? 2 : 1,
+                      className: age < 10_000 ? "smap-lightning-flash" : "",
+                    }}
+                  />
+                );
+              })}
+            </Pane>
+          )}
 
           {/* TVS / Mesocyclone storm attribute markers */}
           {showStorms && stormData && stormData.features.length > 0 && (

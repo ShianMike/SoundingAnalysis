@@ -1254,8 +1254,8 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           </div>
         </div>
 
-        {/* ── Convective Mode Card ── */}
-        {params.convectiveMode && (() => {
+        {/* ── Storm Mode Prediction Panel ── */}
+        {(() => {
           const modeSpectrum = [
             { key: "Single Cell / Pulse",  short: "Pulse",       color: "#22c55e" },
             { key: "Weak Multicell",       short: "Weak Multi",  color: "#84cc16" },
@@ -1265,13 +1265,95 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
             { key: "Discrete / Supercell", short: "Disc / SC",   color: "#dc2626" },
             { key: "Discrete Supercell",   short: "Discrete SC", color: "#b91c1c" },
           ];
-          const activeIdx = modeSpectrum.findIndex(m => m.key === params.convectiveMode);
+          const activeIdx = params.convectiveMode
+            ? modeSpectrum.findIndex(m => m.key === params.convectiveMode)
+            : -1;
+
+          // Compute storm mode confidence scores from available parameters
+          const brn = params.brn ?? 999;
+          const bwd6 = params.bwd6km ?? 0;
+          const bwd1 = params.bwd1km ?? 0;
+          const srh1 = params.srh1km ?? 0;
+          const srh3 = params.srh3km ?? 0;
+          const scp = params.scp ?? 0;
+          const stp = params.stp ?? 0;
+          const mlCape = params.mlCape ?? 0;
+          const muCape = params.muCape ?? 0;
+          const sbLcl = params.sbLclM ?? 2000;
+          const lr03 = params.lr03 ?? 0;
+          const dcp = params.dcp ?? 0;
+          const dcape = params.dcape ?? 0;
+
+          const clamp = (v) => Math.max(0, Math.min(100, Math.round(v)));
+
+          // Discrete supercell confidence
+          const scDisc = clamp(
+            (brn < 10 ? 30 : brn < 25 ? 20 : brn < 45 ? 10 : 0)
+            + (bwd6 >= 50 ? 25 : bwd6 >= 40 ? 20 : bwd6 >= 30 ? 10 : 0)
+            + (scp >= 4 ? 20 : scp >= 2 ? 15 : scp >= 1 ? 8 : 0)
+            + (srh3 >= 300 ? 15 : srh3 >= 150 ? 10 : srh3 >= 100 ? 5 : 0)
+            + (muCape >= 2000 ? 10 : muCape >= 1000 ? 5 : 0)
+          );
+
+          // QLCS / Bow Echo confidence
+          const qlcs = clamp(
+            (dcp >= 4 ? 30 : dcp >= 2 ? 20 : dcp >= 1 ? 10 : 0)
+            + (bwd6 >= 30 ? 15 : bwd6 >= 20 ? 10 : 0)
+            + (dcape >= 800 ? 20 : dcape >= 400 ? 12 : dcape >= 200 ? 5 : 0)
+            + (mlCape >= 1000 ? 10 : mlCape >= 500 ? 5 : 0)
+            + (bwd1 >= 20 ? 15 : bwd1 >= 15 ? 10 : bwd1 >= 10 ? 5 : 0)
+            + (srh1 >= 100 ? 10 : srh1 >= 50 ? 5 : 0)
+          );
+
+          // Multicell confidence
+          const multi = clamp(
+            (bwd6 >= 15 && bwd6 < 35 ? 25 : bwd6 >= 35 ? 5 : bwd6 >= 10 ? 15 : 10)
+            + (brn >= 45 ? 25 : brn >= 25 ? 15 : 5)
+            + (muCape >= 500 ? 15 : muCape >= 200 ? 10 : 5)
+            + (scp < 1 ? 20 : scp < 2 ? 10 : 0)
+            + (bwd6 < 20 ? 15 : 0)
+          );
+
+          // Tornado confidence (from STP-like logic)
+          const torConf = clamp(
+            (stp >= 4 ? 30 : stp >= 2 ? 22 : stp >= 1 ? 15 : stp >= 0.5 ? 8 : 0)
+            + (srh1 >= 300 ? 20 : srh1 >= 200 ? 15 : srh1 >= 100 ? 10 : 0)
+            + (sbLcl < 800 ? 20 : sbLcl < 1200 ? 12 : sbLcl < 1500 ? 5 : 0)
+            + (bwd1 >= 25 ? 15 : bwd1 >= 15 ? 10 : bwd1 >= 10 ? 5 : 0)
+            + (lr03 >= 7 ? 10 : lr03 >= 6 ? 5 : 0)
+            + (mlCape >= 1500 ? 5 : 0)
+          );
+
+          // Elevated convection
+          const elevated = clamp(
+            (params.eilBot != null && params.eilBot > 1000 ? 30 : params.eilBot > 500 ? 15 : 0)
+            + (params.sbCin != null && params.sbCin < -100 ? 25 : params.sbCin < -50 ? 15 : 0)
+            + (muCape > mlCape + 500 ? 20 : muCape > mlCape + 200 ? 10 : 0)
+            + (bwd6 >= 25 ? 15 : bwd6 >= 15 ? 8 : 0)
+            + (mlCape < 100 && muCape > 500 ? 10 : 0)
+          );
+
+          const modes = [
+            { label: "Discrete SC",  conf: scDisc, color: "#dc2626", icon: "🌪️" },
+            { label: "QLCS / Bow",   conf: qlcs,   color: "#f97316", icon: "🏹" },
+            { label: "Multicell",    conf: multi,   color: "#eab308", icon: "⛈️" },
+            { label: "Tornadic",     conf: torConf, color: "#ef4444", icon: "🔴" },
+            { label: "Elevated",     conf: elevated,color: "#818cf8", icon: "☁️" },
+          ].sort((a, b) => b.conf - a.conf);
+          const topMode = modes[0];
+
+          const hasConvMode = params.convectiveMode;
+
           return (
-          <div className="param-section param-section--mode">
+          <div className="param-section param-section--stormmode">
             <div className="param-section-header">
               <Target size={14} />
-              <h3>Predicted Convective Mode</h3>
+              <h3>Storm Mode Prediction</h3>
+              {topMode.conf >= 40 && <span className="sm-top-badge" style={{ background: topMode.color + "22", color: topMode.color, borderColor: topMode.color + "55" }}>{topMode.icon} {topMode.label} ({topMode.conf}%)</span>}
             </div>
+
+            {/* Mode spectrum bar */}
+            {hasConvMode && (
             <div className="cm-spectrum">
               {modeSpectrum.map((m, i) => (
                 <div
@@ -1284,7 +1366,38 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                 </div>
               ))}
             </div>
-            <span className="param-tooltip cm-tooltip">Predicted convective mode using BRN, 0–6 km bulk shear, SCP, and 0–1 km SRH (Thompson et al. 2007). Discrete Supercell: BRN &lt; 10 + shear &gt; 50 kt. Supercell: BRN 10–45 + shear ≥ 35 kt. Supercell Likely: shear ≥ 30 kt + SCP ≥ 1. Rotating Storms: shear ≥ 25 kt + SRH ≥ 100. Multicell: shear ≥ 20 kt. Weak Multicell: shear ≥ 10 kt. Single Cell / Pulse: weak shear.</span>
+            )}
+
+            {/* Confidence gauges */}
+            <div className="sm-gauges">
+              {modes.map((m) => (
+                <div key={m.label} className="sm-gauge">
+                  <div className="sm-gauge-header">
+                    <span className="sm-gauge-icon">{m.icon}</span>
+                    <span className="sm-gauge-label">{m.label}</span>
+                    <span className="sm-gauge-pct" style={{ color: m.conf >= 50 ? m.color : "var(--text-secondary)" }}>{m.conf}%</span>
+                  </div>
+                  <div className="sm-gauge-track">
+                    <div
+                      className="sm-gauge-fill"
+                      style={{ width: `${m.conf}%`, background: m.color }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Key driving parameters */}
+            <div className="sm-drivers">
+              <span className="sm-driver" title="Bulk Richardson Number"><b>BRN</b> {brn < 900 ? brn : "N/A"}</span>
+              <span className="sm-driver" title="0–6 km Bulk Wind Difference"><b>BWD6</b> {bwd6} kt</span>
+              <span className="sm-driver" title="Supercell Composite"><b>SCP</b> {scp?.toFixed?.(1) ?? scp}</span>
+              <span className="sm-driver" title="0–1 km SRH"><b>SRH1</b> {srh1} m²/s²</span>
+              <span className="sm-driver" title="SB LCL Height"><b>LCL</b> {sbLcl} m</span>
+              <span className="sm-driver" title="Derecho Composite"><b>DCP</b> {dcp?.toFixed?.(1) ?? dcp}</span>
+            </div>
+
+            <span className="param-tooltip cm-tooltip">Storm mode prediction using BRN, 0–6 km shear, SCP, SRH, DCP, DCAPE, LCL, and lapse rates. Confidence bars show relative likelihood of each mode based on Thompson et al. (2007) and Coniglio et al. (2012) parameter spaces. Discrete SC: BRN &lt; 45 + shear &gt; 30 kt + SCP ≥ 1. QLCS: DCP ≥ 2 + strong low-level shear + DCAPE &gt; 400. Tornadic: STP ≥ 1 + SRH &gt; 100 + low LCL. Elevated: strong surface CIN + elevated instability.</span>
           </div>
           );
         })()}
