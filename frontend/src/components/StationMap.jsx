@@ -46,8 +46,8 @@ async function fetchRadarFrames(retries = 2) {
       const res = await fetch(RAINVIEWER_API);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const past    = (data.radar?.past    || []).slice(-12);  // last 12 frames
-      const nowcast = (data.radar?.nowcast || []).slice(0, 3); // up to 3 forecast frames
+      const past    = (data.radar?.past    || []).filter(f => f.path).slice(-12);  // last 12 frames
+      const nowcast = (data.radar?.nowcast || []).filter(f => f.path).slice(0, 3); // up to 3 forecast frames
       return { past, nowcast, generated: data.generated };
     } catch (e) {
       if (attempt < retries) {
@@ -91,8 +91,11 @@ function buildMosaicFrames(count = 24) {
 const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual&message_type=alert,update";
 
 /* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
-const SPC_MD_URL = "https://mesonet.agron.iastate.edu/geojson/spc_mcd.geojson";
-const SPC_WATCH_URL = "https://mesonet.agron.iastate.edu/geojson/spc_watch.geojson";
+const SPC_WATCH_URL =
+  "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query" +
+  "?where=(phenom%3D%27TO%27+OR+phenom%3D%27SV%27)+AND+sig%3D%27A%27" +
+  "&f=geojson&outFields=prod_type,event,sig,phenom,wfo,expiration,issuance" +
+  "&returnGeometry=true&outSR=4326";
 
 const WATCH_STYLES = {
   "Tornado Watch":           { color: "#ff0000", fill: "#ff000022", label: "TOR" },
@@ -100,21 +103,21 @@ const WATCH_STYLES = {
 };
 
 async function fetchSpcMds() {
-  try {
-    const res = await fetch(SPC_MD_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (e) {
-    console.error("SPC MD fetch error:", e);
-    return { type: "FeatureCollection", features: [] };
-  }
+  // IEM removed the spc_mcd.geojson endpoint; no alternative GeoJSON source exists
+  return { type: "FeatureCollection", features: [] };
 }
 
 async function fetchSpcWatches() {
   try {
     const res = await fetch(SPC_WATCH_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    // Map NWS MapServer property names to what MdWatchLayer expects
+    for (const f of data.features || []) {
+      f.properties.type = f.properties.prod_type;
+      f.properties.number = f.properties.event;
+    }
+    return data;
   } catch (e) {
     console.error("SPC Watch fetch error:", e);
     return { type: "FeatureCollection", features: [] };
@@ -1579,7 +1582,7 @@ export default function StationMap({
           <Pane name="radar-tiles" style={{ zIndex: 300 }}>
             {/* Composite (RainViewer) — single persistent layer
                 whose URL is swapped via setUrl() to avoid tile-request floods. */}
-            {showRadar && radarSource === "composite" && radarFrames[radarFrame] && (
+            {showRadar && radarSource === "composite" && radarFrames[radarFrame]?.path && (
               <RadarLayer
                 pane="radar-tiles"
                 url={`${RAINVIEWER_TILE}${radarFrames[radarFrame].path}${RAINVIEWER_OPTS}`}
