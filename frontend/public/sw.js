@@ -1,4 +1,4 @@
-const CACHE_NAME = "sounding-v2";
+const CACHE_NAME = "sounding-v3";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -28,18 +28,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // API calls: network-first, cache fallback for offline
+  // API calls: network-first, cache fallback for GET only
   if (url.pathname.startsWith("/api/")) {
+    // Cache API doesn't support POST — skip caching for non-GET
+    if (event.request.method !== "GET") return;
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          // Cache successful API responses for offline access
-          if (res.ok && event.request.method === "POST") {
+          if (res.ok) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              // Use request URL + body hash as key
-              cache.put(event.request, clone);
-            });
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return res;
         })
