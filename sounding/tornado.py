@@ -7,7 +7,7 @@ import metpy.calc as mpcalc
 from metpy.units import units
 
 from .constants import STATIONS, STATION_WMO, TORNADO_SCAN_STATIONS
-from .fetchers import fetch_iem_sounding, fetch_wyoming_sounding
+from .fetchers import fetch_iem_sounding, fetch_wyoming_sounding, fetch_bufkit_sounding
 from .parameters import _mixing_ratio_from_dewpoint, compute_parameters
 
 
@@ -232,6 +232,207 @@ def _quick_tornado_score(station_id, dt):
             dcp_score = 0
 
         # 0-6 km shear direction (degrees, meteorological convention)
+        try:
+            bwd_dir = float(np.degrees(np.arctan2(-bwd_u.to("m/s").magnitude,
+                                                   -bwd_v.to("m/s").magnitude)) % 360)
+        except Exception:
+            bwd_dir = None
+
+        return (float(stp_score), float(raw_score), cape_val, srh_val, bwd_val,
+                float(scp_score), float(ship_score), float(dcp_score), bwd_dir)
+
+    except Exception:
+        return None
+
+
+def _quick_forecast_score(station_id, dt, model="hrrr", fhour=0):
+    """
+    Fetch a BUFKIT model sounding and compute quick severe weather scores.
+    Same return signature as _quick_tornado_score:
+    (stp_score, raw_score, cape, srh, bwd, scp, ship, dcp, bwd_dir) or None.
+    """
+    try:
+        data = fetch_bufkit_sounding(station_id, dt, model=model, fhour=fhour)
+    except Exception:
+        return None
+
+    p = data["pressure"]
+    T = data["temperature"]
+    Td = data["dewpoint"]
+    h = data["height"]
+    wdir = data["wind_direction"]
+    wspd = data["wind_speed"]
+
+    try:
+        u_wind, v_wind = mpcalc.wind_components(wspd, wdir)
+
+        sb_cape, sb_cin = mpcalc.surface_based_cape_cin(p, T, Td)
+        cape_val = sb_cape.magnitude if hasattr(sb_cape, "magnitude") else 0
+
+        # Most-Unstable CAPE
+        try:
+            mu_search_top = p[0] - 300 * units.hPa
+            mu_mask = p >= mu_search_top
+            mu_n = int(np.sum(mu_mask))
+            if mu_n < 2:
+                mu_n = min(30, len(p))
+            mu_idx = np.argmax(
+                np.array(mpcalc.equivalent_potential_temperature(
+                    p[:mu_n], T[:mu_n], Td[:mu_n]
+                ).magnitude)
+            )
+            mu_prof = mpcalc.parcel_profile(p[mu_idx:], T[mu_idx], Td[mu_idx]).to("degC")
+            mu_cape_v, mu_cin_v = mpcalc.cape_cin(p[mu_idx:], T[mu_idx:], Td[mu_idx:], mu_prof)
+            mu_cape_val = float(mu_cape_v.magnitude)
+            mu_cin_val = float(mu_cin_v.magnitude)
+        except Exception:
+            mu_cape_val = cape_val
+            mu_cin_val = float(sb_cin.magnitude) if hasattr(sb_cin, "magnitude") else 0
+
+        h_agl = (h - h[0]).to("meter")
+
+        # Bunkers & SRH
+        try:
+            rm, lm, mw = mpcalc.bunkers_storm_motion(p, u_wind, v_wind, h)
+            rm_u, rm_v = rm
+            _, _, total_srh_1km = mpcalc.storm_relative_helicity(
+                h_agl, u_wind, v_wind, 1000 * units.meter,
+                storm_u=rm_u, storm_v=rm_v
+            )
+            srh_val = total_srh_1km.magnitude if hasattr(total_srh_1km, "magnitude") else 0
+        except Exception:
+            srh_val = 0
+            rm_u = rm_v = 0 * units("m/s")
+
+        # 0-6 km BWD
+        try:
+            bwd_u, bwd_v = mpcalc.bulk_shear(p, u_wind, v_wind,
+                                             height=h_agl,
+                                             depth=6000 * units.meter)
+            bwd_val = np.sqrt(bwd_u**2 + bwd_v**2).to("knot").magnitude
+            bwd_ms = np.sqrt(bwd_u**2 + bwd_v**2).to("m/s").magnitude
+        except Exception:
+            bwd_val = 0
+            bwd_ms = 0
+            bwd_u = bwd_v = 0 * units("m/s")
+
+        # SB LCL
+        try:
+            sb_lcl_p, sb_lcl_t = mpcalc.lcl(p[0], T[0], Td[0])
+            from scipy.interpolate import interp1d as _interp1d
+            _h_interp = _interp1d(
+                p.magnitude[::-1], h_agl.magnitude[::-1],
+                bounds_error=False, fill_value="extrapolate"
+            )
+            sb_lcl_m = float(_h_interp(float(sb_lcl_p.magnitude)))
+        except Exception:
+            sb_lcl_m = None
+
+        # STP
+        try:
+            if sb_lcl_m is not None:
+                _stp_result = mpcalc.significant_tornado(
+                    sb_cape,
+                    sb_lcl_m * units.meter,
+                    total_srh_1km,
+                    np.sqrt(bwd_u**2 + bwd_v**2).to("m/s")
+                )
+                stp_score = float(np.asarray(_stp_result.magnitude).flat[0])
+            else:
+                stp_score = 0.0
+        except Exception:
+            stp_score = 0.0
+
+        raw_score = (max(cape_val, 0) / 1500.0
+                     + max(srh_val, 0) / 150.0
+                     + bwd_val / 40.0)
+
+        # Effective inflow layer
+        _esrh = 0 * units("m^2/s^2")
+        _ebwd_mag = 0 * units("m/s")
+        try:
+            _eff_base_i = None
+            _eff_top_i = None
+            _max_idx = int(np.searchsorted(h_agl.magnitude, 3000.0))
+            _step = max(1, _max_idx // 20)
+            for _i in range(0, min(_max_idx + 1, len(p)), _step):
+                _prof_i = mpcalc.parcel_profile(p[_i:], T[_i], Td[_i]).to("degC")
+                _cape_i, _cin_i = mpcalc.cape_cin(p[_i:], T[_i:], Td[_i:], _prof_i)
+                if float(_cape_i.magnitude) >= 100 and float(_cin_i.magnitude) >= -250:
+                    if _eff_base_i is None:
+                        _eff_base_i = _i
+                    _eff_top_i = _i
+                elif _eff_base_i is not None:
+                    break
+            if _eff_base_i is not None and _eff_top_i is not None:
+                _eb_h = h_agl.magnitude[_eff_base_i]
+                _et_h = h_agl.magnitude[_eff_top_i]
+                _, _, _esrh = mpcalc.storm_relative_helicity(
+                    h_agl, u_wind, v_wind,
+                    _et_h * units.meter,
+                    bottom=_eb_h * units.meter,
+                    storm_u=rm_u, storm_v=rm_v
+                )
+                _mu_prof = mpcalc.parcel_profile(p[mu_idx:], T[mu_idx], Td[mu_idx]).to("degC")
+                _mu_el_p = mpcalc.el(p[mu_idx:], T[mu_idx:], Td[mu_idx:], _mu_prof)
+                _el_h = None
+                if _mu_el_p[0] is not None and not np.isnan(_mu_el_p[0].magnitude):
+                    _el_idx = int(np.argmin(np.abs(p.magnitude - _mu_el_p[0].magnitude)))
+                    _el_h = h_agl.magnitude[_el_idx]
+                if _el_h is not None and _el_h > 0:
+                    _ebwd_top = max(min(_el_h * 0.5, 10000.0), 1500.0)
+                else:
+                    _ebwd_top = 6000.0
+                from scipy.interpolate import interp1d as _interp1d
+                _h_m = h_agl.magnitude
+                _u_interp = _interp1d(_h_m, u_wind.to("m/s").magnitude,
+                                      bounds_error=False, fill_value="extrapolate")
+                _v_interp = _interp1d(_h_m, v_wind.to("m/s").magnitude,
+                                      bounds_error=False, fill_value="extrapolate")
+                _ebwd_u = _u_interp(_ebwd_top) - _u_interp(_eb_h)
+                _ebwd_v = _v_interp(_ebwd_top) - _v_interp(_eb_h)
+                _ebwd_mag = np.sqrt(_ebwd_u**2 + _ebwd_v**2) * units("m/s")
+        except Exception:
+            pass
+
+        # SCP
+        try:
+            _scp_result = mpcalc.supercell_composite(
+                mu_cape_val * units("J/kg"), _esrh, _ebwd_mag
+            )
+            scp_score = float(np.asarray(_scp_result.magnitude).flat[0])
+        except Exception:
+            scp_score = 0.0
+
+        # SHIP
+        try:
+            _sfc_mr = float(_mixing_ratio_from_dewpoint(p[0], Td[0]).to("g/kg").magnitude)
+            _p700_i = int(np.argmin(np.abs(p.magnitude - 700.0)))
+            _p500_i = int(np.argmin(np.abs(p.magnitude - 500.0)))
+            _t700 = float(T.magnitude[_p700_i])
+            _t500 = float(T.magnitude[_p500_i])
+            _lr75 = (_t700 - _t500) / ((h.magnitude[_p500_i] - h.magnitude[_p700_i]) / 1000.0)
+            _neg500 = max(-_t500, 0)
+            ship_raw = (mu_cape_val * _sfc_mr * _lr75 * _neg500 * bwd_ms) / 42_000_000.0
+            if mu_cape_val < 1300 or mu_cin_val < -200:
+                ship_raw = 0.0
+            ship_score = max(ship_raw, 0)
+        except Exception:
+            ship_score = 0
+
+        # DCP
+        try:
+            dcape_v, _dp, _dt = mpcalc.downdraft_cape(p, T, Td)
+            _dcape_f = float(dcape_v.magnitude)
+            _mask06 = h_agl.magnitude <= 6000.0
+            _u06 = u_wind[_mask06].to("m/s").magnitude
+            _v06 = v_wind[_mask06].to("m/s").magnitude
+            _mw06 = np.sqrt(np.mean(_u06)**2 + np.mean(_v06)**2)
+            dcp_score = (_dcape_f / 980.0) * (mu_cape_val / 2000.0) * (bwd_ms / 20.0) * (_mw06 / 16.0)
+        except Exception:
+            dcp_score = 0
+
+        # BWD direction
         try:
             bwd_dir = float(np.degrees(np.arctan2(-bwd_u.to("m/s").magnitude,
                                                    -bwd_v.to("m/s").magnitude)) % 360)

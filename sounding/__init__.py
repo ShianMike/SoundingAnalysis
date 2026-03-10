@@ -34,7 +34,7 @@ from .fetchers import (
 from .vad import fetch_vad_data, fetch_vwp_timeseries, plot_vwp
 
 # ── Tornado risk ────────────────────────────────────────────────────
-from .tornado import _quick_tornado_score, find_highest_tornado_risk
+from .tornado import _quick_tornado_score, _quick_forecast_score, find_highest_tornado_risk
 
 # ── Merge ───────────────────────────────────────────────────────────
 from .merge import merge_profiles
@@ -56,7 +56,7 @@ __all__ = [
     "fetch_bufkit_sounding", "fetch_psu_bufkit", "fetch_acars_sounding",
     "fetch_sounding", "_parse_bufkit",
     "fetch_vad_data", "fetch_vwp_timeseries", "plot_vwp",
-    "_quick_tornado_score", "find_highest_tornado_risk",
+    "_quick_tornado_score", "_quick_forecast_score", "find_highest_tornado_risk",
     "merge_profiles",
     "_mixing_ratio_from_dewpoint", "compute_parameters",
     "plot_sounding", "plot_composite_sounding",

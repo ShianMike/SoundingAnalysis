@@ -38,7 +38,7 @@ import {
   Wrench,
   AlertTriangle,
 } from "lucide-react";
-import { fetchRiskScan } from "../api";
+import { fetchRiskScan, fetchForecastRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
 import "./ControlPanel.css";
 
@@ -276,6 +276,9 @@ export default function ControlPanel({
   const [rapStationSearch, setRapStationSearch] = useState("");
   const [rapDropOpen, setRapDropOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanMode, setScanMode] = useState("obs"); // "obs" | "forecast"
+  const [fcstModel, setFcstModel] = useState("hrrr");
+  const [fcstFhour, setFcstFhour] = useState("12");
   const [sortMode, setSortMode] = useState("az");
   const [favorites, setFavorites] = useState(() => getFavorites());
   const [soundingHour, setSoundingHour] = useState("latest");
@@ -448,8 +451,16 @@ export default function ControlPanel({
   const handleRiskScan = async () => {
     setScanning(true);
     try {
-      const dateParam = date ? date.replace(/[-T:]/g, "").slice(0, 10) : undefined;
-      const data = await fetchRiskScan(dateParam);
+      let data;
+      if (scanMode === "forecast") {
+        data = await fetchForecastRiskScan({
+          model: fcstModel,
+          fhour: parseInt(fcstFhour) || 0,
+        });
+      } else {
+        const dateParam = date ? date.replace(/[-T:]/g, "").slice(0, 10) : undefined;
+        data = await fetchRiskScan(dateParam);
+      }
       onRiskDataChange(data);
       setSortMode("risk-high");
       // Auto-open the map
@@ -710,6 +721,55 @@ export default function ControlPanel({
               Station
             </label>
             <div className="cp-station-picker">
+              {/* Scan mode toggle */}
+              <div className="cp-scan-tabs">
+                <button
+                  type="button"
+                  className={`cp-scan-tab${scanMode === "obs" ? " active" : ""}`}
+                  onClick={() => setScanMode("obs")}
+                >
+                  <Eye size={12} /> Observed
+                </button>
+                <button
+                  type="button"
+                  className={`cp-scan-tab${scanMode === "forecast" ? " active" : ""}`}
+                  onClick={() => setScanMode("forecast")}
+                >
+                  <TrendingUp size={12} /> Forecast
+                </button>
+              </div>
+
+              {/* Forecast model + fhour pickers */}
+              {scanMode === "forecast" && (
+                <div className="cp-scan-forecast-opts">
+                  <select
+                    className="cp-input cp-scan-select"
+                    value={fcstModel}
+                    onChange={(e) => {
+                      setFcstModel(e.target.value);
+                      const meta = MODEL_META[e.target.value] || { maxF: 384, step: 1 };
+                      if (parseInt(fcstFhour) > meta.maxF) setFcstFhour(String(meta.maxF));
+                    }}
+                  >
+                    {["hrrr", "rap", "nam", "namnest", "gfs"].map((m) => (
+                      <option key={m} value={m}>{MODEL_META[m]?.short || m}</option>
+                    ))}
+                  </select>
+                  <div className="cp-scan-fhour">
+                    <label className="cp-scan-fhour-label">F{fcstFhour}</label>
+                    <input
+                      type="range"
+                      className="cp-scan-slider"
+                      min={0}
+                      max={(MODEL_META[fcstModel] || { maxF: 48 }).maxF}
+                      step={(MODEL_META[fcstModel] || { step: 1 }).step}
+                      value={fcstFhour}
+                      onChange={(e) => setFcstFhour(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               <button
                 type="button"
                 className="cp-risk-btn"
@@ -730,7 +790,9 @@ export default function ControlPanel({
               </button>
               {riskData && (
                 <p className="cp-risk-hint">
-                  Scanned {riskData.stations.length} stations at {riskData.date}
+                  {riskData.model
+                    ? `${(MODEL_META[riskData.model]?.short || riskData.model).toUpperCase()} F${riskData.fhour} · ${riskData.stations.length} stations`
+                    : `Scanned ${riskData.stations.length} stations at ${riskData.date}`}
                 </p>
               )}
               <div className="cp-station-toolbar">

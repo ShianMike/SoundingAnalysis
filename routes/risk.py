@@ -10,9 +10,9 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from sounding import (
-    STATIONS, STATION_WMO,
+    STATIONS, STATION_WMO, BUFKIT_MODELS, TORNADO_SCAN_STATIONS,
     fetch_sounding, compute_parameters,
-    get_latest_sounding_time, _quick_tornado_score,
+    get_latest_sounding_time, _quick_tornado_score, _quick_forecast_score,
 )
 from .helpers import _serialize_params, _nan_safe
 
@@ -83,6 +83,81 @@ def risk_scan():
 
     return jsonify({
         "date": dt.strftime("%Y-%m-%d %HZ"),
+        "stations": results,
+    })
+
+
+# ─── Forecast Risk Scan ────────────────────────────────────────────
+@bp.route("/api/forecast-risk-scan", methods=["POST", "OPTIONS"])
+def forecast_risk_scan():
+    """Scan stations using model/forecast data and return risk scores."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(force=True) if request.data else {}
+    model = body.get("model", "hrrr").lower()
+    fhour = int(body.get("fhour", 0))
+
+    if model not in BUFKIT_MODELS:
+        return jsonify({"error": f"Unknown model '{model}'."}), 400
+
+    # Use current time as the model init time (latest run)
+    dt = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+    # Valid time = init time + forecast hour
+    valid_time = dt + timedelta(hours=fhour)
+
+    station_ids = list(TORNADO_SCAN_STATIONS)
+
+    def _scan_one(sid):
+        try:
+            score = _quick_forecast_score(sid, dt, model=model, fhour=fhour)
+            if score is None:
+                return None
+            stp_score, raw_score, cape, srh, bwd, scp, ship, dcp, bwd_dir = score
+            result = {
+                "id": sid,
+                "name": STATIONS.get(sid, (sid,))[0],
+                "lat": STATIONS.get(sid, ("", 0, 0))[1],
+                "lon": STATIONS.get(sid, ("", 0, 0))[2],
+                "stp": round(stp_score, 2),
+                "raw": round(raw_score, 2),
+                "cape": round(cape),
+                "srh": round(srh),
+                "bwd": round(bwd),
+                "scp": round(scp, 2),
+                "ship": round(ship, 2),
+                "dcp": round(dcp, 2),
+            }
+            if bwd_dir is not None:
+                result["bwdDir"] = round(bwd_dir)
+            return result
+        except Exception:
+            return None
+
+    results = []
+    scan_workers = int(os.environ.get("SCAN_WORKERS", "6"))
+
+    try:
+        with ThreadPoolExecutor(max_workers=scan_workers) as executor:
+            futures = {executor.submit(_scan_one, sid): sid for sid in station_ids}
+            for future in as_completed(futures, timeout=180):
+                try:
+                    r = future.result(timeout=30)
+                    if r is not None:
+                        results.append(r)
+                except Exception:
+                    pass
+    except Exception as exc:
+        print(f"[forecast-risk-scan] partial results due to: {exc}")
+
+    results.sort(key=lambda r: (r["stp"], r["raw"]), reverse=True)
+
+    return jsonify({
+        "date": valid_time.strftime("%Y-%m-%d %HZ"),
+        "model": model.upper(),
+        "fhour": fhour,
+        "initTime": dt.strftime("%Y-%m-%d %HZ"),
         "stations": results,
     })
 

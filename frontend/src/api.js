@@ -56,6 +56,17 @@ export async function fetchRiskScan(date) {
   return data;
 }
 
+export async function fetchForecastRiskScan({ model, fhour }) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/forecast-risk-scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, fhour }),
+  }, 240000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Forecast risk scan failed");
+  return data;
+}
+
 export async function fetchSounding(params) {
   const res = await fetchWithTimeout(`${API_BASE}/api/sounding`, {
     method: "POST",
