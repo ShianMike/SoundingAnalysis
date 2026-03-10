@@ -152,7 +152,13 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 
 ### Risk Scanner & Mesoscale Dashboard
 - Scans all CONUS upper-air stations in parallel
-- Scores sites by STP, SCP, SHIP, DCP / tornado potential
+- **Observed mode** — scores sites using real radiosonde data (STP, SCP, SHIP, DCP / tornado potential)
+- **Forecast mode** — scores sites using BUFKIT model sounding data (HRRR, RAP, NAM, NAM Nest, GFS)
+  - Model selector with forecast hour range per model (HRRR 0–48h, RAP 0–21h, GFS 0–384h, etc.)
+  - Forecast hour slider with live UTC valid-time display (e.g., "F12 · 10 Mar 18Z")
+  - Auto-selects latest available model init cycle with archive lag offset
+- **Click-to-load** — click any station row in the risk table to instantly load its full sounding (BUFKIT for forecast, OBS for observed)
+- **Export PNG** — high-resolution (3× scale) PNG export of the top 15 stations with model/fhour metadata in the header
 - Returns ranked results via API
 - Auto-opens interactive station map with color-coded risk markers
 - **Mesoscale panel:** sortable multi-station parameter table with color-coded threshold chips
@@ -291,7 +297,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 │   ├── feedback.py        # /api/feedback (GET/POST)
 │   ├── helpers.py         # Shared helpers (safe_round, parse_date, etc.)
 │   ├── meta.py            # /api/stations, /api/sources, /api/acars-airports
-│   ├── risk.py            # /api/risk-scan
+│   ├── risk.py            # /api/risk-scan, /api/forecast-risk-scan
 │   ├── sounding_routes.py # /api/sounding (main endpoint)
 │   ├── spc.py             # /api/spc-outlook
 │   └── wind.py            # /api/vwp-display

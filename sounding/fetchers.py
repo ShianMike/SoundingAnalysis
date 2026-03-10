@@ -552,13 +552,12 @@ def fetch_bufkit_sounding(station_id, dt, model="rap", fhour=0):
             f"Unknown model '{model}'. Options: {list(BUFKIT_MODELS.keys())}"
         )
 
-    stn = station_id.lower()
-    stn_icao = f"k{stn}" if len(stn) == 3 else stn
+    stn_lower = station_id.lower()
 
-    # Iowa State BUFKIT archive
+    # Iowa State BUFKIT archive uses {model}_{station}.buf naming
     url = (
         f"https://mtarchive.geol.iastate.edu/"
-        f"{dt:%Y}/{dt:%m}/{dt:%d}/bufkit/{dt:%H}/{model}/{stn_icao}.buf"
+        f"{dt:%Y}/{dt:%m}/{dt:%d}/bufkit/{dt:%H}/{model}/{model}_{stn_lower}.buf"
     )
 
     print(f"  Fetching BUFKIT {model.upper()} f{fhour:03d} for {station_id} "
@@ -567,8 +566,12 @@ def fetch_bufkit_sounding(station_id, dt, model="rap", fhour=0):
 
     resp = requests.get(url, timeout=45)
     if resp.status_code == 404:
-        # Try without K prefix (some stations use 3-letter IDs)
-        url2 = url.replace(f"/{stn_icao}.buf", f"/{stn}.buf")
+        # Some stations use ICAO prefix (k + 3-letter)
+        stn_icao = f"k{stn_lower}" if len(stn_lower) == 3 else stn_lower
+        url2 = (
+            f"https://mtarchive.geol.iastate.edu/"
+            f"{dt:%Y}/{dt:%m}/{dt:%d}/bufkit/{dt:%H}/{model}/{model}_{stn_icao}.buf"
+        )
         resp = requests.get(url2, timeout=45)
         if resp.status_code == 404:
             raise ValueError(

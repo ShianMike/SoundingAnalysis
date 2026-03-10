@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+﻿import { useState, useRef, useCallback, useEffect } from "react";
 import {
   ImageIcon,
   BarChart3,
@@ -31,7 +31,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-/* ── Icon map for summary section cards ─────────────── */
+/* â”€â”€ Icon map for summary section cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const SECTION_ICONS = {
   thermo: Thermometer,
   llcape: ArrowUp,
@@ -57,13 +57,13 @@ const SoundingAnimator = lazy(() => import("./SoundingAnimator"));
 const SoundingTimeline = lazy(() => import("./SoundingTimeline"));
 import "./ResultsView.css";
 
-/* ── Sounding text summary generator ───────────────────────── */
+/* â”€â”€ Sounding text summary generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function generateSoundingSummary(params, meta) {
   const sections = [];
   const n = (v) => (v != null && typeof v === "number" ? v : null);
   const fmt = (v, d = 0) => v != null ? Number(v).toFixed(d) : "--";
 
-  // ── Gather all values up front ──
+  // â”€â”€ Gather all values up front â”€â”€
   const sbCape = n(params.sbCape);
   const mlCape = n(params.mlCape);
   const muCape = n(params.muCape);
@@ -93,11 +93,11 @@ function generateSoundingSummary(params, meta) {
   const wbo    = n(params.wbo);
   const bestCape = Math.max(sbCape ?? 0, mlCape ?? 0, muCape ?? 0);
 
-  // ── Header ──
+  // â”€â”€ Header â”€â”€
   const stName = meta?.stationName || meta?.station || "this location";
   const dateStr = meta?.date || "";
 
-  // — Overall threat level for banner —
+  // â€” Overall threat level for banner â€”
   let threatLevel = "none";
   let threatColor = "#6b7280";
   if (stp >= 4 || (bestCape >= 4000 && bwd6 >= 50)) { threatLevel = "HIGH"; threatColor = "#ef4444"; }
@@ -105,7 +105,7 @@ function generateSoundingSummary(params, meta) {
   else if (bestCape >= 500 && bwd6 >= 25) { threatLevel = "LOW"; threatColor = "#22c55e"; }
   else if (bestCape >= 250) { threatLevel = "MARGINAL"; threatColor = "#60a5fa"; }
 
-  // ── 1) Thermodynamic profile overview ──
+  // â”€â”€ 1) Thermodynamic profile overview â”€â”€
   {
     let text;
     const vals = [];
@@ -129,24 +129,24 @@ function generateSoundingSummary(params, meta) {
     sections.push({ id: "thermo", title: "Thermodynamic Overview", text, vals });
   }
 
-  // ── 2) Low-level CAPE / updraft acceleration ──
+  // â”€â”€ 2) Low-level CAPE / updraft acceleration â”€â”€
   if (cape3 != null && bestCape >= 250 && cape3 >= 50) {
     const vals = [{ k: "0-3km CAPE", v: `${fmt(cape3)} J/kg` }];
     let text;
     if (cape3 >= 100) {
-      text = "Strong low-level updraft acceleration enhances stretching of low-level vertical vorticity — a key ingredient for tornado intensity, dynamically stretching near-surface rotation into tighter, faster-spinning vortices.";
+      text = "Strong low-level updraft acceleration enhances stretching of low-level vertical vorticity â€” a key ingredient for tornado intensity, dynamically stretching near-surface rotation into tighter, faster-spinning vortices.";
     } else {
       text = "Moderate low-level updraft acceleration provides meaningful support for efficient vortex stretching and tornado development.";
     }
     sections.push({ id: "llcape", title: "Low-Level Buoyancy", text, vals });
   }
 
-  // ── 3) Cap / CIN analysis ──
+  // â”€â”€ 3) Cap / CIN analysis â”€â”€
   if (mlCin != null) {
     const vals = [{ k: "MLCIN", v: `${fmt(mlCin)} J/kg` }];
     let text;
     if (mlCin > -10) {
-      text = "Convective inhibition is negligible. Storms could fire readily with minimal forcing — this is an uncapped environment where widespread initiation is possible.";
+      text = "Convective inhibition is negligible. Storms could fire readily with minimal forcing â€” this is an uncapped environment where widespread initiation is possible.";
     } else if (mlCin > -50) {
       text = "A weak cap is present. Convective initiation should occur fairly easily along boundaries, outflow, or modest terrain features.";
     } else if (mlCin > -150) {
@@ -157,7 +157,7 @@ function generateSoundingSummary(params, meta) {
     sections.push({ id: "cin", title: "Convective Inhibition", text, vals });
   }
 
-  // ── 4) Cloud base / LCL ──
+  // â”€â”€ 4) Cloud base / LCL â”€â”€
   if (mlLcl != null && bestCape >= 250) {
     const vals = [{ k: "MLLCL", v: `${fmt(mlLcl)} m AGL` }];
     let text;
@@ -173,17 +173,17 @@ function generateSoundingSummary(params, meta) {
     sections.push({ id: "lcl", title: "Cloud Base Height", text, vals });
   }
 
-  // ── 5) Lapse rates ──
+  // â”€â”€ 5) Lapse rates â”€â”€
   if ((lr03 != null || lr36 != null) && bestCape >= 100) {
     const vals = [];
-    if (lr03 != null) vals.push({ k: "LR 0-3", v: `${fmt(lr03, 1)} °C/km` });
-    if (lr36 != null) vals.push({ k: "LR 3-6", v: `${fmt(lr36, 1)} °C/km` });
+    if (lr03 != null) vals.push({ k: "LR 0-3", v: `${fmt(lr03, 1)} Â°C/km` });
+    if (lr36 != null) vals.push({ k: "LR 3-6", v: `${fmt(lr36, 1)} Â°C/km` });
     const parts = [];
     if (lr03 != null) {
-      if (lr03 >= 9) parts.push("exceptionally steep 0–3 km lapse rates approaching dry-adiabatic, indicating intense low-level buoyancy");
-      else if (lr03 >= 8) parts.push("very steep 0–3 km lapse rates indicating a well-mixed, nearly adiabatic boundary layer");
-      else if (lr03 >= 7) parts.push("moderately steep 0–3 km lapse rates");
-      else if (lr03 < 5.5) parts.push("relatively weak 0–3 km lapse rates suggesting a stable boundary layer");
+      if (lr03 >= 9) parts.push("exceptionally steep 0â€“3 km lapse rates approaching dry-adiabatic, indicating intense low-level buoyancy");
+      else if (lr03 >= 8) parts.push("very steep 0â€“3 km lapse rates indicating a well-mixed, nearly adiabatic boundary layer");
+      else if (lr03 >= 7) parts.push("moderately steep 0â€“3 km lapse rates");
+      else if (lr03 < 5.5) parts.push("relatively weak 0â€“3 km lapse rates suggesting a stable boundary layer");
     }
     if (lr36 != null) {
       if (lr36 >= 8.5) parts.push("extreme mid-level lapse rates contributing to exceptionally deep CAPE");
@@ -195,7 +195,7 @@ function generateSoundingSummary(params, meta) {
     }
   }
 
-  // ── 6) Moisture profile ──
+  // â”€â”€ 6) Moisture profile â”€â”€
   {
     const vals = [];
     if (pwat != null) vals.push({ k: "PWAT", v: `${fmt(pwat)} mm` });
@@ -220,7 +220,7 @@ function generateSoundingSummary(params, meta) {
     }
   }
 
-  // ── 7) Deep-layer shear ──
+  // â”€â”€ 7) Deep-layer shear â”€â”€
   if (bwd6 != null && bestCape >= 100) {
     const vals = [{ k: "0-6km BWD", v: `${fmt(bwd6)} kt` }];
     if (ebwd != null) vals.push({ k: "Eff BWD", v: `${fmt(ebwd)} kt` });
@@ -234,18 +234,18 @@ function generateSoundingSummary(params, meta) {
     } else if (bwd6 >= 20) {
       text = "Moderate deep-layer shear provides some storm organization. Multicell clusters with embedded supercell structures are possible.";
     } else {
-      text = "Weak deep-layer shear favors disorganized convection — pulse storms or loosely organized multicells without persistent updraft rotation.";
+      text = "Weak deep-layer shear favors disorganized convection â€” pulse storms or loosely organized multicells without persistent updraft rotation.";
     }
     sections.push({ id: "dlshear", title: "Deep-Layer Shear", text, vals });
   }
 
-  // ── 8) Low-level shear & SRH ──
+  // â”€â”€ 8) Low-level shear & SRH â”€â”€
   if (bestCape >= 250 && (srh1 != null || bwd1 != null)) {
     const vals = [];
     if (bwd1 != null) vals.push({ k: "0-1km BWD", v: `${fmt(bwd1)} kt` });
-    if (srh1 != null) vals.push({ k: "0-1km SRH", v: `${fmt(srh1)} m²/s²` });
-    if (srh3 != null) vals.push({ k: "0-3km SRH", v: `${fmt(srh3)} m²/s²` });
-    if (esrh != null) vals.push({ k: "Eff SRH", v: `${fmt(esrh)} m²/s²` });
+    if (srh1 != null) vals.push({ k: "0-1km SRH", v: `${fmt(srh1)} mÂ²/sÂ²` });
+    if (srh3 != null) vals.push({ k: "0-3km SRH", v: `${fmt(srh3)} mÂ²/sÂ²` });
+    if (esrh != null) vals.push({ k: "Eff SRH", v: `${fmt(esrh)} mÂ²/sÂ²` });
     const llParts = [];
     if (bwd1 != null) {
       if (bwd1 >= 30) llParts.push("extreme low-level shear");
@@ -263,7 +263,7 @@ function generateSoundingSummary(params, meta) {
     }
   }
 
-  // ── 9) Composite indices ──
+  // â”€â”€ 9) Composite indices â”€â”€
   {
     const vals = [];
     const compLines = [];
@@ -273,7 +273,7 @@ function generateSoundingSummary(params, meta) {
     if (dcp != null) vals.push({ k: "DCP", v: `${fmt(dcp, 1)}` });
 
     if (stp != null && bestCape >= 250) {
-      if (stp >= 8) compLines.push("STP is in the top percentile — high-confidence setup for violent (EF3+) tornadoes.");
+      if (stp >= 8) compLines.push("STP is in the top percentile â€” high-confidence setup for violent (EF3+) tornadoes.");
       else if (stp >= 4) compLines.push("STP is a high-end value indicating a well-above-average environment for significant (EF2+) tornadoes.");
       else if (stp >= 1) compLines.push("STP exceeds the significant tornado threshold, indicating ingredients are aligned for EF2+ tornadoes.");
       else if (stp >= 0.5) compLines.push("STP suggests a non-trivial tornado risk, particularly for brief or weak (EF0-EF1) tornadoes.");
@@ -284,8 +284,8 @@ function generateSoundingSummary(params, meta) {
       else if (scp >= 1) compLines.push("SCP supports supercell development with moderate mesocyclone potential.");
     }
     if (ship != null && bestCape >= 500) {
-      if (ship >= 2.5) compLines.push("SHIP is very high, indicating a robust environment for significant hail (≥2 in.).");
-      else if (ship >= 1.0) compLines.push("SHIP exceeds the significant-hail threshold (≥1 in. hail expected).");
+      if (ship >= 2.5) compLines.push("SHIP is very high, indicating a robust environment for significant hail (â‰¥2 in.).");
+      else if (ship >= 1.0) compLines.push("SHIP exceeds the significant-hail threshold (â‰¥1 in. hail expected).");
       else if (ship >= 0.5) compLines.push("SHIP indicates marginal significant hail potential.");
     }
     if (dcp != null && dcp >= 2) {
@@ -301,21 +301,21 @@ function generateSoundingSummary(params, meta) {
     }
   }
 
-  // ── 10) DCAPE / Downdraft threat ──
+  // â”€â”€ 10) DCAPE / Downdraft threat â”€â”€
   if (dcape != null && dcape >= 600 && bestCape >= 100) {
     const vals = [{ k: "DCAPE", v: `${fmt(dcape)} J/kg` }];
     let text;
     if (dcape >= 1500) {
       text = "Extreme downdraft energy indicates very strong potential for damaging outflow winds. Microbursts and macrobursts with gusts exceeding 80 kt are likely.";
     } else if (dcape >= 1000) {
-      text = "Strong downdraft energy supports damaging outflow winds. Isolated downbursts with gusts of 50–70 kt are probable.";
+      text = "Strong downdraft energy supports damaging outflow winds. Isolated downbursts with gusts of 50â€“70 kt are probable.";
     } else {
-      text = "Moderate downdraft energy is sufficient for gusty outflow winds (40–55 kt), particularly where mid-level dry air is entrained.";
+      text = "Moderate downdraft energy is sufficient for gusty outflow winds (40â€“55 kt), particularly where mid-level dry air is entrained.";
     }
     sections.push({ id: "dcape", title: "Downdraft Potential", text, vals });
   }
 
-  // ── 11) Hail environment ──
+  // â”€â”€ 11) Hail environment â”€â”€
   if (bestCape >= 500 && frzLvl != null && wbo != null && ship >= 0.5) {
     const vals = [{ k: "FRZ Level", v: `${fmt(frzLvl)} m` }, { k: "WB Zero", v: `${fmt(wbo)} m` }];
     let text = null;
@@ -327,7 +327,7 @@ function generateSoundingSummary(params, meta) {
     if (text) sections.push({ id: "hail", title: "Hail Environment", text, vals });
   }
 
-  // ── 12) Convective mode forecast ──
+  // â”€â”€ 12) Convective mode forecast â”€â”€
   if (bestCape >= 250) {
     let mode = "";
     if (bwd6 >= 40 && (srh1 >= 100 || scp >= 1)) {
@@ -346,14 +346,14 @@ function generateSoundingSummary(params, meta) {
     sections.push({ id: "mode", title: "Expected Convective Mode", text: `${mode}.`, vals: [] });
   }
 
-  // ── 13) Overall threat summary ──
+  // â”€â”€ 13) Overall threat summary â”€â”€
   const threats = [];
   if (stp != null && stp >= 1) {
     threats.push(stp >= 4 ? "Strong to violent tornadoes (EF2+)" : "Significant tornadoes");
   } else if (stp != null && stp >= 0.3 && mlLcl < 1500) {
     threats.push("Brief/weak tornadoes");
   }
-  if (ship != null && ship >= 1.5) threats.push("Significant hail (≥2 in.)");
+  if (ship != null && ship >= 1.5) threats.push("Significant hail (â‰¥2 in.)");
   else if (ship != null && ship >= 0.5) threats.push("Large hail");
   else if (bestCape >= 2500 && bwd6 >= 30) threats.push("Large hail");
   if (dcp != null && dcp >= 4) threats.push("Widespread damaging winds / derecho");
@@ -379,16 +379,144 @@ function generateSoundingSummary(params, meta) {
   };
 }
 
-function RiskTable({ riskData }) {
+function RiskTable({ riskData, onStationSelect }) {
   if (!riskData || !riskData.stations || riskData.stations.length === 0) return null;
+
+  const handleExportPng = () => {
+    const stations = riskData.stations.slice(0, 15);
+    const cols = ["#", "Station", "Name", "STP", "SCP", "SHIP", "DCP", "CAPE", "SRH", "BWD"];
+    const colW = [50, 80, 220, 80, 80, 80, 80, 80, 70, 70];
+    const rowH = 32;
+    const headerH = 70;
+    const pad = 24;
+    const totalW = colW.reduce((a, b) => a + b, 0) + pad * 2;
+    const totalH = headerH + rowH * (stations.length + 1) + pad * 2 + 4;
+
+    const canvas = document.createElement("canvas");
+    const scale = 3;
+    canvas.width = totalW * scale;
+    canvas.height = totalH * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+
+    // Background
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    // Header
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "bold 16px system-ui, sans-serif";
+    ctx.fillText("Severe Weather Risk Scan", pad, pad + 22);
+    ctx.font = "13px monospace";
+    ctx.fillStyle = "#94a3b8";
+    let subtitle = riskData.date;
+    if (riskData.model) {
+      subtitle = `${riskData.model} F${riskData.fhour} Â· Init ${riskData.initTime} Â· Valid ${riskData.date}`;
+    }
+    ctx.fillText(subtitle, pad, pad + 46);
+    ctx.fillText(`${stations.length} stations`, totalW - pad - ctx.measureText(`${stations.length} stations`).width, pad + 46);
+
+    const tableY = headerH + pad;
+
+    // Column header row
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(pad, tableY, totalW - pad * 2, rowH);
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    let cx = pad;
+    cols.forEach((c, ci) => {
+      const align = ci >= 3 ? "right" : "left";
+      if (align === "right") {
+        ctx.textAlign = "right";
+        ctx.fillText(c, cx + colW[ci] - 6, tableY + 21);
+      } else {
+        ctx.textAlign = "left";
+        ctx.fillText(c, cx + 6, tableY + 21);
+      }
+      cx += colW[ci];
+    });
+
+    // Rows
+    ctx.font = "13px monospace";
+    stations.forEach((s, i) => {
+      const y = tableY + rowH * (i + 1);
+      // Alternating row bg
+      if (i % 2 === 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.02)";
+        ctx.fillRect(pad, y, totalW - pad * 2, rowH);
+      }
+      // Row highlight
+      if (s.stp >= 1) {
+        ctx.fillStyle = "rgba(239,68,68,0.08)";
+        ctx.fillRect(pad, y, totalW - pad * 2, rowH);
+      } else if (s.stp >= 0.3) {
+        ctx.fillStyle = "rgba(234,179,8,0.06)";
+        ctx.fillRect(pad, y, totalW - pad * 2, rowH);
+      }
+
+      const vals = [
+        String(i + 1), s.id, s.name,
+        s.stp.toFixed(2), s.scp.toFixed(2), s.ship.toFixed(2), s.dcp.toFixed(2),
+        String(s.cape), String(s.srh), String(s.bwd),
+      ];
+      const colorMap = [
+        null, null, null,
+        s.stp >= 1 ? "#ef4444" : s.stp >= 0.3 ? "#eab308" : "#94a3b8",
+        s.scp >= 4 ? "#ef4444" : s.scp >= 1 ? "#eab308" : "#94a3b8",
+        s.ship >= 1.5 ? "#ef4444" : s.ship >= 0.5 ? "#eab308" : "#94a3b8",
+        s.dcp >= 4 ? "#ef4444" : s.dcp >= 2 ? "#eab308" : "#94a3b8",
+        null, null, null,
+      ];
+
+      let vx = pad;
+      vals.forEach((v, ci) => {
+        ctx.fillStyle = colorMap[ci] || (ci <= 2 ? "#cbd5e1" : "#94a3b8");
+        ctx.font = ci >= 3 && colorMap[ci] && colorMap[ci] !== "#94a3b8"
+          ? "bold 13px monospace" : "13px monospace";
+        if (ci === 1) ctx.font = "bold 13px monospace";
+        const align = ci >= 3 ? "right" : "left";
+        if (align === "right") {
+          ctx.textAlign = "right";
+          ctx.fillText(v, vx + colW[ci] - 6, y + 21);
+        } else {
+          ctx.textAlign = "left";
+          ctx.fillText(v, vx + 6, y + 21);
+        }
+        vx += colW[ci];
+      });
+    });
+
+    // Border
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pad, tableY, totalW - pad * 2, rowH * (stations.length + 1));
+
+    // Download
+    const link = document.createElement("a");
+    const tag = riskData.model ? `${riskData.model}_F${riskData.fhour}` : "observed";
+    link.download = `risk_scan_${tag}_${riskData.date.replace(/[:\s]/g, "")}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
 
   return (
     <div className="rv-risk-table-wrap">
       <div className="rv-risk-table-header">
         <Zap size={14} />
         <h3>Severe Weather Risk Scan</h3>
+        {riskData.model && (
+          <span className="rv-risk-table-model">{riskData.model} F{riskData.fhour}</span>
+        )}
         <span className="rv-risk-table-date">{riskData.date}</span>
         <span className="rv-risk-table-count">{riskData.stations.length} stations</span>
+        <button
+          type="button"
+          className="rv-risk-export-btn"
+          onClick={handleExportPng}
+          title="Export as PNG"
+        >
+          <Download size={13} />
+        </button>
       </div>
       <div className="rv-risk-table-scroll">
         <table className="rv-risk-table">
@@ -408,7 +536,12 @@ function RiskTable({ riskData }) {
           </thead>
           <tbody>
             {riskData.stations.map((s, i) => (
-              <tr key={s.id} className={s.stp >= 1 ? "rv-rt-high" : s.stp >= 0.3 ? "rv-rt-med" : ""}>
+              <tr
+                key={s.id}
+                className={`${s.stp >= 1 ? "rv-rt-high" : s.stp >= 0.3 ? "rv-rt-med" : ""} rv-rt-clickable`}
+                onClick={() => onStationSelect?.(s.id, riskData)}
+                title={`Load ${s.id} sounding${riskData.model ? ` (${riskData.model} F${riskData.fhour})` : ""}`}
+              >
                 <td className="rv-rt-rank">{i + 1}</td>
                 <td className="rv-rt-id">{s.id}</td>
                 <td className="rv-rt-name">{s.name}</td>
@@ -444,8 +577,8 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams, autoRefresh, onToggleAutoRefresh, refreshInterval, onRefreshIntervalChange, theme, onTimelineSelect }) {
-  /* ── Hooks — must be called unconditionally before any return ── */
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams, autoRefresh, onToggleAutoRefresh, refreshInterval, onRefreshIntervalChange, theme, onTimelineSelect, onRiskStationSelect }) {
+  /* â”€â”€ Hooks â€” must be called unconditionally before any return â”€â”€ */
   const [zoomed, setZoomed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -502,7 +635,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         <Suspense fallback={null}>
           {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} onStationSelect={onRiskStationSelect} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
             <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
@@ -531,7 +664,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         <Suspense fallback={null}>
           {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} onStationSelect={onRiskStationSelect} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
             <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
@@ -563,7 +696,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         <Suspense fallback={null}>
           {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
         </Suspense>
-        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
+        {showRisk && <div id="section-risk"><RiskTable riskData={riskData} onStationSelect={onRiskStationSelect} /></div>}
         <Suspense fallback={null}>
           {showTimeSeries && (
             <div id="section-timeseries"><TimeSeriesChart station={selectedStation} source={source} onClose={onCloseTimeSeries} /></div>
@@ -658,7 +791,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
-  // ── SHARPpy format export ──────────────────────────────────
+  // â”€â”€ SHARPpy format export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSharppy = () => {
     const profile = result.profile;
     if (!profile || profile.length === 0) return;
@@ -689,7 +822,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
-  // ── CM1 input_sounding export ──────────────────────────────
+  // â”€â”€ CM1 input_sounding export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCm1 = () => {
     const profile = result.profile;
     if (!profile || profile.length === 0) return;
@@ -714,7 +847,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       const qv = (621.97 * e) / (lv.p - e);
       let u = 0, v = 0;
       if (lv.wd != null && lv.ws != null) {
-        const wsMs = lv.ws * 0.51444; // kt → m/s
+        const wsMs = lv.ws * 0.51444; // kt â†’ m/s
         const wdRad = (lv.wd * Math.PI) / 180;
         u = -wsMs * Math.sin(wdRad);
         v = -wsMs * Math.cos(wdRad);
@@ -731,7 +864,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
-  // ── JSON export ─────────────────────────────────────────────
+  // â”€â”€ JSON export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleJsonExport = () => {
     const payload = {
       meta: { station: meta.station, date: meta.date, source: meta.source, stationName: meta.stationName },
@@ -759,7 +892,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
 
       // Build parameter summary rows
       const rows = [
-        [`${meta.station || meta.source.toUpperCase()}  —  ${meta.stationName || ""}  —  ${meta.date}`, ""],
+        [`${meta.station || meta.source.toUpperCase()}  â€”  ${meta.stationName || ""}  â€”  ${meta.date}`, ""],
         ["", ""],
         ["THERMODYNAMIC", ""],
         ["SB CAPE", `${params.sbCape ?? "---"} J/kg`], ["SB CIN", `${params.sbCin ?? "---"} J/kg`],
@@ -773,7 +906,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         ["", ""],
         ["KINEMATIC", ""],
         ["BWD 0-1 km", `${params.bwd1km ?? "---"} kt`], ["BWD 0-6 km", `${params.bwd6km ?? "---"} kt`],
-        ["SRH 0-1 km", `${params.srh1km ?? "---"} m²/s²`], ["SRH 0-3 km", `${params.srh3km ?? "---"} m²/s²`],
+        ["SRH 0-1 km", `${params.srh1km ?? "---"} mÂ²/sÂ²`], ["SRH 0-3 km", `${params.srh3km ?? "---"} mÂ²/sÂ²`],
         ["", ""],
         ["COMPOSITE INDICES", ""],
         ["STP", `${params.stp ?? "---"}`], ["SCP", `${params.scp ?? "---"}`],
@@ -853,7 +986,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       <Suspense fallback={null}>
         {showMap && mapProps && <div id="section-map"><StationMap {...mapProps} /></div>}
       </Suspense>
-      {showRisk && <div id="section-risk"><RiskTable riskData={riskData} /></div>}
+      {showRisk && <div id="section-risk"><RiskTable riskData={riskData} onStationSelect={onRiskStationSelect} /></div>}
 
       {/* Time-Series Chart / Comparison / VWP */}
       <Suspense fallback={null}>
@@ -868,7 +1001,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         )}
       </Suspense>
 
-      {/* Meta bar — above the sounding plot */}
+      {/* Meta bar â€” above the sounding plot */}
       <div id="section-sounding" className="rv-meta-bar">
         <div className="rv-meta-row-top">
           <span className="rv-meta-station">{meta.station || meta.source.toUpperCase()}</span>
@@ -935,7 +1068,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                 <button onClick={() => { handleFullReport(); setExportOpen(false); }} disabled={reportBusy}>
                   <Printer size={13} />
                   <div>
-                    <span className="rv-export-title">{reportBusy ? "Generating…" : "Full Report PNG"}</span>
+                    <span className="rv-export-title">{reportBusy ? "Generatingâ€¦" : "Full Report PNG"}</span>
                     <span className="rv-export-desc">Screenshot of sounding + all parameters</span>
                   </div>
                 </button>
@@ -1010,7 +1143,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
       )}
       {/* Sounding Animator */}
       {showAnimator && (
-        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading animator…</span></div>}>
+        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading animatorâ€¦</span></div>}>
           <SoundingAnimator
             station={lastParams?.station || selectedStation}
             model={lastParams?.model}
@@ -1021,9 +1154,9 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           />
         </Suspense>
       )}
-      {/* Plot — static PNG or interactive Skew-T */}
+      {/* Plot â€” static PNG or interactive Skew-T */}
       {interactiveMode ? (
-        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading interactive Skew-T…</span></div>}>
+        <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading interactive Skew-Tâ€¦</span></div>}>
           <InteractiveSkewT
             profile={result.profile}
             sbParcel={result.sbParcel}
@@ -1091,7 +1224,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
           const summary = generateSoundingSummary(params, meta);
           return (
             <div className="rv-summary-body">
-              {/* ── Header banner ── */}
+              {/* â”€â”€ Header banner â”€â”€ */}
               <div className="rv-sum-banner">
                 <div className="rv-sum-banner-left">
                   <span className="rv-sum-station">{summary.station}</span>
@@ -1104,7 +1237,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                 )}
               </div>
 
-              {/* ── Threat callout ── */}
+              {/* â”€â”€ Threat callout â”€â”€ */}
               {summary.threats.length > 0 && (
                 <div className="rv-sum-callout" style={{ borderLeftColor: summary.threatColor }}>
                   <span className="rv-sum-callout-label">Primary Hazards</span>
@@ -1116,7 +1249,7 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
                 </div>
               )}
 
-              {/* ── Analysis sections ── */}
+              {/* â”€â”€ Analysis sections â”€â”€ */}
               <div className="rv-sum-sections">
                 {summary.sections.map((sec) => {
                   const IconComp = SECTION_ICONS[sec.id];

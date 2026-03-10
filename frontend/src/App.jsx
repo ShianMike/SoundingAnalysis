@@ -193,6 +193,27 @@ export default function App() {
     });
   };
 
+  const handleRiskStationSelect = (stationId, riskMeta) => {
+    // Load sounding for a station from risk scan results
+    if (riskMeta?.model) {
+      // Forecast scan — load BUFKIT sounding with model/fhour
+      handleSubmit({
+        source: "bufkit",
+        station: stationId,
+        model: riskMeta.model.toLowerCase(),
+        fhour: riskMeta.fhour || 0,
+      });
+    } else {
+      // Observed scan — load observed sounding
+      handleSubmit({
+        source: "obs",
+        station: stationId,
+        date: riskMeta?.date?.replace(/[^0-9]/g, "").slice(0, 10) || "",
+      });
+    }
+    setSelectedStation(stationId);
+  };
+
   const handleMapLatLonSelect = (lat, lon) => {
     // stored for ControlPanel to pick up via props
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
@@ -394,6 +415,7 @@ export default function App() {
             onRefreshIntervalChange={setRefreshInterval}
             theme={theme}
             onTimelineSelect={handleTimelineSelect}
+            onRiskStationSelect={handleRiskStationSelect}
             mapProps={{
               stations,
               riskData,

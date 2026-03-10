@@ -101,8 +101,26 @@ def forecast_risk_scan():
     if model not in BUFKIT_MODELS:
         return jsonify({"error": f"Unknown model '{model}'."}), 400
 
-    # Use current time as the model init time (latest run)
-    dt = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    # Model init cycles and data availability lag
+    # HRRR/RAP run hourly but archive has ~2-3h delay
+    # NAM/GFS run at 00/06/12/18Z with ~4-5h delay
+    MODEL_CYCLES = {
+        "hrrr":    {"interval": 1,  "lag": 3},
+        "rap":     {"interval": 1,  "lag": 3},
+        "nam":     {"interval": 6,  "lag": 5},
+        "namnest": {"interval": 6,  "lag": 5},
+        "gfs":     {"interval": 6,  "lag": 6},
+        "sref":    {"interval": 6,  "lag": 6},
+    }
+    cycle_info = MODEL_CYCLES.get(model, {"interval": 6, "lag": 5})
+    now = datetime.now(timezone.utc)
+    # Find most recent init cycle that should be available
+    candidate = now - timedelta(hours=cycle_info["lag"])
+    if cycle_info["interval"] == 1:
+        dt = candidate.replace(minute=0, second=0, microsecond=0)
+    else:
+        cycle_hour = (candidate.hour // cycle_info["interval"]) * cycle_info["interval"]
+        dt = candidate.replace(hour=cycle_hour, minute=0, second=0, microsecond=0)
 
     # Valid time = init time + forecast hour
     valid_time = dt + timedelta(hours=fhour)
@@ -132,11 +150,14 @@ def forecast_risk_scan():
             if bwd_dir is not None:
                 result["bwdDir"] = round(bwd_dir)
             return result
-        except Exception:
+        except Exception as e:
+            print(f"[forecast-scan] {sid} failed: {e}")
             return None
 
     results = []
     scan_workers = int(os.environ.get("SCAN_WORKERS", "6"))
+    print(f"[forecast-risk-scan] model={model} init={dt:%Y-%m-%d %H}Z fhour={fhour} "
+          f"valid={valid_time:%Y-%m-%d %H}Z stations={len(station_ids)}")
 
     try:
         with ThreadPoolExecutor(max_workers=scan_workers) as executor:

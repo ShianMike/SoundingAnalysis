@@ -740,35 +740,48 @@ export default function ControlPanel({
               </div>
 
               {/* Forecast model + fhour pickers */}
-              {scanMode === "forecast" && (
-                <div className="cp-scan-forecast-opts">
-                  <select
-                    className="cp-input cp-scan-select"
-                    value={fcstModel}
-                    onChange={(e) => {
-                      setFcstModel(e.target.value);
-                      const meta = MODEL_META[e.target.value] || { maxF: 384, step: 1 };
-                      if (parseInt(fcstFhour) > meta.maxF) setFcstFhour(String(meta.maxF));
-                    }}
-                  >
-                    {["hrrr", "rap", "nam", "namnest", "gfs"].map((m) => (
-                      <option key={m} value={m}>{MODEL_META[m]?.short || m}</option>
-                    ))}
-                  </select>
-                  <div className="cp-scan-fhour">
-                    <label className="cp-scan-fhour-label">F{fcstFhour}</label>
-                    <input
-                      type="range"
-                      className="cp-scan-slider"
-                      min={0}
-                      max={(MODEL_META[fcstModel] || { maxF: 48 }).maxF}
-                      step={(MODEL_META[fcstModel] || { step: 1 }).step}
-                      value={fcstFhour}
-                      onChange={(e) => setFcstFhour(e.target.value)}
-                    />
+              {scanMode === "forecast" && (() => {
+                const meta = MODEL_META[fcstModel] || { maxF: 48, step: 1 };
+                const fh = parseInt(fcstFhour) || 0;
+                const validDate = new Date(Date.now() + fh * 3600000);
+                const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                const zLabel = `${validDate.getUTCDate()} ${months[validDate.getUTCMonth()]} ${String(validDate.getUTCHours()).padStart(2,"0")}Z`;
+                return (
+                  <div className="cp-scan-forecast-opts">
+                    <div className="cp-scan-row">
+                      <select
+                        className="cp-input cp-scan-select"
+                        value={fcstModel}
+                        onChange={(e) => {
+                          setFcstModel(e.target.value);
+                          const m = MODEL_META[e.target.value] || { maxF: 384, step: 1 };
+                          if (parseInt(fcstFhour) > m.maxF) setFcstFhour(String(m.maxF));
+                        }}
+                      >
+                        {["hrrr", "rap", "nam", "namnest", "gfs"].map((m) => (
+                          <option key={m} value={m}>
+                            {MODEL_META[m]?.short || m} (0–{MODEL_META[m]?.maxF}h)
+                          </option>
+                        ))}
+                      </select>
+                      <span className="cp-scan-valid-tag">F{fcstFhour} · {zLabel}</span>
+                    </div>
+                    <div className="cp-scan-slider-row">
+                      <span className="cp-scan-edge-label">0h</span>
+                      <input
+                        type="range"
+                        className="cp-scan-slider"
+                        min={0}
+                        max={meta.maxF}
+                        step={meta.step}
+                        value={fcstFhour}
+                        onChange={(e) => setFcstFhour(e.target.value)}
+                      />
+                      <span className="cp-scan-edge-label">{meta.maxF}h</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <button
                 type="button"
