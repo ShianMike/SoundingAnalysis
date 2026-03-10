@@ -132,12 +132,25 @@ export async function fetchSpcOutlookStations(day = 1, type = "cat", minRisk = "
 }
 
 /**
+ * Fetch SPC convective outlook forecaster discussion text.
+ * @param {number} day - 1-8
+ * @returns {{ day, text }}
+ */
+export async function fetchSpcDiscussion(day = 1) {
+  const res = await fetchWithTimeout(`${API_BASE}/api/spc-discussion?day=${day}`, {}, 15000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch discussion");
+  return data;
+}
+
+/**
  * Fetch gridded wind U/V field for the animated wind overlay.
  * @param {string} level – "500" (500 hPa steering flow, default) or "surface" (10 m).
+ * @param {number} hourOffset - Forecast hour offset from now (0-12).
  */
-export async function fetchWindField(level = "500") {
+export async function fetchWindField(level = "500", hourOffset = 0) {
   const res = await fetchWithTimeout(
-    `${API_BASE}/api/wind-field?level=${encodeURIComponent(level)}`, {}, 30000,
+    `${API_BASE}/api/wind-field?level=${encodeURIComponent(level)}&hourOffset=${encodeURIComponent(hourOffset)}`, {}, 30000,
   );
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to fetch wind field");
@@ -228,4 +241,13 @@ export async function fetchForecastProfiles(params) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Forecast profiles request failed");
   return data;
+}
+
+/**
+ * Fetch ACARS/AMDAR airport locations for the map overlay.
+ */
+export async function fetchAcarsAirports() {
+  const res = await fetchWithTimeout(`${API_BASE}/api/acars-airports`, {}, 10000);
+  if (!res.ok) throw new Error("Failed to fetch ACARS airports");
+  return res.json();
 }

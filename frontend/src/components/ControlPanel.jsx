@@ -36,6 +36,7 @@ import {
   PanelLeftClose,
   Sliders,
   Wrench,
+  AlertTriangle,
 } from "lucide-react";
 import { fetchRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
@@ -168,6 +169,8 @@ export default function ControlPanel({
   onStationChange,
   onSourceChange,
   mapLatLon,
+  mapStormMotion,
+  mapBoundaryOrientation,
   onFeedbackClick,
   showFeedback: feedbackActive,
   urlParams,
@@ -348,6 +351,27 @@ export default function ControlPanel({
       setLon(String(mapLatLon.lon));
     }
   }, [mapLatLon]);
+
+  // Sync custom storm motion from map draw tool
+  useEffect(() => {
+    if (
+      mapStormMotion &&
+      mapStormMotion.direction != null &&
+      mapStormMotion.speed != null
+    ) {
+      setSmEnabled(true);
+      setSmDirection(String(Math.round(mapStormMotion.direction)));
+      setSmSpeed(String(Math.round(mapStormMotion.speed)));
+    }
+  }, [mapStormMotion]);
+
+  // Sync boundary orientation from map draw tool
+  useEffect(() => {
+    if (mapBoundaryOrientation != null) {
+      setBoundaryEnabled(true);
+      setBoundaryOrientation(String(Math.round(mapBoundaryOrientation)));
+    }
+  }, [mapBoundaryOrientation]);
 
   // Close RAP station dropdown on outside click
   useEffect(() => {
@@ -550,31 +574,25 @@ export default function ControlPanel({
             <p className="cp-brand-sub">Atmospheric Profile Tool</p>
           </div>
         </div>
-        <div className="cp-loading">
+        <div className="cp-loading-state">
           {initialLoading ? (
             <>
-              <Loader2 className="spin" size={20} />
-              <span>Connecting to API...</span>
-              <span style={{ fontSize: "0.85em", opacity: 0.7 }}>May take a moment, be patient</span>
+              <Loader2 className="spin cp-loading-icon" size={32} />
+              <span className="cp-loading-title">Connecting to API&hellip;</span>
+              <span className="cp-loading-hint">May take a moment, be patient</span>
+              <div className="cp-loading-skeleton">
+                <div className="cp-skel-bar" style={{ width: "80%" }} />
+                <div className="cp-skel-bar" style={{ width: "60%" }} />
+                <div className="cp-skel-bar" style={{ width: "90%" }} />
+                <div className="cp-skel-bar" style={{ width: "45%" }} />
+              </div>
             </>
           ) : (
             <>
-              <span style={{ color: "var(--danger, #e74c3c)" }}>{connectError}</span>
-              <button
-                type="button"
-                onClick={onRetry}
-                style={{
-                  marginTop: 8,
-                  padding: "6px 16px",
-                  cursor: "pointer",
-                  borderRadius: 6,
-                  border: "1px solid var(--border, #555)",
-                  background: "var(--surface, #2a2a2a)",
-                  color: "inherit",
-                }}
-              >
-                Retry
-              </button>
+              <AlertTriangle size={32} style={{ color: "var(--danger, #e74c3c)" }} />
+              <span className="cp-loading-title" style={{ color: "var(--danger, #e74c3c)" }}>Connection Failed</span>
+              <span className="cp-loading-hint">{connectError}</span>
+              <button type="button" className="cp-retry-btn" onClick={onRetry}>Retry</button>
             </>
           )}
         </div>

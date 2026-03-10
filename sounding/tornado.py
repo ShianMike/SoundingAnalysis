@@ -231,8 +231,15 @@ def _quick_tornado_score(station_id, dt):
         except Exception:
             dcp_score = 0
 
+        # 0-6 km shear direction (degrees, meteorological convention)
+        try:
+            bwd_dir = float(np.degrees(np.arctan2(-bwd_u.to("m/s").magnitude,
+                                                   -bwd_v.to("m/s").magnitude)) % 360)
+        except Exception:
+            bwd_dir = None
+
         return (float(stp_score), float(raw_score), cape_val, srh_val, bwd_val,
-                float(scp_score), float(ship_score), float(dcp_score))
+                float(scp_score), float(ship_score), float(dcp_score), bwd_dir)
 
     except Exception:
         return None

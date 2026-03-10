@@ -70,6 +70,7 @@ def vwp_display():
 # ── Animated wind-field grid (Open-Meteo GFS) ──────────────────────
 _WF_CACHE = {}
 _WF_CACHE_TTL = 1800   # 30 min
+_WF_MAX_HOUR_OFFSET = 12
 
 # CONUS grid at ~2° resolution  (14 lat × 31 lon = 434 points)
 _WF_LATS = list(range(24, 51, 2))     # [24, 26, 28, ..., 50]
@@ -84,13 +85,20 @@ def wind_field():
 
     Query params:
       level – "surface" (10 m) or "500" (500 hPa steering flow, default).
+      hourOffset – forecast hour offset from now (0-12, default 0).
     """
     level = request.args.get("level", "500")
     if level not in _VALID_LEVELS:
         level = "500"
 
-    cache_key = f"wf_{level}"
-    cached = _WF_CACHE.get(cache_key)
+    try:
+        hour_offset = int(request.args.get("hourOffset", 0))
+    except (TypeError, ValueError):
+        hour_offset = 0
+    hour_offset = max(0, min(hour_offset, _WF_MAX_HOUR_OFFSET))
+
+    payload_key = f"wf_payload_{level}_{hour_offset}"
+    cached = _WF_CACHE.get(payload_key)
     now = time.time()
     if cached and (now - cached["ts"]) < _WF_CACHE_TTL:
         return jsonify(cached["payload"])
@@ -105,42 +113,49 @@ def wind_field():
     lat_str = ",".join(f"{la:.1f}" for la in all_lats)
     lon_str = ",".join(f"{lo:.1f}" for lo in all_lons)
 
-    if level == "surface":
-        url = (
-            f"https://api.open-meteo.com/v1/forecast?"
-            f"latitude={lat_str}&longitude={lon_str}"
-            f"&current=wind_speed_10m,wind_direction_10m"
-            f"&wind_speed_unit=ms&timezone=auto"
-        )
+    source_key = f"wf_source_{level}"
+    source_cached = _WF_CACHE.get(source_key)
+    if source_cached and (now - source_cached["ts"]) < _WF_CACHE_TTL:
+        results = source_cached["results"]
     else:
+        hourly_vars = (
+            "wind_speed_10m,wind_direction_10m"
+            if level == "surface"
+            else "wind_speed_500hPa,wind_direction_500hPa"
+        )
+        # Fetch the full 0..N hour block once, then slice per request.
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat_str}&longitude={lon_str}"
-            f"&hourly=wind_speed_500hPa,wind_direction_500hPa"
-            f"&forecast_hours=1&wind_speed_unit=ms&timezone=auto"
+            f"&hourly={hourly_vars}"
+            f"&forecast_hours={_WF_MAX_HOUR_OFFSET + 1}&wind_speed_unit=ms&timezone=auto"
         )
-
-    try:
-        resp = _requests.get(url, timeout=30)
-        resp.raise_for_status()
-        results = resp.json()
-    except Exception as e:
-        print(f"[WIND-FIELD] Open-Meteo error: {e}")
-        return jsonify({"error": f"Failed to fetch wind data: {e}"}), 502
+        try:
+            resp = _requests.get(url, timeout=30)
+            resp.raise_for_status()
+            results = resp.json()
+            _WF_CACHE[source_key] = {"results": results, "ts": now}
+        except Exception as e:
+            print(f"[WIND-FIELD] Open-Meteo error: {e}")
+            # Graceful fallback: if source cache exists but stale, still use it.
+            if source_cached and source_cached.get("results") is not None:
+                results = source_cached["results"]
+            else:
+                return jsonify({"error": f"Failed to fetch wind data: {e}"}), 502
 
     u_data, v_data = [], []
     items = results if isinstance(results, list) else [results]
     for r in items:
+        h = r.get("hourly", {})
         if level == "surface":
-            c = r.get("current", {})
-            spd = c.get("wind_speed_10m", 0) or 0
-            ddir = c.get("wind_direction_10m", 0) or 0
+            spd_arr = h.get("wind_speed_10m", [0])
+            dir_arr = h.get("wind_direction_10m", [0])
         else:
-            h = r.get("hourly", {})
             spd_arr = h.get("wind_speed_500hPa", [0])
             dir_arr = h.get("wind_direction_500hPa", [0])
-            spd = (spd_arr[0] if spd_arr else 0) or 0
-            ddir = (dir_arr[0] if dir_arr else 0) or 0
+        idx = min(hour_offset, max(0, len(spd_arr) - 1), max(0, len(dir_arr) - 1))
+        spd = (spd_arr[idx] if spd_arr else 0) or 0
+        ddir = (dir_arr[idx] if dir_arr else 0) or 0
         rad = math.radians(ddir)
         u_data.append(round(-spd * math.sin(rad), 2))
         v_data.append(round(-spd * math.cos(rad), 2))
@@ -154,6 +169,8 @@ def wind_field():
         "uData": u_data,
         "vData": v_data,
         "level": level,
+        "hourOffset": hour_offset,
+        "validAt": now,
     }
-    _WF_CACHE[cache_key] = {"payload": payload, "ts": now}
+    _WF_CACHE[payload_key] = {"payload": payload, "ts": now}
     return jsonify(payload)

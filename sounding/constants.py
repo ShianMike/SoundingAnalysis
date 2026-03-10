@@ -67,6 +67,15 @@ STATIONS = {
     "KEY": ("Key West, FL", 24.55, -81.75),
     "RIW": ("Riverton, WY", 43.07, -108.48),
     "LMN": ("Lamont, OK", 36.60, -97.48),
+    "FFC": ("Peachtree City, GA", 33.36, -84.57),
+    "LIX": ("Slidell, LA", 30.34, -89.83),
+    "VEF": ("Las Vegas, NV", 36.05, -115.18),
+    "OAK": ("Oakland, CA", 37.75, -122.22),
+    "GGW": ("Glasgow, MT", 48.21, -106.63),
+    "ANC": ("Anchorage, AK", 61.17, -150.02),
+    "FAI": ("Fairbanks, AK", 64.82, -147.87),
+    "LIH": ("Lihue, HI", 21.98, -159.35),
+    "ITO": ("Hilo, HI", 19.72, -155.07),
 }
 
 # University of Wyoming station IDs (3-letter -> WMO number lookup)
@@ -87,6 +96,9 @@ STATION_WMO = {
     "MPX": "72649", "GRB": "72645", "ILX": "74560", "APX": "72634",
     "INL": "72747", "CRP": "72251", "MAF": "72265", "DRT": "72261",
     "BRO": "72250", "KEY": "72201", "RIW": "72672", "LMN": "74646",
+    "FFC": "72215", "LIX": "72233", "VEF": "72388", "OAK": "72493",
+    "GGW": "72768", "ANC": "70273", "FAI": "70261", "LIH": "91165",
+    "ITO": "91285",
 }
 
 

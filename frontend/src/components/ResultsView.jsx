@@ -54,6 +54,7 @@ const VwpDisplay       = lazy(() => import("./VwpDisplay"));
 const InteractiveSkewT = lazy(() => import("./InteractiveSkewT"));
 const InteractiveHodograph = lazy(() => import("./InteractiveHodograph"));
 const SoundingAnimator = lazy(() => import("./SoundingAnimator"));
+const SoundingTimeline = lazy(() => import("./SoundingTimeline"));
 import "./ResultsView.css";
 
 /* ── Sounding text summary generator ───────────────────────── */
@@ -443,7 +444,58 @@ function RiskTable({ riskData }) {
   );
 }
 
-export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams, autoRefresh, onToggleAutoRefresh, refreshInterval, onRefreshIntervalChange, theme }) {
+export default function ResultsView({ result, loading, error, riskData, showRisk, showMap, mapProps, showTimeSeries, onCloseTimeSeries, showCompare, onCloseCompare, showVwp, onCloseVwp, compareHistoryData, onCompareHistoryConsumed, stations, selectedStation, source, lastParams, autoRefresh, onToggleAutoRefresh, refreshInterval, onRefreshIntervalChange, theme, onTimelineSelect }) {
+  /* ── Hooks — must be called unconditionally before any return ── */
+  const [zoomed, setZoomed] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [interactiveMode, setInteractiveMode] = useState(false);
+  const [showAnimator, setShowAnimator] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const exportRef = useRef(null);
+  const plotRef = useRef(null);
+  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e) => {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
+
+  const handleMouseDown = useCallback((e) => {
+    if (!zoomed) return;
+    const el = plotRef.current;
+    if (!el) return;
+    dragRef.current = {
+      dragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+    };
+    el.style.cursor = "grabbing";
+    e.preventDefault();
+  }, [zoomed]);
+
+  const handleMouseMove = useCallback((e) => {
+    const d = dragRef.current;
+    if (!d.dragging) return;
+    const el = plotRef.current;
+    if (!el) return;
+    el.scrollLeft = d.scrollLeft - (e.clientX - d.startX);
+    el.scrollTop = d.scrollTop - (e.clientY - d.startY);
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    dragRef.current.dragging = false;
+    const el = plotRef.current;
+    if (el && zoomed) el.style.cursor = "grab";
+  }, [zoomed]);
+
   if (error) {
     return (
       <div className="results-view">
@@ -540,55 +592,6 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
   }
 
   const { image, params, meta } = result;
-  const [zoomed, setZoomed] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
-  const [interactiveMode, setInteractiveMode] = useState(false);
-  const [showAnimator, setShowAnimator] = useState(false);
-  const exportRef = useRef(null);
-  const plotRef = useRef(null);
-  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
-
-  // Close export menu on outside click
-  useEffect(() => {
-    if (!exportOpen) return;
-    const handler = (e) => {
-      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [exportOpen]);
-
-  const handleMouseDown = useCallback((e) => {
-    if (!zoomed) return;
-    const el = plotRef.current;
-    if (!el) return;
-    dragRef.current = {
-      dragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      scrollLeft: el.scrollLeft,
-      scrollTop: el.scrollTop,
-    };
-    el.style.cursor = "grabbing";
-    e.preventDefault();
-  }, [zoomed]);
-
-  const handleMouseMove = useCallback((e) => {
-    const d = dragRef.current;
-    if (!d.dragging) return;
-    const el = plotRef.current;
-    if (!el) return;
-    el.scrollLeft = d.scrollLeft - (e.clientX - d.startX);
-    el.scrollTop = d.scrollTop - (e.clientY - d.startY);
-  }, []);
-
-  const handleMouseUp = useCallback(() => {
-    dragRef.current.dragging = false;
-    const el = plotRef.current;
-    if (el && zoomed) el.style.cursor = "grab";
-  }, [zoomed]);
 
   const handleDownload = () => {
     const link = document.createElement("a");
@@ -745,7 +748,6 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
     URL.revokeObjectURL(url);
   };
 
-  const [reportBusy, setReportBusy] = useState(false);
   const handleFullReport = async () => {
     if (reportBusy) return;
     setReportBusy(true);
@@ -995,6 +997,17 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         </div>
         </div>
       </div>
+      {/* Sounding Timeline */}
+      {onTimelineSelect && (
+        <Suspense fallback={null}>
+          <SoundingTimeline
+            station={selectedStation}
+            currentDate={meta?.date}
+            onSelectTime={onTimelineSelect}
+            source={source}
+          />
+        </Suspense>
+      )}
       {/* Sounding Animator */}
       {showAnimator && (
         <Suspense fallback={<div className="rv-state rv-loading"><Loader2 size={20} className="spin" /><span>Loading animator…</span></div>}>

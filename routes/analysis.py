@@ -188,6 +188,32 @@ def ensemble_plume():
         else:
             colors = plt.cm.plasma(np.linspace(0.15, 0.85, n))
 
+        # Interpolate each member to a common pressure grid for percentile bands.
+        p_grid = np.arange(1000, 99, -25, dtype=float)  # hPa (surface to upper levels)
+        t_members = []
+        td_members = []
+
+        def _interp_to_grid(d, field_name):
+            p = np.asarray(d["pressure"].m, dtype=float)
+            x = np.asarray(d[field_name].m, dtype=float)
+            mask = np.isfinite(p) & np.isfinite(x)
+            if mask.sum() < 3:
+                return None
+            p_valid = p[mask]
+            x_valid = x[mask]
+            order = np.argsort(p_valid)
+            p_sorted = p_valid[order]
+            x_sorted = x_valid[order]
+            p_unique, idx = np.unique(p_sorted, return_index=True)
+            x_unique = x_sorted[idx]
+            if p_unique.size < 3:
+                return None
+            out = np.full_like(p_grid, np.nan, dtype=float)
+            valid = (p_grid >= p_unique.min()) & (p_grid <= p_unique.max())
+            if np.any(valid):
+                out[valid] = np.interp(p_grid[valid], p_unique, x_unique)
+            return out
+
         for i, pf in enumerate(profiles):
             d = pf["data"]
             p = d["pressure"].m
@@ -198,9 +224,70 @@ def ensemble_plume():
             skew.plot(p, t, c, linewidth=1.0, alpha=alpha)
             skew.plot(p, td, c, linewidth=0.8, alpha=alpha * 0.7, linestyle="--")
 
+            t_interp = _interp_to_grid(d, "temperature")
+            td_interp = _interp_to_grid(d, "dewpoint")
+            if t_interp is not None:
+                t_members.append(t_interp)
+            if td_interp is not None:
+                td_members.append(td_interp)
+
+        # Percentile plume (10/25/50/75/90) across all available members.
+        if len(t_members) >= 3:
+            t_arr = np.asarray(t_members)
+            t10, t25, t50, t75, t90 = np.nanpercentile(t_arr, [10, 25, 50, 75, 90], axis=0)
+            valid_wide = np.isfinite(t10) & np.isfinite(t90)
+            valid_core = np.isfinite(t25) & np.isfinite(t75)
+            valid_med = np.isfinite(t50)
+            if np.any(valid_wide):
+                skew.ax.fill_betweenx(
+                    p_grid[valid_wide], t10[valid_wide], t90[valid_wide],
+                    color="#ef4444", alpha=0.08, linewidth=0, label="T 10–90%",
+                )
+            if np.any(valid_core):
+                skew.ax.fill_betweenx(
+                    p_grid[valid_core], t25[valid_core], t75[valid_core],
+                    color="#ef4444", alpha=0.16, linewidth=0, label="T 25–75%",
+                )
+            if np.any(valid_med):
+                skew.plot(p_grid[valid_med], t50[valid_med], color="#dc2626", linewidth=2.0, alpha=0.9, label="T median")
+
+        if len(td_members) >= 3:
+            td_arr = np.asarray(td_members)
+            td10, td25, td50, td75, td90 = np.nanpercentile(td_arr, [10, 25, 50, 75, 90], axis=0)
+            valid_wide = np.isfinite(td10) & np.isfinite(td90)
+            valid_core = np.isfinite(td25) & np.isfinite(td75)
+            valid_med = np.isfinite(td50)
+            if np.any(valid_wide):
+                skew.ax.fill_betweenx(
+                    p_grid[valid_wide], td10[valid_wide], td90[valid_wide],
+                    color="#22c55e", alpha=0.06, linewidth=0, label="Td 10–90%",
+                )
+            if np.any(valid_core):
+                skew.ax.fill_betweenx(
+                    p_grid[valid_core], td25[valid_core], td75[valid_core],
+                    color="#22c55e", alpha=0.12, linewidth=0, label="Td 25–75%",
+                )
+            if np.any(valid_med):
+                skew.plot(
+                    p_grid[valid_med], td50[valid_med],
+                    color="#16a34a", linewidth=1.6, alpha=0.9, linestyle="--", label="Td median",
+                )
+
         d0 = profiles[0]["data"]
         skew.plot(d0["pressure"].m, d0["temperature"].m, "r", linewidth=2, alpha=0.9, label="Analysis (f000)")
         skew.plot(d0["pressure"].m, d0["dewpoint"].m, "g", linewidth=1.5, alpha=0.8)
+
+        handles, labels = skew.ax.get_legend_handles_labels()
+        if handles:
+            dedup = {}
+            for h, lbl in zip(handles, labels):
+                if lbl and lbl not in dedup:
+                    dedup[lbl] = h
+            skew.ax.legend(
+                dedup.values(), dedup.keys(),
+                loc="lower left", fontsize=7, framealpha=0.22,
+                facecolor=bg, edgecolor=grid_c,
+            )
 
         skew.ax.set_title(
             f"Ensemble Plume: {station.upper()} {model.upper()}\n"

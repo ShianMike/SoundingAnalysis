@@ -1,9 +1,9 @@
-const CACHE_NAME = "sounding-v1";
+const CACHE_NAME = "sounding-v2";
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/favicon.svg",
-  "/manifest.json",
+  "./",
+  "./index.html",
+  "./favicon.svg",
+  "./manifest.json",
 ];
 
 // Install — cache static shell

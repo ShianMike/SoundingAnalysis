@@ -172,13 +172,44 @@ export default function App() {
     setCompareHistoryData(data);
   };
 
+  const handleCompareStations = (stationIds) => {
+    // Open Compare view with pre-filled station slots from proximity search
+    const slots = stationIds.map((id) => ({ station: id, source: "obs", date: "", hour: "12" }));
+    setShowCompare(true);
+    setCompareHistoryData({ slots, results: [] });
+    scrollToSection("section-compare");
+  };
+
   const handleMapStationSelect = (stationId) => {
     setSelectedStation(stationId);
+  };
+
+  const handleTimelineSelect = (dateKey) => {
+    // Re-fetch sounding for the same station with a different date
+    handleSubmit({
+      source: source || "obs",
+      station: selectedStation,
+      date: dateKey,
+    });
   };
 
   const handleMapLatLonSelect = (lat, lon) => {
     // stored for ControlPanel to pick up via props
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
+  };
+
+  const handleMapStormMotionSelect = ({ direction, speed }) => {
+    // stored for ControlPanel to pick up via props
+    setLastParams((prev) => ({
+      ...prev,
+      _mapStormDirection: direction,
+      _mapStormSpeed: speed,
+    }));
+  };
+
+  const handleMapBoundaryOrientationSelect = (orientation) => {
+    // stored for ControlPanel to pick up via props
+    setLastParams((prev) => ({ ...prev, _mapBoundaryOrientation: orientation }));
   };
 
   const handleFetchLatest = (stationId) => {
@@ -312,7 +343,12 @@ export default function App() {
             selectedStation={selectedStation}
             onStationChange={handleStationChange}
             onSourceChange={handleSourceChange}
-            mapLatLon={lastParams?._mapLat ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
+            mapLatLon={lastParams?._mapLat != null ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
+            mapStormMotion={lastParams?._mapStormDirection != null ? {
+              direction: lastParams._mapStormDirection,
+              speed: lastParams._mapStormSpeed,
+            } : null}
+            mapBoundaryOrientation={lastParams?._mapBoundaryOrientation != null ? lastParams._mapBoundaryOrientation : null}
             onFeedbackClick={() => setShowFeedback((v) => !v)}
             showFeedback={showFeedback}
             urlParams={urlParamsRef.current}
@@ -357,15 +393,19 @@ export default function App() {
             refreshInterval={refreshInterval}
             onRefreshIntervalChange={setRefreshInterval}
             theme={theme}
+            onTimelineSelect={handleTimelineSelect}
             mapProps={{
               stations,
               riskData,
               selectedStation,
               onStationSelect: handleMapStationSelect,
               onLatLonSelect: handleMapLatLonSelect,
+              onStormMotionSelect: handleMapStormMotionSelect,
+              onBoundaryOrientationSelect: handleMapBoundaryOrientationSelect,
               latLonMode: source === "rap",
               onClose: () => setShowMap(false),
               onFetchLatest: handleFetchLatest,
+              onCompareStations: handleCompareStations,
             }}
           />
         </main>

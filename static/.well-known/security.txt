@@ -1,0 +1,7 @@
+# Security Policy for Sounding Analysis
+# https://securitytxt.org/
+
+Contact: https://github.com/shianmike/SoundingAnalysis/issues
+Preferred-Languages: en
+Canonical: https://shianmike.github.io/.well-known/security.txt
+Expires: 2027-03-07T00:00:00.000Z

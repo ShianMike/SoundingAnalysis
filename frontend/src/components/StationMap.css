@@ -238,6 +238,18 @@ body.smap-fullscreen-active .control-panel {
   flex-shrink: 0;
 }
 
+.smap-utc-clock {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #60a5fa;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(59, 130, 246, 0.08);
+  white-space: nowrap;
+}
+
 .smap-tag {
   font-size: 11px;
   font-weight: 500;
@@ -246,6 +258,18 @@ body.smap-fullscreen-active .control-panel {
   padding: 4px 10px;
   border-radius: 5px;
   white-space: nowrap;
+}
+.smap-tag-draw {
+  color: var(--text-secondary, #94a3b8);
+  background: rgba(148, 163, 184, 0.12);
+}
+.smap-tag-sm {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.smap-tag-bdry {
+  color: #ff44ff;
+  background: rgba(255, 68, 255, 0.12);
 }
 
 /* ── Toolbar toggle buttons ────── */
@@ -276,6 +300,19 @@ body.smap-fullscreen-active .control-panel {
   color: #22c55e;
   background: rgba(34, 197, 94, 0.08);
   border-color: rgba(34, 197, 94, 0.25);
+}
+.smap-draw-boundary.active {
+  color: #ff44ff;
+  background: rgba(255, 68, 255, 0.1);
+  border-color: rgba(255, 68, 255, 0.3);
+}
+.smap-draw-clear {
+  color: var(--text-secondary);
+}
+
+.smap-tbtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* SPC refresh button — compact icon-only */
@@ -368,7 +405,7 @@ body.smap-fullscreen-active .control-panel {
 }
 
 .smap-type-btns {
-  /* same pill group style as day buttons — no separator */
+  display: flex;
 }
 
 .smap-sig-hatch {
@@ -397,6 +434,56 @@ body.smap-fullscreen-active .control-panel {
   margin-left: auto;
   font-style: italic;
 }
+
+/* ── SPC Discussion panel ── */
+.smap-discussion-panel {
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.smap-discussion-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.smap-discussion-header span {
+  flex: 1;
+}
+.smap-discussion-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+.smap-discussion-close:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+.smap-discussion-body {
+  padding: 8px 10px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+  letter-spacing: -0.01em;
+}
+.smap-discussion-body::-webkit-scrollbar { width: 5px; }
+.smap-discussion-body::-webkit-scrollbar-track { background: transparent; }
+.smap-discussion-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 
 /* ── Floating legend overlays (inside map container) ─────── */
 .smap-legend-stack {
@@ -478,7 +565,7 @@ body.smap-fullscreen-active .control-panel {
   min-height: 800px;
   overflow: hidden;
   position: relative;
-  z-index: 0; /* creates stacking context — keeps Leaflet z-indexes contained */
+  isolation: isolate; /* creates stacking context — keeps Leaflet z-indexes contained */
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
@@ -833,6 +920,24 @@ body.smap-fullscreen-active .control-panel {
   cursor: pointer;
 }
 
+.smap-wind-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.smap-wind-time .smap-radar-slider {
+  width: 86px;
+}
+
+.smap-cluster-marker {
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.35));
+}
+
+.smap-legend-decimation {
+  border-color: rgba(96, 165, 250, 0.25);
+}
+
 .smap-radar-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -862,14 +967,13 @@ body.smap-fullscreen-active .control-panel {
 }
 
 /* ── Station popup card ──────────────────────────────────────── */
+
 .smap-popup .leaflet-popup-content-wrapper {
-  background: rgba(17, 17, 24, 0.96) !important;
+  background: rgb(17, 17, 24) !important;
   color: var(--text-primary) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 12px !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   padding: 0 !important;
   overflow: hidden;
 }
@@ -880,7 +984,7 @@ body.smap-fullscreen-active .control-panel {
 }
 
 .smap-popup .leaflet-popup-tip {
-  background: rgba(17, 17, 24, 0.96) !important;
+  background: rgb(17, 17, 24) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-top: none !important;
   border-left: none !important;
@@ -1104,13 +1208,13 @@ body.smap-fullscreen-active .control-panel {
 
 /* ── Light theme popup ──────────────────────────────────────── */
 [data-theme="light"] .smap-popup .leaflet-popup-content-wrapper {
-  background: rgba(255, 255, 255, 0.97) !important;
+  background: rgb(255, 255, 255) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15) !important;
 }
 
 [data-theme="light"] .smap-popup .leaflet-popup-tip {
-  background: rgba(255, 255, 255, 0.97) !important;
+  background: rgb(255, 255, 255) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
@@ -1298,6 +1402,231 @@ body.smap-fullscreen-active .control-panel {
 [data-theme=\"light\"] .smap-warn-headline { color: #222; }
 [data-theme=\"light\"] .smap-warn-area { color: #555; }
 [data-theme=\"light\"] .smap-warn-time { color: #777; }
+
+/* ── Proximity Search overlay (rendered outside Leaflet) ────── */
+.smap-prox-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.smap-prox-panel {
+  background: rgb(17, 17, 24);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  min-width: 220px;
+  max-width: 280px;
+  overflow: hidden;
+  font-size: 11px;
+}
+
+[data-theme="light"] .smap-prox-panel {
+  background: rgb(255, 255, 255);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+[data-theme="light"] .smap-prox-select {
+  background: rgba(59, 130, 246, 0.06);
+  color: #2563eb;
+}
+
+.smap-prox-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px 7px;
+  color: #f43f5e;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.smap-prox-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.smap-prox-close:hover {
+  color: var(--text-primary);
+}
+
+.smap-prox-coords {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 12px 2px;
+}
+
+.smap-prox-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  gap: 2px;
+}
+
+.smap-prox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+  width: 100%;
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.smap-prox-item:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.smap-prox-rank {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.smap-prox-sid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #60a5fa;
+  flex-shrink: 0;
+  min-width: 30px;
+}
+
+.smap-prox-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smap-prox-dist {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.smap-prox-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.smap-prox-select {
+  padding: 5px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+}
+.smap-prox-select:focus {
+  border-color: #3b82f6;
+}
+
+.smap-prox-compare {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.3px;
+}
+.smap-prox-compare:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+}
+
+.smap-prox-dismiss {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.smap-prox-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* ── Favorite star marker icon ───────────────────────────────── */
+.smap-fav-icon {
+  background: none !important;
+  border: none !important;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  transition: transform 0.15s ease;
+}
+.smap-fav-icon:hover {
+  transform: scale(1.2);
+}
+
+/* ── Hint bar below map ──────────────────────────────────────── */
+.smap-hint-bar {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  opacity: 0.7;
+}
+.smap-fullscreen .smap-hint-bar {
+  border-radius: 0;
+}
+
+/* ── Legend hint text ────────────────────────────────────────── */
+.smap-legend-hint {
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-style: italic;
+}
 
 /* Responsive */
 @media (max-width: 1024px) {

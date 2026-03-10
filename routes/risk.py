@@ -41,8 +41,8 @@ def risk_scan():
             score = _quick_tornado_score(sid, dt)
             if score is None:
                 return None
-            stp_score, raw_score, cape, srh, bwd, scp, ship, dcp = score
-            return {
+            stp_score, raw_score, cape, srh, bwd, scp, ship, dcp, bwd_dir = score
+            result = {
                 "id": sid,
                 "name": STATIONS.get(sid, (sid,))[0],
                 "lat": STATIONS.get(sid, ("", 0, 0))[1],
@@ -56,6 +56,9 @@ def risk_scan():
                 "ship": round(ship, 2),
                 "dcp": round(dcp, 2),
             }
+            if bwd_dir is not None:
+                result["bwdDir"] = round(bwd_dir)
+            return result
         except Exception:
             return None
 

@@ -168,6 +168,18 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - **NWS active warnings:** real-time Tornado/Severe Thunderstorm/Flash Flood/Special Weather warnings from the NWS API, rendered as color-coded polygons with click-for-details popups
 - **SPC outlook overlays:** Day 1 through Day 8 convective outlook GeoJSON with color-coded risk categories and legend
 - **Wind flow animation:** surface streamlines and 500 hPa steering flow overlays powered by Open-Meteo forecast data, rendered on a Canvas layer with animated particle trails
+- **SPC watch boxes:** Tornado and Severe Thunderstorm watch outlines from NWS MapServer
+- **Spotter Network:** real-time active storm spotter positions
+- **Lightning overlay:** real-time lightning strikes via Blitzortung WebSocket feed
+- **Proximity search:** click "Near me" to find the closest upper-air stations to your browser location
+- **Wind barbs on map:** toggle surface/850 hPa/500 hPa Open-Meteo wind barbs over the map
+- **Shear vectors:** 0-6 km bulk shear direction arrows on station markers (requires risk scan)
+- **Favorite station stars:** gold star markers highlight your pinned stations on the map
+- **ACARS airport markers:** blue aircraft icons on major ACARS-capable airports with click-to-fetch
+- **Tools dropdown:** dedicated toolbar group (right side) with draw-on-map tools for storm motion vectors and boundary orientation lines
+- **Draw Storm Motion:** two-click tool to define a custom storm-motion vector — first click sets start, cursor shows live speed (kt) and direction as you move, second click commits the vector and auto-fills the ControlPanel storm-motion fields
+- **Draw Boundary:** two-click tool to define a boundary orientation line — live orientation angle preview while moving the cursor, auto-fills ControlPanel boundary orientation on commit
+- **Live draw preview:** dashed guide line and real-time value readout (speed/direction or orientation) displayed on the map and toolbar between the first and second click
 
 ### Multi-Sounding Comparison
 - Compare up to 4 soundings side-by-side
@@ -194,15 +206,20 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 
 ### Sounding Modifications
 - **Surface modification** — override surface T, Td, wind speed/direction and re-compute all parameters
-- **Custom storm motion** — input direction + speed for SRH/SRW recalculation
+- **Custom storm motion** — input direction + speed for SRH/SRW recalculation; also settable by drawing on the station map
 - **Profile smoothing** — Gaussian filter with adjustable σ (great for noisy ACARS profiles)
-- **Boundary orientation** — plot boundary line on hodograph at custom angle
+- **Boundary orientation** — plot boundary line on hodograph at custom angle; also settable by drawing on the station map
 
 ### Sounding History & Favorites
 - Auto-saves last 20 soundings to localStorage with one-click reload
 - Relative timestamps ("3m ago", "2h ago")
 - Tabbed view: Soundings and Comparisons tabs
 - **Favorite stations** — pin frequently used stations; persisted in localStorage
+
+### Sounding Timeline
+- Horizontal scrollable bar showing available sounding times for the past 4 days
+- 00Z and 12Z cycle buttons with one-click fetch
+- Displayed above the results when a sounding is loaded
 
 ### Shareable Sounding Links
 - Sounding parameters encoded in the URL query string
@@ -273,7 +290,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 │   ├── analysis.py        # /api/compare, /api/time-series, /api/ensemble-plume
 │   ├── feedback.py        # /api/feedback (GET/POST)
 │   ├── helpers.py         # Shared helpers (safe_round, parse_date, etc.)
-│   ├── meta.py            # /api/stations, /api/sources
+│   ├── meta.py            # /api/stations, /api/sources, /api/acars-airports
 │   ├── risk.py            # /api/risk-scan
 │   ├── sounding_routes.py # /api/sounding (main endpoint)
 │   ├── spc.py             # /api/spc-outlook
@@ -316,6 +333,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
     │       ├── CustomUpload.jsx   # WRF/CSV/SHARPpy upload page
     │       ├── InteractiveSkewT.jsx # Canvas interactive Skew-T
     │       ├── InteractiveHodograph.jsx # Canvas interactive hodograph
+    │       ├── SoundingTimeline.jsx # Historical sounding time bar
     │       ├── SoundingAnimator.jsx # BUFKIT forecast animation
     │       └── *.css              # Component styles (dark/light theme)
     ├── public/
@@ -403,6 +421,7 @@ The backend deploys via Cloud Build from source to Cloud Run (Singapore region).
 |---|---|---|
 | `GET` | `/api/stations` | List all known sounding stations |
 | `GET` | `/api/sources` | List available data sources and BUFKIT models |
+| `GET` | `/api/acars-airports` | List ACARS-capable airport locations |
 | `POST` | `/api/sounding` | Fetch sounding, compute params, return base64 plot + data |
 | `POST` | `/api/risk-scan` | Scan stations and return tornado risk scores |
 | `POST` | `/api/time-series` | Fetch parameter trends over a date range |

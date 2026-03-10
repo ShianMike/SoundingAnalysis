@@ -1,6 +1,7 @@
 """
 SPC Convective Outlook proxy routes.
 """
+import re
 import time
 
 import requests as _requests
@@ -33,6 +34,14 @@ _SPC_OUTLOOK_URLS = {
 }
 
 _VALID_DAYS = {"1", "2", "3", "4", "5", "6", "7", "8"}
+
+# SPC discussion text URLs (plain-text ACUS products)
+_SPC_DISCUSSION_URLS = {
+    "1": "https://www.spc.noaa.gov/products/outlook/day1otlk.txt",
+    "2": "https://www.spc.noaa.gov/products/outlook/day2otlk.txt",
+    "3": "https://www.spc.noaa.gov/products/outlook/day3otlk.txt",
+    "48": "https://www.spc.noaa.gov/products/exper/day4-8/day48prob.txt",
+}
 
 _spc_cache = {}
 _SPC_CACHE_TTL = 600  # 10 minutes
@@ -70,6 +79,58 @@ def spc_outlook():
     except Exception as e:
         print(f"[SPC] Failed to fetch Day {day} {otype} outlook: {e}")
         return jsonify({"error": f"Failed to fetch SPC outlook: {e}"}), 502
+
+
+def _parse_discussion(raw_text, day):
+    """Extract the narrative discussion from an SPC outlook text product."""
+    # The discussion block sits between ...SUMMARY... or ...DISCUSSION...
+    # and the next section marker or the end of the narrative area.
+    text = raw_text.replace("\r\n", "\n")
+
+    # Try to extract between "...DISCUSSION..." and the end marker ($$, .PREV, or similar)
+    disc_match = re.search(
+        r"\.{3}(?:SUMMARY|DISCUSSION)\.{3}\s*\n(.*?)(?:\n\$\$|\n\.PREV|\n&&|\Z)",
+        text, re.DOTALL | re.IGNORECASE,
+    )
+    if disc_match:
+        body = disc_match.group(1).strip()
+    else:
+        # Fallback: grab everything after the header lines
+        body = text.strip()
+
+    return body
+
+
+@bp.route("/api/spc-discussion", methods=["GET"])
+def spc_discussion():
+    """Proxy SPC convective outlook discussion text."""
+    day = request.args.get("day", "1")
+    if day not in _VALID_DAYS:
+        return jsonify({"error": f"Invalid day: {day}. Use 1-8."}), 400
+
+    # Day 4-8 all share the same product
+    url_key = "48" if int(day) >= 4 else day
+    cache_key = f"disc_{url_key}"
+
+    cached = _spc_cache.get(cache_key)
+    if cached and (time.time() - cached["ts"]) < _SPC_CACHE_TTL:
+        return jsonify(cached["data"])
+
+    url = _SPC_DISCUSSION_URLS.get(url_key)
+    if not url:
+        return jsonify({"error": f"No discussion product for day {day}"}), 400
+
+    try:
+        resp = _requests.get(url, timeout=15)
+        resp.raise_for_status()
+        raw = resp.text
+        body = _parse_discussion(raw, int(day))
+        result = {"day": int(day), "text": body}
+        _spc_cache[cache_key] = {"data": result, "ts": time.time()}
+        return jsonify(result)
+    except Exception as e:
+        print(f"[SPC] Failed to fetch Day {day} discussion: {e}")
+        return jsonify({"error": f"Failed to fetch discussion: {e}"}), 502
 
 
 @bp.route("/api/spc-outlook-stations", methods=["GET"])

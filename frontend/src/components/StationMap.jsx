@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown } from "lucide-react";
-import { fetchSpcOutlook, fetchSpcOutlookStations, fetchWindField } from "../api";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Plane, Navigation, Search, FileText, Minus, Compass } from "lucide-react";
+import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports } from "../api";
+import { getFavorites } from "../favorites";
 import WindCanvas from "./WindCanvas";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
@@ -27,8 +28,8 @@ function RadarLayer({ url, opacity, ...rest }) {
 
 /* ── base-map tile options ───────────────────────────────────── */
 const BASE_MAPS = [
-  { id: "dark",      name: "Dark",      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",  labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
-  { id: "light",     name: "Light",     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", labels: "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png" },
+  { id: "dark",      name: "Dark",      url: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",  labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
+  { id: "light",     name: "Light",     url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", labels: "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png" },
   { id: "satellite", name: "Satellite", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
   { id: "terrain",   name: "Terrain",   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", labels: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" },
 ];
@@ -87,8 +88,20 @@ function buildMosaicFrames(count = 24) {
   return frames;
 }
 
+const WIND_MAX_HOUR_OFFSET = 12;
+
+function clampNum(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function frameToHourOffset(frameIdx, frameCount, maxOffset = WIND_MAX_HOUR_OFFSET) {
+  if (frameCount <= 1) return 0;
+  const ratio = clampNum(frameIdx, 0, frameCount - 1) / (frameCount - 1);
+  return Math.round(ratio * maxOffset);
+}
+
 /* ── NWS Active Warnings ─────────────────────────────────────── */
-const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual&message_type=alert,update";
+const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual";
 
 /* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
 const SPC_WATCH_URL =
@@ -201,7 +214,66 @@ function MdWatchLayer({ mdData, watchData }) {
 }
 
 /* ── Lightning overlay (Blitzortung) ─────────────────────────── */
-const BLITZ_WS_URL = "wss://ws1.blitzortung.org/";
+const BLITZ_WS_SERVERS = [
+  "wss://ws1.blitzortung.org/",
+];
+const LIGHTNING_BOUNDS = { west: -130, east: -60, north: 55, south: 20 };
+
+function decodeBlitzPayload(ciphertext) {
+  // Mirrors the LZW-like decoder used by known Blitzortung clients.
+  const chars = [...String(ciphertext || "")];
+  if (!chars.length) return "";
+
+  let c = chars[0];
+  let prev = c;
+  let out = c;
+  const dict = [];
+
+  for (let i = 1; i < chars.length; i += 1) {
+    const ch = chars[i];
+    const code = ch.codePointAt(0);
+    const a = code < 256
+      ? ch
+      : (dict[code - 256] != null ? dict[code - 256] : `${prev}${c}`);
+
+    out += a;
+    c = [...a][0] || "";
+    dict.push(`${prev}${c}`);
+    prev = a;
+  }
+
+  return out;
+}
+
+function normalizeStrikeTime(rawTime) {
+  if (rawTime == null) return Date.now();
+  const t = Number(rawTime);
+  if (!Number.isFinite(t)) return Date.now();
+  if (t > 1e15) return t / 1e6; // unix nanos -> millis
+  if (t > 1e12) return t / 1e3; // unix micros -> millis
+  if (t > 1e10) return t;       // unix millis
+  return t * 1000;              // unix seconds
+}
+
+function parseLightningMessage(raw) {
+  if (typeof raw !== "string") return null;
+
+  const parseJson = (txt) => {
+    try { return JSON.parse(txt); } catch { return null; }
+  };
+  const parsed = parseJson(raw) || parseJson(decodeBlitzPayload(raw));
+  if (!parsed) return null;
+
+  const lat = Number(parsed.lat);
+  const lon = Number(parsed.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  return {
+    lat,
+    lon,
+    time: normalizeStrikeTime(parsed.time),
+  };
+}
 
 function useLightningData(enabled) {
   const [strikes, setStrikes] = useState([]);
@@ -223,26 +295,31 @@ function useLightningData(enabled) {
     function connect() {
       if (wsRef.current) return;
       try {
-        const ws = new WebSocket(BLITZ_WS_URL);
+        const url = BLITZ_WS_SERVERS[Math.floor(Math.random() * BLITZ_WS_SERVERS.length)];
+        const ws = new WebSocket(url);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // Subscribe to lightning data (global region)
-          ws.send(JSON.stringify({ west: -130, east: -60, north: 55, south: 20 }));
+          // Required handshake for the live strike stream.
+          ws.send(JSON.stringify({ a: 111 }));
+          ws.send(JSON.stringify(LIGHTNING_BOUNDS));
         };
 
         ws.onmessage = (event) => {
-          try {
-            const d = JSON.parse(event.data);
-            if (d.lat != null && d.lon != null) {
-              const now = Date.now();
-              const strike = { lat: d.lat, lon: d.lon, time: d.time || now, id: now + Math.random() };
-              strikesRef.current = [
-                strike,
-                ...strikesRef.current.filter((s) => now - s.time < STRIKE_TTL),
-              ].slice(0, MAX_STRIKES);
-            }
-          } catch {}
+          const strike = parseLightningMessage(event.data);
+          if (!strike) return;
+          if (
+            strike.lat < LIGHTNING_BOUNDS.south ||
+            strike.lat > LIGHTNING_BOUNDS.north ||
+            strike.lon < LIGHTNING_BOUNDS.west ||
+            strike.lon > LIGHTNING_BOUNDS.east
+          ) return;
+
+          const now = Date.now();
+          strikesRef.current = [
+            { ...strike, id: `${Math.round(strike.time)}_${strike.lat.toFixed(3)}_${strike.lon.toFixed(3)}` },
+            ...strikesRef.current.filter((s) => now - s.time < STRIKE_TTL),
+          ].slice(0, MAX_STRIKES);
         };
 
         ws.onclose = () => {
@@ -631,20 +708,58 @@ function nearestNexrad(lat, lon) {
   return { id: best[0], lat: best[1], lon: best[2] };
 }
 
-/* ── Track map center for nearest-radar selection ───────────── */
-function MapCenterTracker({ onCenterChange }) {
+function _toRad(deg) { return (deg * Math.PI) / 180; }
+function _toDeg(rad) { return (rad * 180) / Math.PI; }
+
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const phi1 = _toRad(lat1);
+  const phi2 = _toRad(lat2);
+  const dLon = _toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) -
+            Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  return (_toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371.0;
+  const dLat = _toRad(lat2 - lat1);
+  const dLon = _toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(_toRad(lat1)) * Math.cos(_toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* ── Track map center + view bounds for nearest-radar and decimation ───────────── */
+function MapViewTracker({ onCenterChange, onViewChange }) {
   const map = useMap();
+  const report = useCallback(() => {
+    const c = map.getCenter();
+    const b = map.getBounds();
+    onCenterChange?.(c.lat, c.lng);
+    onViewChange?.({
+      zoom: map.getZoom(),
+      south: b.getSouth(),
+      west: b.getWest(),
+      north: b.getNorth(),
+      east: b.getEast(),
+    });
+  }, [map, onCenterChange, onViewChange]);
+
   useMapEvents({
     moveend() {
-      const c = map.getCenter();
-      onCenterChange(c.lat, c.lng);
+      report();
+    },
+    zoomend() {
+      report();
     },
   });
+
   // Fire once on mount
   useEffect(() => {
-    const c = map.getCenter();
-    onCenterChange(c.lat, c.lng);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    report();
+  }, [report]);
+
   return null;
 }
 
@@ -765,11 +880,26 @@ function OutlookLayer({ data, outlookType }) {
 }
 
 /* ── click-for-coords layer ─────────────────────────────────── */
-function MapClickHandler({ enabled, onLatLonSelect }) {
+function MapClickHandler({ enabled, onLatLonSelect, onRightClick, onMapClick, onMouseMove, disableRightClick = false }) {
   useMapEvents({
     click(e) {
+      if (onMapClick && onMapClick(e.latlng.lat, e.latlng.lng, e) === true) return;
       if (enabled && onLatLonSelect) {
         onLatLonSelect(e.latlng.lat.toFixed(2), e.latlng.lng.toFixed(2));
+      }
+    },
+    mousemove(e) {
+      onMouseMove?.(e.latlng.lat, e.latlng.lng);
+    },
+    contextmenu(e) {
+      if (disableRightClick) {
+        e.originalEvent.preventDefault();
+        return;
+      }
+      // Right-click → proximity search
+      if (onRightClick) {
+        e.originalEvent.preventDefault();
+        onRightClick(e.latlng.lat, e.latlng.lng);
       }
     },
   });
@@ -805,11 +935,15 @@ export default function StationMap({
   selectedStation,
   onStationSelect,
   onLatLonSelect,
+  onStormMotionSelect,
+  onBoundaryOrientationSelect,
   latLonMode,   // true when source is rap
   onClose,
   onFetchLatest,            // (stationId) => void  — triggers auto-fetch with best source
+  onCompareStations,        // (stationIds[]) => void — compare nearest stations
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [utcNow, setUtcNow] = useState(() => new Date());
   const [outlookDay, setOutlookDay] = useState(1);
   const [outlookType, setOutlookType] = useState("cat");
   const [outlookData, setOutlookData] = useState(null);
@@ -858,8 +992,11 @@ export default function StationMap({
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
   const [windLevel, setWindLevel] = useState("500");  // "500" = steering, "surface" = 10m
+  const [windHourOffset, setWindHourOffset] = useState(0);
   const [windData, setWindData] = useState(null);
-  const [windLoading, setWindLoading] = useState(false);
+  const [syncTimeline, setSyncTimeline] = useState(true);
+  const windFetchDebounceRef = useRef(null);
+  const windReqSeqRef = useRef(0);
 
   // SPC Mesoscale Discussions & Watches overlay
   const [showMdWatch, setShowMdWatch] = useState(false);
@@ -877,8 +1014,15 @@ export default function StationMap({
   const [outlookRefresh, setOutlookRefresh] = useState(0);
 
   // Toolbar group dropdown (only one open at a time)
-  const [openGroup, setOpenGroup] = useState(null); // "forecasts" | "radar" | "overlays" | null
+  const [openGroup, setOpenGroup] = useState(null); // "forecasts" | "radar" | "overlays" | "tools" | null
   const toggleGroup = useCallback((g) => setOpenGroup((prev) => (prev === g ? null : g)), []);
+
+  // Draw tools: map-driven storm motion and boundary orientation
+  const [drawMode, setDrawMode] = useState(null); // "stormMotion" | "boundary" | null
+  const [drawPoints, setDrawPoints] = useState([]); // [[lat, lon]]
+  const [stormMotionGuide, setStormMotionGuide] = useState(null); // {start, end, direction, speed, toward}
+  const [boundaryGuide, setBoundaryGuide] = useState(null); // {start, end, orientation}
+  const [drawPreview, setDrawPreview] = useState(null); // live preview while cursor moves after first click
 
   // Outlook stations (stations within SPC outlook polygons)
   const [outlookStations, setOutlookStations] = useState(null);
@@ -886,6 +1030,30 @@ export default function StationMap({
   const [showOutlookStations, setShowOutlookStations] = useState(false);
   const [outlookError, setOutlookError] = useState(null);
   const [popupStationId, setPopupStationId] = useState(null);
+  const [showDiscussion, setShowDiscussion] = useState(false);
+  const [discussionText, setDiscussionText] = useState("");
+  const [discussionLoading, setDiscussionLoading] = useState(false);
+
+  // ── Proximity search (right-click map) ────────────────────
+  const [proximityResult, setProximityResult] = useState(null); // {lat, lon, stations: [{id, name, dist}]}
+
+  // ── Wind barbs from risk-scan data on map ─────────────────
+  const [showWindBarbs, setShowWindBarbs] = useState(false);
+
+  // ── Favorite stations as distinct markers ─────────────────
+  const [showFavorites, setShowFavorites] = useState(true);
+  const [favorites, setFavorites] = useState(() => getFavorites());
+  // Refresh favorites when window regains focus (in case changed in ControlPanel)
+  useEffect(() => {
+    const handler = () => setFavorites(getFavorites());
+    window.addEventListener("focus", handler);
+    return () => window.removeEventListener("focus", handler);
+  }, []);
+
+  // ── ACARS airports overlay ────────────────────────────────
+  const [showAcars, setShowAcars] = useState(false);
+  const [acarsAirports, setAcarsAirports] = useState(null);
+  const [acarsLoading, setAcarsLoading] = useState(false);
 
   // Animated radar state — unified for both composite (RainViewer) and mosaic (IEM)
   const [radarPlaying, setRadarPlaying] = useState(false);
@@ -1004,10 +1172,206 @@ export default function StationMap({
     return () => clearInterval(velTimerRef.current);
   }, [velPlaying, showVelocity, velFrameCount]);
 
+  // Optional timeline sync: map radar/velocity frame position to wind forecast offset.
+  useEffect(() => {
+    if (!syncTimeline || !showWind) return;
+    let nextOffset = null;
+    if (showVelocity && velFrameCount > 0) {
+      nextOffset = frameToHourOffset(velFrame, velFrameCount);
+    } else if (showRadar && radarFrameCount > 0) {
+      nextOffset = frameToHourOffset(radarFrame, radarFrameCount);
+    }
+    if (nextOffset == null) return;
+    setWindHourOffset((prev) => (prev === nextOffset ? prev : nextOffset));
+  }, [
+    syncTimeline,
+    showWind,
+    showVelocity,
+    velFrame,
+    velFrameCount,
+    showRadar,
+    radarFrame,
+    radarFrameCount,
+  ]);
+
   const handleCenterChange = useCallback((lat, lng) => {
     const nr = nearestNexrad(lat, lng);
     setVelocityRadar((prev) => prev.id === nr.id ? prev : nr);
   }, []);
+
+  const activeTimeline = useMemo(() => {
+    if (showVelocity && velFrameCount > 0) {
+      return {
+        kind: "velocity",
+        frame: velFrame,
+        count: velFrameCount,
+        playing: velPlaying,
+        label: velFrames[velFrame] ? fmtRadarTime(velFrames[velFrame].time) : "Animate",
+      };
+    }
+    if (showRadar && radarFrameCount > 0) {
+      return {
+        kind: "radar",
+        frame: radarFrame,
+        count: radarFrameCount,
+        playing: radarPlaying,
+        label: radarFrames[radarFrame]
+          ? `${radarFrames[radarFrame].forecast ? "\u2601 " : ""}${fmtRadarTime(radarFrames[radarFrame].time)}`
+          : "Animate",
+      };
+    }
+    return null;
+  }, [
+    showVelocity, velFrameCount, velFrame, velPlaying, velFrames,
+    showRadar, radarFrameCount, radarFrame, radarPlaying, radarFrames,
+  ]);
+
+  const toggleTimelinePlayback = useCallback(() => {
+    if (!activeTimeline) return;
+    if (activeTimeline.kind === "velocity") {
+      setVelPlaying((v) => !v);
+    } else {
+      setRadarPlaying((v) => !v);
+    }
+  }, [activeTimeline]);
+
+  const scrubTimelineFrame = useCallback((rawFrame) => {
+    const frame = Number(rawFrame);
+    if (showVelocity && velFrameCount > 0) {
+      const idx = clampNum(frame, 0, velFrameCount - 1);
+      setVelFrame(idx);
+      setVelPlaying(false);
+      if (syncTimeline && showWind) {
+        setWindHourOffset(frameToHourOffset(idx, velFrameCount));
+      }
+      return;
+    }
+    if (showRadar && radarFrameCount > 0) {
+      const idx = clampNum(frame, 0, radarFrameCount - 1);
+      setRadarFrame(idx);
+      setRadarPlaying(false);
+      if (syncTimeline && showWind) {
+        setWindHourOffset(frameToHourOffset(idx, radarFrameCount));
+      }
+    }
+  }, [
+    showVelocity, velFrameCount, syncTimeline, showWind,
+    showRadar, radarFrameCount,
+  ]);
+
+  // ── Proximity search: right-click map → find nearest N stations ──
+  const handleProximitySearch = useCallback((lat, lng) => {
+    if (!stations.length) return;
+    const nearest = stations
+      .map((s) => {
+        const dLat = s.lat - lat;
+        const dLon = (s.lon - lng) * Math.cos((lat * Math.PI) / 180);
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon) * 111.32; // approx km
+        return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, dist };
+      })
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 5);
+    setProximityResult({ lat, lon: lng, stations: nearest });
+  }, [stations]);
+
+  const toggleDrawMode = useCallback((mode) => {
+    setDrawPoints([]);
+    setDrawPreview(null);
+    setDrawMode((prev) => (prev === mode ? null : mode));
+  }, []);
+
+  const clearDrawGuides = useCallback(() => {
+    setDrawMode(null);
+    setDrawPoints([]);
+    setDrawPreview(null);
+    setStormMotionGuide(null);
+    setBoundaryGuide(null);
+  }, []);
+
+  const handleMapToolClick = useCallback((lat, lon) => {
+    if (!drawMode) return false;
+
+    const clickPoint = [Number(lat), Number(lon)];
+
+    // First click picks the start point; second click completes the vector/line.
+    if (drawPoints.length === 0) {
+      setDrawPoints([clickPoint]);
+      return true;
+    }
+
+    const [start] = drawPoints;
+    const [sLat, sLon] = start;
+    const [eLat, eLon] = clickPoint;
+    const distKm = haversineKm(sLat, sLon, eLat, eLon);
+
+    // Ignore accidental near-zero second clicks.
+    if (distKm < 0.5) return true;
+
+    if (drawMode === "stormMotion") {
+      // User draws where the storm is moving toward.
+      const toward = bearingDeg(sLat, sLon, eLat, eLon);
+      // Backend expects meteorological "from" direction for wind_components.
+      const direction = (toward + 180) % 360;
+      // Interpret line length as 1-hour displacement (nm/hr = kt).
+      const speed = Math.max(5, Math.min(120, Math.round(distKm * 0.539957)));
+      const payload = {
+        start,
+        end: clickPoint,
+        direction: Math.round(direction),
+        speed,
+        toward: Math.round(toward),
+      };
+      setStormMotionGuide(payload);
+      onStormMotionSelect?.({ direction: payload.direction, speed: payload.speed });
+    } else if (drawMode === "boundary") {
+      const rawOrient = bearingDeg(sLat, sLon, eLat, eLon);
+      // Boundary orientation is an axis, so 045° and 225° are equivalent.
+      const orientation = Math.round(((rawOrient % 180) + 180) % 180);
+      const payload = {
+        start,
+        end: clickPoint,
+        orientation,
+      };
+      setBoundaryGuide(payload);
+      onBoundaryOrientationSelect?.(orientation);
+    }
+
+    setDrawMode(null);
+    setDrawPoints([]);
+    setDrawPreview(null);
+    return true;
+  }, [drawMode, drawPoints, onStormMotionSelect, onBoundaryOrientationSelect]);
+
+  const handleDrawMouseMove = useCallback((lat, lon) => {
+    if (!drawMode || drawPoints.length !== 1) { setDrawPreview(null); return; }
+    const [sLat, sLon] = drawPoints[0];
+    const eLat = Number(lat), eLon = Number(lon);
+    const distKm = haversineKm(sLat, sLon, eLat, eLon);
+    if (distKm < 0.5) { setDrawPreview(null); return; }
+    const cursorPos = [eLat, eLon];
+    if (drawMode === "stormMotion") {
+      const toward = bearingDeg(sLat, sLon, eLat, eLon);
+      const direction = (toward + 180) % 360;
+      const speed = Math.max(5, Math.min(120, Math.round(distKm * 0.539957)));
+      setDrawPreview({ cursorPos, direction: Math.round(direction), speed, toward: Math.round(toward) });
+    } else if (drawMode === "boundary") {
+      const rawOrient = bearingDeg(sLat, sLon, eLat, eLon);
+      const orientation = Math.round(((rawOrient % 180) + 180) % 180);
+      setDrawPreview({ cursorPos, orientation });
+    }
+  }, [drawMode, drawPoints]);
+
+  // ── Fetch ACARS airports when toggled on ─────────────────────
+  useEffect(() => {
+    if (!showAcars) { setAcarsAirports(null); return; }
+    let cancelled = false;
+    setAcarsLoading(true);
+    fetchAcarsAirports()
+      .then((data) => { if (!cancelled) setAcarsAirports(data); })
+      .catch((e) => console.error("ACARS airports fetch error:", e))
+      .finally(() => { if (!cancelled) setAcarsLoading(false); });
+    return () => { cancelled = true; };
+  }, [showAcars]);
 
   // Fetch NWS active warnings on mount + every 2 min when toggle is on
   useEffect(() => {
@@ -1065,17 +1429,34 @@ export default function StationMap({
     return () => { cancelled = true; clearInterval(id); };
   }, [showMdWatch]);
 
-  // Fetch wind field when toggled on or level changes
+  // Fetch wind field with scrub-friendly debounce to avoid UI jitter.
   useEffect(() => {
-    if (!showWind) return;
+    clearTimeout(windFetchDebounceRef.current);
+
+    if (!showWind) {
+      return;
+    }
+
     let cancelled = false;
-    setWindLoading(true);
-    fetchWindField(windLevel)
-      .then((d) => { if (!cancelled) setWindData(d); })
-      .catch((e) => console.error("Wind field error:", e))
-      .finally(() => { if (!cancelled) setWindLoading(false); });
-    return () => { cancelled = true; };
-  }, [showWind, windLevel]);
+    const reqSeq = ++windReqSeqRef.current;
+
+    windFetchDebounceRef.current = setTimeout(() => {
+      fetchWindField(windLevel, windHourOffset)
+        .then((d) => {
+          if (!cancelled && reqSeq === windReqSeqRef.current) setWindData(d);
+        })
+        .catch((e) => {
+          if (!cancelled && reqSeq === windReqSeqRef.current) {
+            console.error("Wind field error:", e);
+          }
+        });
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(windFetchDebounceRef.current);
+    };
+  }, [showWind, windLevel, windHourOffset]);
 
   // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
@@ -1151,6 +1532,18 @@ export default function StationMap({
     };
   }, [outlookData]);
 
+  // Fetch SPC discussion when toggled
+  useEffect(() => {
+    if (!showDiscussion || !showOutlook) { setDiscussionText(""); return; }
+    let cancelled = false;
+    setDiscussionLoading(true);
+    fetchSpcDiscussion(outlookDay)
+      .then((data) => { if (!cancelled) setDiscussionText(data.text || ""); })
+      .catch(() => { if (!cancelled) setDiscussionText("Failed to load discussion."); })
+      .finally(() => { if (!cancelled) setDiscussionLoading(false); });
+    return () => { cancelled = true; };
+  }, [showDiscussion, showOutlook, outlookDay, outlookRefresh]);
+
   // Set of station IDs within the outlook area
   const outlookStationIds = useMemo(() => {
     if (!outlookStations?.stations) return new Set();
@@ -1172,6 +1565,109 @@ export default function StationMap({
 
   const mapCenter = CONUS_CENTER;
   const mapZoom = CONUS_ZOOM;
+  const [mapView, setMapView] = useState({
+    zoom: CONUS_ZOOM,
+    south: 22,
+    west: -128,
+    north: 52,
+    east: -66,
+  });
+
+  const stationRender = useMemo(() => {
+    if (!stations.length) {
+      return { stations: [], clusters: [], hiddenCount: 0 };
+    }
+
+    const view = mapView || { zoom: 4, south: 20, west: -130, north: 55, east: -60 };
+    const zoom = view.zoom ?? 4;
+    const pad = zoom <= 4 ? 2.5 : zoom <= 6 ? 1.5 : 0.8;
+    const south = view.south - pad;
+    const north = view.north + pad;
+    const west = view.west;
+    const east = view.east;
+
+    const lonInBounds = (lon) => (
+      west <= east ? (lon >= west && lon <= east) : (lon >= west || lon <= east)
+    );
+    const inBounds = (s) => (
+      s.lat >= south && s.lat <= north && lonInBounds(s.lon)
+    );
+
+    const priorityIds = new Set();
+    if (selectedStation) priorityIds.add(selectedStation);
+    if (popupStationId) priorityIds.add(popupStationId);
+    favorites.forEach((fid) => priorityIds.add(fid));
+    if (showOutlookStations) {
+      outlookStationIds.forEach((sid) => priorityIds.add(sid));
+    }
+
+    const candidates = stations.filter((s) => inBounds(s) || priorityIds.has(s.id));
+    if (zoom >= 7) {
+      return { stations: candidates, clusters: [], hiddenCount: 0 };
+    }
+
+    const cellDeg = zoom <= 3 ? 2.4 : zoom <= 4 ? 1.8 : zoom <= 5 ? 1.2 : 0.9;
+    const buckets = new Map();
+    const kept = new Map();
+
+    for (const s of candidates) {
+      if (priorityIds.has(s.id)) {
+        kept.set(s.id, s);
+        continue;
+      }
+
+      const wrappedLon = ((s.lon + 540) % 360) - 180;
+      const key = `${Math.floor((s.lat + 90) / cellDeg)}_${Math.floor((wrappedLon + 180) / cellDeg)}`;
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { members: [], sumLat: 0, sumLon: 0, maxStp: null };
+        buckets.set(key, bucket);
+      }
+      bucket.members.push(s);
+      bucket.sumLat += s.lat;
+      bucket.sumLon += s.lon;
+      const stp = riskMap[s.id]?.stp;
+      if (stp != null && (bucket.maxStp == null || stp > bucket.maxStp)) {
+        bucket.maxStp = stp;
+      }
+    }
+
+    const renderedStations = [...kept.values()];
+    const clusters = [];
+    let hiddenCount = 0;
+
+    for (const [key, bucket] of buckets.entries()) {
+      if (bucket.members.length === 1) {
+        renderedStations.push(bucket.members[0]);
+        continue;
+      }
+      hiddenCount += bucket.members.length;
+      clusters.push({
+        id: key,
+        lat: bucket.sumLat / bucket.members.length,
+        lon: bucket.sumLon / bucket.members.length,
+        count: bucket.members.length,
+        color: riskColor(bucket.maxStp),
+      });
+    }
+
+    return { stations: renderedStations, clusters, hiddenCount };
+  }, [
+    stations,
+    mapView,
+    selectedStation,
+    popupStationId,
+    favorites,
+    showOutlookStations,
+    outlookStationIds,
+    riskMap,
+  ]);
+
+  // Live UTC clock
+  useEffect(() => {
+    const id = setInterval(() => setUtcNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Escape key exits fullscreen
   useEffect(() => {
@@ -1232,6 +1728,19 @@ export default function StationMap({
             </button>
             <div className="smap-toolbar-end">
               <button
+                className={`smap-group-btn${openGroup === "tools" ? " open" : ""}${(stormMotionGuide || boundaryGuide || drawMode) ? " has-active" : ""}`}
+                onClick={() => toggleGroup("tools")}
+              >
+                <Compass size={11} />
+                Tools
+                {stormMotionGuide && <span className="smap-group-dot" />}
+                {boundaryGuide && <span className="smap-group-dot smap-dot-vel" />}
+                <ChevronDown size={10} className="smap-group-chevron" />
+              </button>
+              <span className="smap-utc-clock" title="Current UTC / Zulu time">
+                {utcNow.toISOString().slice(11, 16)}Z
+              </span>
+              <button
                 className={`smap-expand${isFullscreen ? " active" : ""}`}
                 onClick={() => setIsFullscreen((v) => !v)}
                 title={isFullscreen ? "Exit fullscreen (Esc)" : "Expand map fullscreen"}
@@ -1244,8 +1753,64 @@ export default function StationMap({
             </div>
           </div>
 
+          {/* ── Tools panel ── */}
+          {openGroup === "tools" && (
+            <div className="smap-group-panel">
+              <div className="smap-controls">
+                <button
+                  className={`smap-tbtn smap-draw-btn ${drawMode === "stormMotion" ? "active" : ""}`}
+                  onClick={() => toggleDrawMode("stormMotion")}
+                  title="Draw storm-motion vector: click start then end point (1-hour displacement)"
+                >
+                  <Navigation size={11} />
+                  Draw Storm Motion
+                </button>
+                <button
+                  className={`smap-tbtn smap-draw-btn smap-draw-boundary ${drawMode === "boundary" ? "active" : ""}`}
+                  onClick={() => toggleDrawMode("boundary")}
+                  title="Draw boundary orientation line: click two points along the boundary"
+                >
+                  <Minus size={11} />
+                  Draw Boundary
+                </button>
+                {(drawMode || drawPoints.length > 0) && (
+                  <span className="smap-tag smap-tag-draw">
+                    {drawPoints.length === 0
+                      ? "Click start point"
+                      : drawPreview
+                        ? drawMode === "stormMotion"
+                          ? `${drawPreview.direction}°/${drawPreview.speed} kt — click to set`
+                          : `${drawPreview.orientation}° — click to set`
+                        : "Move cursor…"}
+                  </span>
+                )}
+                {(stormMotionGuide || boundaryGuide) && (
+                  <button
+                    className="smap-tbtn smap-draw-clear"
+                    onClick={clearDrawGuides}
+                    title="Clear drawn storm-motion and boundary guides"
+                  >
+                    <X size={10} />
+                    Clear Guides
+                  </button>
+                )}
+                {stormMotionGuide && (
+                  <span className="smap-tag smap-tag-sm">
+                    SM {stormMotionGuide.direction}°/{stormMotionGuide.speed} kt
+                  </span>
+                )}
+                {boundaryGuide && (
+                  <span className="smap-tag smap-tag-bdry">
+                    BDRY {boundaryGuide.orientation}°
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Forecasts panel ── */}
           {openGroup === "forecasts" && (
+            <>
             <div className="smap-group-panel">
               <div className="smap-controls">
                 <button
@@ -1324,6 +1889,16 @@ export default function StationMap({
                   </>
                 )}
               </div>
+              {showOutlook && (
+                <button
+                  className={`smap-tbtn ${showDiscussion ? "active" : ""}`}
+                  onClick={() => setShowDiscussion((v) => !v)}
+                  title="Show/hide forecaster discussion narrative"
+                >
+                  <FileText size={11} />
+                  Discussion
+                </button>
+              )}
               {showOutlook && outlookLoading && (
                 <span className="smap-outlook-loading">Loading…</span>
               )}
@@ -1336,6 +1911,19 @@ export default function StationMap({
                 <span className="smap-outlook-error">{outlookError}</span>
               )}
             </div>
+            {showOutlook && showDiscussion && (
+              <div className="smap-discussion-panel">
+                <div className="smap-discussion-header">
+                  <FileText size={12} />
+                  <span>Day {outlookDay} Convective Outlook Discussion</span>
+                  <button className="smap-discussion-close" onClick={() => setShowDiscussion(false)}><X size={12} /></button>
+                </div>
+                <div className="smap-discussion-body">
+                  {discussionLoading ? "Loading discussion…" : discussionText || "No discussion available."}
+                </div>
+              </div>
+            )}
+          </>
           )}
 
           {/* ── Radar panel ── */}
@@ -1375,30 +1963,6 @@ export default function StationMap({
                     </button>
                   </div>
                 )}
-                {showRadar && radarFrameCount > 0 && (
-                  <>
-                    <button
-                      className={`smap-tbtn smap-anim-btn ${radarPlaying ? "active" : ""}`}
-                      onClick={() => setRadarPlaying((v) => !v)}
-                      title={radarPlaying ? "Pause radar animation" : "Animate radar frames"}
-                    >
-                      {radarPlaying ? <Pause size={10} /> : <Play size={10} />}
-                      {radarFrames[radarFrame]
-                        ? (radarFrames[radarFrame].forecast ? "\u2601 " : "") + fmtRadarTime(radarFrames[radarFrame].time)
-                        : "Animate"}
-                    </button>
-                    <input
-                      type="range"
-                      className="smap-radar-slider"
-                      min={0}
-                      max={radarFrameCount - 1}
-                      step={1}
-                      value={radarFrame}
-                      onChange={(e) => { setRadarFrame(Number(e.target.value)); setRadarPlaying(false); }}
-                      title="Scrub through radar frames"
-                    />
-                  </>
-                )}
                 <span className="smap-group-sep" />
                 <button
                   className={`smap-tbtn ${showVelocity ? "active" : ""}`}
@@ -1422,25 +1986,37 @@ export default function StationMap({
                     ))}
                   </div>
                 )}
-                {showVelocity && velFrameCount > 0 && (
+                {(showRadar || showVelocity) && showWind && (
+                  <button
+                    className={`smap-tbtn ${syncTimeline ? "active" : ""}`}
+                    onClick={() => setSyncTimeline((v) => !v)}
+                    title="Sync wind-flow forecast hour to radar/velocity timeline position"
+                  >
+                    <Navigation size={11} />
+                    Sync Wind
+                  </button>
+                )}
+                {activeTimeline && (
                   <>
                     <button
-                      className={`smap-tbtn smap-anim-btn ${velPlaying ? "active" : ""}`}
-                      onClick={() => setVelPlaying((v) => !v)}
-                      title={velPlaying ? "Pause velocity animation" : "Animate velocity frames"}
+                      className={`smap-tbtn smap-anim-btn ${activeTimeline.playing ? "active" : ""}`}
+                      onClick={toggleTimelinePlayback}
+                      title={activeTimeline.playing
+                        ? `Pause ${activeTimeline.kind} animation`
+                        : `Animate ${activeTimeline.kind} frames`}
                     >
-                      {velPlaying ? <Pause size={10} /> : <Play size={10} />}
-                      {velFrames[velFrame] ? fmtRadarTime(velFrames[velFrame].time) : "Animate"}
+                      {activeTimeline.playing ? <Pause size={10} /> : <Play size={10} />}
+                      {activeTimeline.label}
                     </button>
                     <input
                       type="range"
                       className="smap-radar-slider"
                       min={0}
-                      max={velFrameCount - 1}
+                      max={activeTimeline.count - 1}
                       step={1}
-                      value={velFrame}
-                      onChange={(e) => { setVelFrame(Number(e.target.value)); setVelPlaying(false); }}
-                      title="Scrub through velocity frames"
+                      value={activeTimeline.frame}
+                      onChange={(e) => scrubTimelineFrame(e.target.value)}
+                      title={`Scrub through ${activeTimeline.kind} frames`}
                     />
                   </>
                 )}
@@ -1511,26 +2087,75 @@ export default function StationMap({
                 >
                   <Wind size={11} />
                   Wind Flow
-                  {windLoading && <span className="smap-outlook-loading-dot">...</span>}
                 </button>
                 {showWind && (
-                  <div className="smap-day-btns smap-wind-level-btns">
-                    <button
-                      className={`smap-day-btn${windLevel === "500" ? " active" : ""}`}
-                      onClick={() => setWindLevel("500")}
-                      title="500 hPa steering flow — matches radar echo motion"
-                    >
-                      Steering
-                    </button>
-                    <button
-                      className={`smap-day-btn${windLevel === "surface" ? " active" : ""}`}
-                      onClick={() => setWindLevel("surface")}
-                      title="10 m surface wind"
-                    >
-                      Surface
-                    </button>
-                  </div>
+                  <>
+                    <div className="smap-day-btns smap-wind-level-btns">
+                      <button
+                        className={`smap-day-btn${windLevel === "500" ? " active" : ""}`}
+                        onClick={() => setWindLevel("500")}
+                        title="500 hPa steering flow — matches radar echo motion"
+                      >
+                        Steering
+                      </button>
+                      <button
+                        className={`smap-day-btn${windLevel === "surface" ? " active" : ""}`}
+                        onClick={() => setWindLevel("surface")}
+                        title="10 m surface wind"
+                      >
+                        Surface
+                      </button>
+                    </div>
+                    <div className="smap-wind-time">
+                      <input
+                        type="range"
+                        className="smap-radar-slider"
+                        min={0}
+                        max={WIND_MAX_HOUR_OFFSET}
+                        step={1}
+                        value={windHourOffset}
+                        disabled={syncTimeline && Boolean(activeTimeline)}
+                        onChange={(e) => setWindHourOffset(Number(e.target.value))}
+                        title={syncTimeline && activeTimeline
+                          ? "Wind timeline synced to radar/velocity scrubber"
+                          : "Set wind forecast hour offset"}
+                      />
+                      <span className="smap-radar-badge">{`+${windHourOffset}h`}</span>
+                      {syncTimeline && activeTimeline && (
+                        <span className="smap-radar-badge">Synced</span>
+                      )}
+                    </div>
+                  </>
                 )}
+                <span className="smap-group-sep" />
+                <button
+                  className={`smap-tbtn ${showWindBarbs ? "active" : ""}`}
+                  onClick={() => setShowWindBarbs((v) => !v)}
+                  title={riskData ? "Show 0-6 km bulk shear vectors from risk-scan data on station markers" : "Run a Risk Scan first to enable shear vectors"}
+                  disabled={!riskData}
+                >
+                  <Navigation size={11} />
+                  Shear Vectors
+                </button>
+                <button
+                  className={`smap-tbtn ${showFavorites ? "active" : ""}`}
+                  onClick={() => setShowFavorites((v) => !v)}
+                  title="Highlight favorite stations with star markers"
+                >
+                  <Star size={11} />
+                  Favorites
+                  {favorites.length > 0 && <span className="smap-radar-badge">{favorites.length}</span>}
+                </button>
+                <button
+                  className={`smap-tbtn ${showAcars ? "active" : ""}`}
+                  onClick={() => setShowAcars((v) => !v)}
+                  title="Show ACARS/AMDAR aircraft observation airports — click to fetch profile"
+                >
+                  <Plane size={11} />
+                  ACARS
+                  {acarsLoading && <span className="smap-outlook-loading-dot">...</span>}
+                  {acarsAirports && <span className="smap-radar-badge">{acarsAirports.length}</span>}
+                </button>
               </div>
             </div>
           )}
@@ -1575,8 +2200,75 @@ export default function StationMap({
             maxZoom={18}
           />
 
+          {/* Draw-tool guides: storm-motion vector and boundary line */}
+          <Pane name="draw-guides" style={{ zIndex: 465, pointerEvents: "none" }}>
+            {drawPoints.length === 1 && (
+              <>
+                <CircleMarker
+                  center={drawPoints[0]}
+                  radius={6}
+                  pathOptions={{
+                    color: drawMode === "boundary" ? "#ff44ff" : "#22c55e",
+                    fillColor: drawMode === "boundary" ? "#ff44ff" : "#22c55e",
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }}
+                />
+                {drawPreview && (
+                  <Polyline
+                    positions={[drawPoints[0], drawPreview.cursorPos]}
+                    pathOptions={{
+                      color: drawMode === "boundary" ? "#ff44ff" : "#22c55e",
+                      weight: 2,
+                      opacity: 0.5,
+                      dashArray: "6 4",
+                    }}
+                  />
+                )}
+              </>
+            )}
+            {stormMotionGuide && (
+              <>
+                <Polyline
+                  positions={[stormMotionGuide.start, stormMotionGuide.end]}
+                  pathOptions={{
+                    color: "#22c55e",
+                    weight: 3,
+                    opacity: 0.95,
+                  }}
+                />
+                <CircleMarker
+                  center={stormMotionGuide.end}
+                  radius={5}
+                  pathOptions={{
+                    color: "#22c55e",
+                    fillColor: "#22c55e",
+                    fillOpacity: 0.95,
+                    weight: 2,
+                  }}
+                />
+              </>
+            )}
+            {boundaryGuide && (
+              <Polyline
+                positions={[boundaryGuide.start, boundaryGuide.end]}
+                pathOptions={{
+                  color: "#ff44ff",
+                  weight: 3,
+                  opacity: 0.9,
+                  dashArray: "8 6",
+                }}
+              />
+            )}
+          </Pane>
+
           {/* Animated wind particle field — lowest overlay (z-index 250, below tiles/SPC) */}
-          {showWind && windData && <WindCanvas data={windData} />}
+          {showWind && windData && (
+            <WindCanvas
+              key={`wind-${windData.level || "500"}-${windData.hourOffset ?? 0}-${Math.round(windData.validAt || 0)}`}
+              data={windData}
+            />
+          )}
 
           {/* Radar reflectivity — Pane z-index 300 renders ABOVE SPC outlook (250) */}
           <Pane name="radar-tiles" style={{ zIndex: 300 }}>
@@ -1586,7 +2278,7 @@ export default function StationMap({
               <RadarLayer
                 pane="radar-tiles"
                 url={`${RAINVIEWER_TILE}${radarFrames[radarFrame].path}${RAINVIEWER_OPTS}`}
-                opacity={0.6}
+                opacity={0.85}
                 maxNativeZoom={7}
                 maxZoom={18}
                 attribution="Radar via RainViewer"
@@ -1596,7 +2288,7 @@ export default function StationMap({
               <RadarLayer
                 pane="radar-tiles"
                 url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${radarFrames[radarFrame].ts}/{z}/{x}/{y}.png`}
-                opacity={0.6}
+                opacity={0.85}
                 maxZoom={18}
                 attribution="US National Composite via IEM"
               />
@@ -1612,7 +2304,7 @@ export default function StationMap({
               layers={`k${velocityRadar.id.toLowerCase()}_sr_bref`}
               format="image/png"
               transparent={true}
-              opacity={0.65}
+              opacity={0.85}
               maxZoom={18}
               attribution="NWS NEXRAD"
             />
@@ -1646,7 +2338,7 @@ export default function StationMap({
               layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
               format="image/png"
               transparent={true}
-              opacity={0.65}
+              opacity={0.85}
               zIndex={300}
               maxZoom={18}
               attribution="NWS NEXRAD"
@@ -1737,12 +2429,13 @@ export default function StationMap({
             </Pane>
           )}
 
-          {/* Road / city labels on top of all weather overlays */}
-          <Pane name="top-labels" style={{ zIndex: 450, pointerEvents: "none" }}>
+          {/* Road / city labels on top of all weather overlays but below popups */}
+          <Pane name="top-labels" style={{ zIndex: 399, pointerEvents: "none" }}>
             <TileLayer
               url={BASE_MAPS.find((b) => b.id === baseMap)?.labels}
               maxZoom={18}
               opacity={0.9}
+              className="smap-label-tiles"
             />
           </Pane>
 
@@ -1802,12 +2495,119 @@ export default function StationMap({
             </Pane>
           )}
 
-          <MapClickHandler enabled={latLonMode} onLatLonSelect={onLatLonSelect} />
-          <MapCenterTracker onCenterChange={handleCenterChange} />
+          <MapClickHandler
+            enabled={latLonMode}
+            onLatLonSelect={onLatLonSelect}
+            onRightClick={handleProximitySearch}
+            onMapClick={handleMapToolClick}
+            onMouseMove={handleDrawMouseMove}
+            disableRightClick={Boolean(drawMode)}
+          />
+          <MapViewTracker onCenterChange={handleCenterChange} onViewChange={setMapView} />
           <FlyToStation station={selectedStation} stations={stations} />
           <MapResizeHandler trigger={isFullscreen} />
 
-          {stations.map((s) => {
+          {/* ACARS airports overlay */}
+          {showAcars && acarsAirports && (
+            <Pane name="acars-layer" style={{ zIndex: 440 }}>
+              {acarsAirports.map((ap) => (
+                <CircleMarker
+                  key={ap.id}
+                  center={[ap.lat, ap.lon]}
+                  radius={6}
+                  pathOptions={{
+                    color: "#a855f7",
+                    fillColor: "#a855f7",
+                    fillOpacity: 0.7,
+                    weight: 2,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      // Select best nearby sounding station or use ACARS source
+                      onStationSelect(ap.id.replace(/^K/, ""));
+                    },
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id" style={{ color: "#a855f7" }}>✈ {ap.id}</span>
+                        <span className="smap-tt-name">{ap.name}</span>
+                      </div>
+                      <span className="smap-tt-type">ACARS aircraft profiles</span>
+                    </div>
+                  </Tooltip>
+                  <Popup className="smap-popup" maxWidth={260} minWidth={200}>
+                    <div className="smap-popup-inner">
+                      <div className="smap-popup-header">
+                        <span className="smap-popup-id" style={{ color: "#a855f7" }}>✈ {ap.id}</span>
+                        <span className="smap-popup-name">{ap.name}</span>
+                      </div>
+                      <div className="smap-popup-meta">
+                        <span className="smap-popup-coords">{ap.lat.toFixed(2)}°, {ap.lon.toFixed(2)}°</span>
+                      </div>
+                      <div className="smap-popup-outlook">
+                        <span className="smap-outlook-badge" style={{ background: "#a855f722", color: "#a855f7", borderColor: "#a855f755" }}>ACARS Airport</span>
+                        <div className="smap-forecast-btns">
+                          <button className="smap-forecast-btn smap-forecast-btn-auto" onClick={(e) => { e.stopPropagation(); onFetchLatest?.(ap.id.replace(/^K/, "")); }}>Fetch ACARS Profile</button>
+                        </div>
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </Pane>
+          )}
+
+          {/* Proximity search result markers + lines */}
+          {proximityResult && (
+            <Pane name="proximity-layer" style={{ zIndex: 445 }}>
+              <CircleMarker
+                center={[proximityResult.lat, proximityResult.lon]}
+                radius={6}
+                pathOptions={{ color: "#f43f5e", fillColor: "#f43f5e", fillOpacity: 0.9, weight: 2 }}
+              />
+            </Pane>
+          )}
+
+          {stationRender.clusters.length > 0 && (
+            <Pane name="station-clusters" style={{ zIndex: 448 }}>
+              {stationRender.clusters.map((c) => (
+                <CircleMarker
+                  key={`cluster-${c.id}`}
+                  center={[c.lat, c.lon]}
+                  radius={7}
+                  pathOptions={{
+                    color: c.color || "#60a5fa",
+                    fillColor: c.color || "#60a5fa",
+                    fillOpacity: 0.28,
+                    weight: 1.5,
+                    className: "smap-cluster-marker",
+                  }}
+                  eventHandlers={{
+                    click: (e) => {
+                      const map = e?.target?._map;
+                      if (map) {
+                        map.flyTo([c.lat, c.lon], Math.min((map.getZoom() || 4) + 2, 10), { duration: 0.45 });
+                      }
+                    },
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id">Cluster</span>
+                        <span className="smap-tt-name">{c.count} station{c.count !== 1 ? "s" : ""}</span>
+                      </div>
+                      <span className="smap-tt-type">Zoom in to view individual sites</span>
+                    </div>
+                  </Tooltip>
+                </CircleMarker>
+              ))}
+            </Pane>
+          )}
+
+          {stationRender.stations.map((s) => {
             const risk = riskMap[s.id];
             const stp = risk?.stp;
             const color = riskColor(stp);
@@ -1897,6 +2697,69 @@ export default function StationMap({
               </CircleMarker>
             );
           })}
+
+          {/* Wind barb arrows from risk-scan shear data */}
+          {showWindBarbs && riskData && (
+            <Pane name="wind-barbs-layer" style={{ zIndex: 455, pointerEvents: "none" }}>
+              {riskData.stations.filter(s => s.bwdDir != null && s.bwd > 5).map((s) => {
+                const rad = ((s.bwdDir + 180) % 360) * Math.PI / 180; // point in shear direction
+                const len = Math.min(0.8, s.bwd / 60); // degrees, scaled by magnitude
+                const endLat = s.lat + len * Math.cos(rad);
+                const endLon = s.lon + len * Math.sin(rad) / Math.cos(s.lat * Math.PI / 180);
+                const color = s.bwd >= 50 ? "#ef4444" : s.bwd >= 35 ? "#f59e0b" : s.bwd >= 20 ? "#22c55e" : "#888";
+                // SVG arrow rendered as polyline overlay
+                return (
+                  <Pane key={`wb-${s.id}`} name={`wb-${s.id}`} style={{ zIndex: 455, pointerEvents: "none" }}>
+                    <CircleMarker
+                      center={[endLat, endLon]}
+                      radius={3}
+                      pathOptions={{ color, fillColor: color, fillOpacity: 0.9, weight: 1 }}
+                    />
+                    {/* Line from station to arrow tip */}
+                    <GeoJSON
+                      data={{ type: "Feature", geometry: { type: "LineString", coordinates: [[s.lon, s.lat], [endLon, endLat]] }, properties: {} }}
+                      style={() => ({ color, weight: 2, opacity: 0.8 })}
+                    />
+                  </Pane>
+                );
+              })}
+            </Pane>
+          )}
+
+          {/* Favorite station star markers */}
+          {showFavorites && favorites.length > 0 && (
+            <Pane name="favorites-layer" style={{ zIndex: 460 }}>
+              {favorites.map((fid) => {
+                const s = stations.find((st) => st.id === fid);
+                if (!s) return null;
+                return (
+                  <Marker
+                    key={`fav-${fid}`}
+                    position={[s.lat, s.lon]}
+                    icon={L.divIcon({
+                      className: "smap-fav-icon",
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10],
+                      html: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" stroke="#fff" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>`,
+                    })}
+                    eventHandlers={{
+                      click: () => onStationSelect(fid),
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip">
+                      <div className="smap-tt-inner">
+                        <div className="smap-tt-header">
+                          <span className="smap-tt-id" style={{ color: "#f59e0b" }}>★ {s.id}</span>
+                          <span className="smap-tt-name">{s.name}</span>
+                        </div>
+                        <span className="smap-tt-type">Favorite station</span>
+                      </div>
+                    </Tooltip>
+                  </Marker>
+                );
+              })}
+            </Pane>
+          )}
         </MapContainer>
 
         {/* Floating legend overlays — each in its own container */}
@@ -1954,6 +2817,17 @@ export default function StationMap({
               </div>
             </div>
           )}
+          {stationRender.hiddenCount > 0 && (
+            <div className="smap-legend-float">
+              <div className="smap-legend smap-legend-decimation">
+                <span className="smap-legend-item">
+                  <span className="smap-dot" style={{ background: "#60a5fa" }} />
+                  {stationRender.hiddenCount} station{stationRender.hiddenCount !== 1 ? "s" : ""} grouped at this zoom
+                </span>
+                <span className="smap-legend-hint">Click a cluster or zoom in for individual markers</span>
+              </div>
+            </div>
+          )}
           {showOutlookStations && outlookStations && (
             <div className="smap-legend-float">
               <div className="smap-legend smap-legend-outlook-stations">
@@ -1995,6 +2869,66 @@ export default function StationMap({
               </div>
             </div>
           )}
+          {showAcars && acarsAirports && (
+            <div className="smap-legend-float">
+              <div className="smap-legend">
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: "#a855f7" }} />{acarsAirports.length} ACARS airports</span>
+                <span className="smap-legend-hint">Click airport for aircraft profile</span>
+              </div>
+            </div>
+          )}
+          {showWindBarbs && riskData && (
+            <div className="smap-legend-float">
+              <div className="smap-legend">
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: "#ef4444" }} />BWD ≥ 50 kt</span>
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: "#f59e0b" }} />35–50 kt</span>
+                <span className="smap-legend-item"><span className="smap-dot" style={{ background: "#22c55e" }} />20–35 kt</span>
+                <span className="smap-legend-hint">0-6 km bulk shear vectors</span>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Proximity panel — rendered OUTSIDE Leaflet so labels can't overlap */}
+        {proximityResult && (
+          <div className="smap-prox-overlay">
+            <div className="smap-prox-panel">
+              <div className="smap-prox-header">
+                <Crosshair size={14} />
+                <span>Nearest Stations</span>
+                <button className="smap-prox-close" onClick={() => setProximityResult(null)}><X size={14} /></button>
+              </div>
+              <div className="smap-prox-coords">
+                {proximityResult.lat.toFixed(2)}°, {proximityResult.lon.toFixed(2)}°
+              </div>
+              <div className="smap-prox-list">
+                {proximityResult.stations.map((ps, i) => (
+                  <button key={ps.id} className="smap-prox-item" onClick={() => onStationSelect(ps.id)}>
+                    <span className="smap-prox-rank">{i + 1}</span>
+                    <span className="smap-prox-sid">{ps.id}</span>
+                    <span className="smap-prox-name">{ps.name}</span>
+                    <span className="smap-prox-dist">{ps.dist.toFixed(0)} km</span>
+                  </button>
+                ))}
+              </div>
+              <div className="smap-prox-actions">
+                <select className="smap-prox-select" id="prox-compare-count" defaultValue="4">
+                  <option value="2">Top 2</option>
+                  <option value="3">Top 3</option>
+                  <option value="4">Top 4</option>
+                </select>
+                <button className="smap-prox-compare" onClick={() => {
+                  const n = parseInt(document.getElementById('prox-compare-count').value, 10);
+                  onCompareStations?.(proximityResult.stations.slice(0, n).map(s => s.id));
+                }}>Compare</button>
+                <button className="smap-prox-dismiss" onClick={() => setProximityResult(null)}>Dismiss</button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="smap-hint-bar">
+          {drawMode
+            ? "Draw mode active: click two points on the map"
+            : "Right-click map for nearest stations"}
         </div>
       </div>
     </section>
