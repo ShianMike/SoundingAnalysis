@@ -378,12 +378,56 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         params["bwd_1km"] = np.sqrt(bwd_u_1**2 + bwd_v_1**2).to("knot")
         params["bwd_3km"] = np.sqrt(bwd_u_3**2 + bwd_v_3**2).to("knot")
         params["bwd_6km"] = np.sqrt(bwd_u_6**2 + bwd_v_6**2).to("knot")
+        # Store vector components (m/s) for hodograph shear vector rendering
+        params["bwd_u_500m"] = bwd_u_05.to("m/s")
+        params["bwd_v_500m"] = bwd_v_05.to("m/s")
+        params["bwd_u_1km"] = bwd_u_1.to("m/s")
+        params["bwd_v_1km"] = bwd_v_1.to("m/s")
+        params["bwd_u_3km"] = bwd_u_3.to("m/s")
+        params["bwd_v_3km"] = bwd_v_3.to("m/s")
+        params["bwd_u_6km"] = bwd_u_6.to("m/s")
+        params["bwd_v_6km"] = bwd_v_6.to("m/s")
     except Exception as e:
         print(f"  Warning: BWD calc failed: {e}")
         params["bwd_500m"] = 0 * units.knot
         params["bwd_1km"] = 0 * units.knot
         params["bwd_3km"] = 0 * units.knot
         params["bwd_6km"] = 0 * units.knot
+        params["bwd_u_500m"] = 0 * units("m/s")
+        params["bwd_v_500m"] = 0 * units("m/s")
+        params["bwd_u_1km"] = 0 * units("m/s")
+        params["bwd_v_1km"] = 0 * units("m/s")
+        params["bwd_u_3km"] = 0 * units("m/s")
+        params["bwd_v_3km"] = 0 * units("m/s")
+        params["bwd_u_6km"] = 0 * units("m/s")
+        params["bwd_v_6km"] = 0 * units("m/s")
+
+    # ── Critical Angle ───────────────────────────────────────────────
+    # Angle between the 0-500m shear vector and storm-relative inflow vector
+    # Near 90° is highly correlated with tornado development (Esterheld & Giuliano 2008)
+    try:
+        _bu05 = float(params["bwd_u_500m"].magnitude)
+        _bv05 = float(params["bwd_v_500m"].magnitude)
+        _rm_u_ca = float(params["rm_u"].to("m/s").magnitude)
+        _rm_v_ca = float(params["rm_v"].to("m/s").magnitude)
+        # Surface wind (m/s)
+        _sfc_u = float(u_interp[0].to("m/s").magnitude)
+        _sfc_v = float(v_interp[0].to("m/s").magnitude)
+        # Storm-relative inflow vector = surface wind - storm motion
+        _sr_inflow_u = _sfc_u - _rm_u_ca
+        _sr_inflow_v = _sfc_v - _rm_v_ca
+        # Angle between shear vector and SR inflow
+        _dot = _bu05 * _sr_inflow_u + _bv05 * _sr_inflow_v
+        _mag_shear = np.sqrt(_bu05**2 + _bv05**2)
+        _mag_inflow = np.sqrt(_sr_inflow_u**2 + _sr_inflow_v**2)
+        if _mag_shear > 0.1 and _mag_inflow > 0.1:
+            _cos_angle = np.clip(_dot / (_mag_shear * _mag_inflow), -1, 1)
+            params["critical_angle"] = round(float(np.degrees(np.arccos(_cos_angle))), 1)
+        else:
+            params["critical_angle"] = None
+    except Exception as e:
+        print(f"  Warning: Critical angle calc failed: {e}")
+        params["critical_angle"] = None
     
     # STP — fixed-layer (SB CAPE, 0-1km SRH, 0-6km BWD, SB LCL)
     # MetPy's significant_tornado expects LCL HEIGHT in meters, not pressure
@@ -622,6 +666,34 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
             params["wcd"] = None
     except Exception:
         params["wcd"] = None
+
+    # ── Energy-Helicity Index (EHI) ─────────────────────────────────
+    # EHI = (CAPE × SRH) / 160000    (Hart & Korotky 1991)
+    # 0-1km and 0-3km variants
+    try:
+        _ehi_cape = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
+        _ehi_srh1 = float(params.get("srh_1km", 0 * units("m^2/s^2")).magnitude)
+        _ehi_srh3 = float(params.get("srh_3km", 0 * units("m^2/s^2")).magnitude)
+        params["ehi_01"] = round((_ehi_cape * _ehi_srh1) / 160000.0, 2) if _ehi_cape > 0 else 0
+        params["ehi_03"] = round((_ehi_cape * _ehi_srh3) / 160000.0, 2) if _ehi_cape > 0 else 0
+    except Exception as e:
+        print(f"  Warning: EHI calc failed: {e}")
+        params["ehi_01"] = 0
+        params["ehi_03"] = 0
+
+    # ── Vorticity Generation Parameter (VGP) ─────────────────────────
+    # VGP = √(CAPE × BWD_0-6km)   (Rasmussen & Blanchard 1998)
+    # BWD in m/s, CAPE in J/kg → VGP in m²/s²
+    try:
+        _vgp_cape = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
+        _vgp_shear = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        if _vgp_cape > 0 and _vgp_shear > 0:
+            params["vgp"] = round(np.sqrt(_vgp_cape) * _vgp_shear / 1000.0, 3)
+        else:
+            params["vgp"] = 0
+    except Exception as e:
+        print(f"  Warning: VGP calc failed: {e}")
+        params["vgp"] = 0
 
     # ── Supercell Composite Parameter (SCP) ── Thompson et al. 2004
     # Uses MetPy built-in: SCP = (muCAPE/1000) × (ESRH/50) × (EBW/20 m/s)

@@ -1,6 +1,9 @@
 """
 Sounding analysis plot generation (Skew-T, hodograph, parameter tables).
 """
+import io
+import os
+import tempfile
 import warnings
 from datetime import datetime, timedelta, timezone
 
@@ -11,14 +14,90 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patheffects as path_effects
 import numpy as np
+from matplotlib.patches import Circle, FancyBboxPatch
 
 import metpy.calc as mpcalc
 from metpy.plots import SkewT, Hodograph
 from metpy.units import units
 
+import requests as _requests
+
 from .constants import STATIONS
+from .map_data import CONUS_LON, CONUS_LAT, STATE_BORDERS
 
 warnings.filterwarnings("ignore")
+
+
+def _fetch_map_image(lat, lon, map_zoom, theme):
+    """Fetch CartoDB tiles and return (image_array, extent) for the map inset.
+
+    Uses dark_matter tiles for dark theme, positron for light.
+    Tiles are cached in a temp directory to avoid re-fetching.
+    Returns None on failure so the caller can fall back.
+    """
+    tile_size = 256
+    # Map our zoom (1.0-8.0) to web tile zoom (6-9) — zoomed into state level
+    tz = int(np.clip(5 + map_zoom, 6, 9))
+    style = "dark_all" if theme == "dark" else "light_all"
+    n = 2 ** tz
+
+    # Lat/lon → pixel coords in the global tile grid
+    px_x = (lon + 180) / 360 * n * tile_size
+    lat_rad = np.radians(np.clip(lat, -85, 85))
+    px_y = (1 - np.log(np.tan(lat_rad) + 1 / np.cos(lat_rad)) / np.pi) / 2 * n * tile_size
+
+    # Square-ish crop so the map isn't stretched
+    half_w, half_h = 350, 350
+    x0_px, x1_px = int(px_x - half_w), int(px_x + half_w)
+    y0_px, y1_px = int(px_y - half_h), int(px_y + half_h)
+
+    tx0, tx1 = x0_px // tile_size, x1_px // tile_size
+    ty0, ty1 = y0_px // tile_size, y1_px // tile_size
+
+    cache_dir = os.path.join(tempfile.gettempdir(), "sounding_tiles")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    rows = []
+    for ty in range(ty0, ty1 + 1):
+        row_imgs = []
+        for tx in range(tx0, tx1 + 1):
+            cache_file = os.path.join(cache_dir, f"{style}_{tz}_{tx % n}_{ty}.png")
+            try:
+                if os.path.exists(cache_file):
+                    with open(cache_file, "rb") as f:
+                        img_data = f.read()
+                else:
+                    url = f"https://basemaps.cartocdn.com/{style}/{tz}/{tx % n}/{ty}.png"
+                    resp = _requests.get(url, timeout=6)
+                    resp.raise_for_status()
+                    img_data = resp.content
+                    with open(cache_file, "wb") as f:
+                        f.write(img_data)
+                img = plt.imread(io.BytesIO(img_data), format="png")
+                if img.ndim == 2:
+                    img = np.stack([img] * 3, axis=-1)
+                row_imgs.append(img[:, :, :3])
+            except Exception:
+                # Return None so caller uses fallback
+                return None
+        rows.append(np.concatenate(row_imgs, axis=1))
+    canvas = np.concatenate(rows, axis=0)
+
+    # Crop to desired pixel region
+    crop_x0 = x0_px - tx0 * tile_size
+    crop_y0 = y0_px - ty0 * tile_size
+    crop = canvas[crop_y0:crop_y0 + 2 * half_h, crop_x0:crop_x0 + 2 * half_w]
+
+    # Compute geographic extent (for imshow)
+    def _px_to_lon(px):
+        return px / (n * tile_size) * 360 - 180
+
+    def _px_to_lat(py):
+        return np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * py / (n * tile_size)))))
+
+    extent = [_px_to_lon(x0_px), _px_to_lon(x1_px),
+              _px_to_lat(y1_px), _px_to_lat(y0_px)]
+    return crop, extent
 
 
 def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=False,
@@ -79,6 +158,14 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         BORDER    = "#444444"
         ACCENT    = "#55bbee"
 
+    _CARD_FILL = "#111827" if theme == "dark" else "#f4f7fb"
+    _CARD_FILL_ALT = "#0b1220" if theme == "dark" else "#ffffff"
+    _CARD_EDGE = "#29415a" if theme == "dark" else "#bcc8d4"
+    _CARD_SHADOW_ALPHA = 0.24 if theme == "dark" else 0.10
+    _TBL_HDR = "#172238" if theme == "dark" else "#dbe6f0"
+    _TBL_ALT = "#0e1522" if theme == "dark" else "#edf2f7"
+    _MAP_GRID = "#39546c" if theme == "dark" else "#b5c2cf"
+
     # ── Trace colors (standard vs color-blind safe) ──────────────────
     if colorblind:
         # Wong 2011 / Okabe-Ito palette
@@ -122,21 +209,82 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                 return f"{v:.{decimals}f}{' ' + unit_str if unit_str else ''}"
         except:
             return "---"
+
+    def _add_card(ax, bbox, fill=None, edge=None, shadow_alpha=None, zorder=0.1):
+        """Draw a soft card background inside an axes using axes coordinates."""
+        x0, y0, width, height = bbox
+        shadow = FancyBboxPatch(
+            (x0 + 0.006, y0 - 0.010),
+            width, height,
+            boxstyle="round,pad=0.012,rounding_size=0.022",
+            transform=ax.transAxes,
+            facecolor="#000000",
+            edgecolor="none",
+            alpha=_CARD_SHADOW_ALPHA if shadow_alpha is None else shadow_alpha,
+            zorder=zorder,
+        )
+        panel = FancyBboxPatch(
+            (x0, y0),
+            width, height,
+            boxstyle="round,pad=0.012,rounding_size=0.022",
+            transform=ax.transAxes,
+            facecolor=_CARD_FILL if fill is None else fill,
+            edgecolor=_CARD_EDGE if edge is None else edge,
+            linewidth=1.0,
+            zorder=zorder + 0.02,
+        )
+        ax.add_patch(shadow)
+        ax.add_patch(panel)
+        return panel
+
+    def _style_table(tbl, *, header_rows=0, font_size=9.5, pad=0.06,
+                     body_color=FG, header_color=ACCENT,
+                     label_col=None, label_colors=None):
+        """Apply consistent table styling while allowing per-row label colors."""
+        tbl.auto_set_font_size(False)
+        tbl.set_zorder(2.0)
+        for (row_idx, col_idx), cell in tbl.get_celld().items():
+            cell.PAD = pad
+            cell.set_edgecolor(BORDER)
+            cell.set_linewidth(0.3)
+            cell.set_zorder(2.1)
+
+            if header_rows and row_idx < header_rows:
+                cell.set_facecolor(BG)
+                text_color = header_color
+            else:
+                body_row = row_idx - header_rows
+                cell.set_facecolor(BG)
+                text_color = body_color
+
+            if label_col is not None and row_idx >= header_rows and col_idx == label_col:
+                color_idx = row_idx - header_rows
+                if label_colors and 0 <= color_idx < len(label_colors):
+                    text_color = label_colors[color_idx]
+
+            txt = cell.get_text()
+            txt.set_fontfamily("monospace")
+            txt.set_fontweight("bold")
+            txt.set_fontsize(font_size)
+            txt.set_color(text_color)
+            txt.set_zorder(2.2)
+        return tbl
     
     # ── Create figure ────────────────────────────────────────────────
-    fig = plt.figure(figsize=(28, 12), facecolor=BG)
+    fig = plt.figure(figsize=(30, 17), facecolor=BG)
     fig.patch.set_facecolor(BG)
     
     # Define grid for layout — 5 columns: SkewT | Hodograph | SRW | SRH | Theta
     gs = gridspec.GridSpec(
         2, 5, figure=fig,
-        width_ratios=[1.8, 1.6, 0.36, 0.38, 0.42],
-        height_ratios=[2.7, 1.3],
-        hspace=0.10, wspace=0.12,
-        left=0.05, right=0.97, top=0.94, bottom=0.04
+        width_ratios=[1.82, 1.62, 0.36, 0.38, 0.42],
+        height_ratios=[2.2, 1.8],
+        hspace=0.10, wspace=0.13,
+        left=0.045, right=0.975, top=0.935, bottom=0.048
     )
     
     # ── TITLE BAR ────────────────────────────────────────────────────
+    _TITLE_BG = "#101828" if theme == "dark" else "#e7edf4"
     title_tags = []
     if params.get("smoothing_applied"):
         title_tags.append("SMOOTHED")
@@ -169,7 +317,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
         )
     fig.suptitle(title_str, fontsize=20, fontweight="bold",
-                 color=FG, y=0.985, x=0.36, ha="center",
+                 color=FG, y=0.982, x=0.50, ha="center",
                  fontfamily="monospace")
     
     # (Station info placed in bottom-right footer)
@@ -863,6 +1011,69 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             hodo.ax.text(ds_u, ds_v, 'DN', weight='bold', fontsize=12,
                          color='orange', ha='center', alpha=0.5, clip_on=True)
 
+    # --- BWD shear vector arrows on hodograph ---
+    _bwd_layers = [
+        ("500m", 5,   "#aaaaaa"),
+        ("1km",  10,  "#ff5555"),
+        ("3km",  30,  "#ff8800"),
+        ("6km",  60,  "#ffcc00"),
+    ]
+    for _bwd_lbl, _bwd_idx, _bwd_clr in _bwd_layers:
+        if _bwd_idx < n_full:
+            _bu = hodo_u[_bwd_idx] - hodo_u[0]
+            _bv = hodo_v[_bwd_idx] - hodo_v[0]
+            _bmag = np.sqrt(_bu**2 + _bv**2)
+            if _bmag > 0.5:
+                hodo.ax.annotate(
+                    '', xy=(hodo_u[_bwd_idx], hodo_v[_bwd_idx]),
+                    xytext=(hodo_u[0], hodo_v[0]),
+                    arrowprops=dict(arrowstyle='->', color=_bwd_clr,
+                                    lw=2.0, linestyle='--', mutation_scale=14),
+                    zorder=6, clip_on=True)
+                _mid_u = (hodo_u[0] + hodo_u[_bwd_idx]) / 2
+                _mid_v = (hodo_v[0] + hodo_v[_bwd_idx]) / 2
+                hodo.ax.text(_mid_u, _mid_v, f"{_bmag:.0f}",
+                             fontsize=8, fontweight='bold', color=_bwd_clr,
+                             ha='center', va='center', zorder=7, clip_on=True,
+                             fontfamily='monospace',
+                             path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)])
+
+    # --- Critical angle arc on hodograph ---
+    if params.get("rm_u") is not None and 5 < n_full:
+        try:
+            _shr_u = hodo_u[5] - hodo_u[0]
+            _shr_v = hodo_v[5] - hodo_v[0]
+            _sm_u = params["rm_u"].to("knot").magnitude - sr_offset_u
+            _sm_v = params["rm_v"].to("knot").magnitude - sr_offset_v
+            _sri_u = hodo_u[0] - _sm_u
+            _sri_v = hodo_v[0] - _sm_v
+            _shr_m = np.sqrt(_shr_u**2 + _shr_v**2)
+            _sri_m = np.sqrt(_sri_u**2 + _sri_v**2)
+            if _shr_m > 0.5 and _sri_m > 0.5:
+                _cos_ca = np.clip((_shr_u * _sri_u + _shr_v * _sri_v) / (_shr_m * _sri_m), -1, 1)
+                _ca_deg = np.degrees(np.arccos(_cos_ca))
+                _ang_shr = np.degrees(np.arctan2(_shr_v, _shr_u))
+                _ang_sri = np.degrees(np.arctan2(_sri_v, _sri_u))
+                _arc_r = min(_shr_m, _sri_m, 15) * 0.5
+                _a1, _a2 = sorted([_ang_shr, _ang_sri])
+                if _a2 - _a1 > 180:
+                    _a1, _a2 = _a2, _a1 + 360
+                _arc_angles = np.linspace(np.radians(_a1), np.radians(_a2), 30)
+                _arc_x = hodo_u[0] + _arc_r * np.cos(_arc_angles)
+                _arc_y = hodo_v[0] + _arc_r * np.sin(_arc_angles)
+                hodo.ax.plot(_arc_x, _arc_y, color='#ffdd00', linewidth=2.0,
+                             alpha=0.85, zorder=6, clip_on=True)
+                _lbl_ang = np.radians((_a1 + _a2) / 2)
+                hodo.ax.text(
+                    hodo_u[0] + (_arc_r + 3) * np.cos(_lbl_ang),
+                    hodo_v[0] + (_arc_r + 3) * np.sin(_lbl_ang),
+                    f"{_ca_deg:.0f}°", fontsize=9, fontweight='bold',
+                    color='#ffdd00', ha='center', va='center', zorder=7,
+                    clip_on=True, fontfamily='monospace',
+                    path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)])
+        except Exception:
+            pass
+
     # --- Storm motion info text box ---
     sm_lines = []
     if params.get("rm_u") is not None:
@@ -1073,8 +1284,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                          fontfamily="monospace", fontweight="bold")
         ax_srw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_srw.set_title("STORM-REL\nWIND", color=FG, fontsize=10,
-                        fontfamily="monospace", fontweight="bold", pad=3)
+        ax_srw.set_title("STORM-REL WIND", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=10)
     else:
         ax_srw.text(0.5, 0.5, "N/A", transform=ax_srw.transAxes,
                    color=FG_FAINT, ha="center", fontsize=12)
@@ -1133,8 +1344,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                          fontfamily="monospace", fontweight="bold")
         ax_sw.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=10,
-                        fontfamily="monospace", fontweight="bold", pad=3)
+        ax_sw.set_title("STREAMWISENESS", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=10)
         
         # Legend
         leg = ax_sw.legend(loc="lower right", fontsize=7, facecolor=BG,
@@ -1142,8 +1353,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     else:
         ax_sw.text(0.5, 0.5, "N/A", transform=ax_sw.transAxes,
                    color=FG_FAINT, ha="center", fontsize=12)
-        ax_sw.set_title("STREAM-\nWISENESS", color=FG, fontsize=10,
-                        fontfamily="monospace", fontweight="bold", pad=3)
+        ax_sw.set_title("STREAMWISENESS", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=10)
     
     ax_sw.tick_params(colors=FG_DIM, labelsize=9, width=1.2)
     for spine in ax_sw.spines.values():
@@ -1200,8 +1411,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
                          fontfamily="monospace", fontweight="bold")
         ax_th.set_ylabel("Height AGL (km)", color=FG_DIM, fontsize=10,
                          fontfamily="monospace", fontweight="bold")
-        ax_th.set_title("θ / θe\nPROFILE", color=FG, fontsize=10,
-                        fontfamily="monospace", fontweight="bold", pad=3)
+        ax_th.set_title("θ / θe PROFILE", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=10)
         
         # Legend
         leg_th = ax_th.legend(loc="lower right", fontsize=8, facecolor=BG,
@@ -1210,8 +1421,8 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         print(f"[Theta panel] Error: {ex}")
         ax_th.text(0.5, 0.5, "N/A", transform=ax_th.transAxes,
                    color=FG_FAINT, ha="center", fontsize=12)
-        ax_th.set_title("θ / θe\nPROFILE", color=FG, fontsize=10,
-                        fontfamily="monospace", fontweight="bold", pad=3)
+        ax_th.set_title("θ / θe PROFILE", color=FG, fontsize=10,
+                        fontfamily="monospace", fontweight="bold", pad=10)
     
     ax_th.tick_params(colors=FG_DIM, labelsize=9, width=1.2)
     for spine in ax_th.spines.values():
@@ -1219,112 +1430,15 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     ax_th.grid(True, alpha=0.25, color=GRID_CLR)
     
     # ════════════════════════════════════════════════════════════════
-    # MINI MAP INSET (station location)
-    # ════════════════════════════════════════════════════════════════
-    # Detailed CONUS outline — traced clockwise from Pacific NW
-    _conus_lon = [
-        # Pacific NW coast (WA)
-        -124.7, -124.6, -124.1, -123.2, -122.9, -122.8, -123.0, -123.5,
-        -124.1, -124.6, -124.4, -124.2, -124.0, -123.9, -124.4,
-        # OR coast
-        -124.6, -124.5, -124.2, -124.3, -124.6, -124.5, -124.2, -124.4,
-        -124.3, -124.1,
-        # CA coast
-        -124.2, -124.0, -123.7, -122.4, -122.0, -121.8, -122.0, -122.4,
-        -122.5, -121.9, -121.3, -120.9, -120.6, -120.6, -120.2, -119.5,
-        -118.5, -117.9, -117.6, -117.2, -117.1, -117.1,
-        # US-Mexico border
-        -114.7, -111.1, -109.0, -108.2, -106.6, -104.9, -103.3, -101.4,
-        -100.0, -99.2, -97.8, -97.1,
-        # TX Gulf coast
-        -97.2, -97.0, -96.8, -96.4, -95.5, -94.9, -94.7, -93.8, -93.5,
-        -93.2, -93.0, -91.6, -90.6,
-        # LA coast
-        -90.1, -89.7, -89.5, -89.2, -89.4, -89.0, -88.8, -88.6, -88.9,
-        -88.5, -88.4,
-        # MS-AL-FL Gulf coast
-        -88.3, -87.6, -87.2, -86.5, -85.8, -85.5, -85.0, -84.0, -83.5,
-        -82.8, -82.2, -81.8, -81.1, -80.4, -80.0, -80.1,
-        # FL Atlantic coast
-        -80.4, -80.6, -80.3, -80.0, -80.1, -80.5, -81.0, -81.3, -81.3,
-        -81.0, -80.7, -80.5,
-        # GA-SC-NC coast
-        -80.8, -81.1, -80.8, -79.9, -79.1, -78.5, -77.9, -77.7, -76.5,
-        -75.8, -75.5, -75.5, -76.0,
-        # VA-MD-DE-NJ coast
-        -75.6, -75.7, -76.0, -75.5, -74.9, -74.5, -74.0, -73.9,
-        # NY-CT-RI-MA coast
-        -74.0, -73.6, -72.8, -72.0, -71.2, -70.2, -70.0, -70.8, -71.4,
-        -71.0, -70.5, -70.0, -69.9,
-        # ME coast
-        -69.8, -69.0, -68.5, -67.8, -67.0, -67.0,
-        # Northern border — ME to MN (US-Canada)
-        -67.1, -67.8, -69.0, -69.2, -71.1, -71.5, -73.4, -74.7, -75.0,
-        -76.8, -79.0, -79.5, -82.4, -83.5, -84.1, -84.8, -85.0, -88.4,
-        -89.6, -90.0, -89.5, -90.8, -92.0, -92.2, -94.6, -94.6, -95.1,
-        # ND-MT-WA border (49°N)
-        -95.2, -97.0, -99.0, -100.0, -102.0, -104.0, -106.0, -109.0,
-        -111.0, -113.0, -116.0, -117.0, -120.0, -122.0, -122.8, -123.0,
-        # WA coast back to start
-        -123.2, -124.1, -124.7,
-    ]
-    _conus_lat = [
-        # Pacific NW coast (WA)
-        40.3, 42.0, 43.4, 46.2, 46.7, 47.1, 47.5, 48.0,
-        48.3, 48.1, 47.5, 47.0, 46.6, 46.2, 44.7,
-        # OR coast
-        44.0, 43.5, 43.3, 42.8, 42.4, 42.0, 41.8, 41.0,
-        40.5, 40.0,
-        # CA coast
-        39.5, 39.0, 38.5, 37.8, 37.5, 37.0, 36.8, 36.5,
-        36.2, 36.0, 35.7, 35.3, 35.0, 34.8, 34.1, 33.4,
-        33.0, 32.8, 32.6, 32.7, 33.0, 32.5,
-        # US-Mexico border
-        32.5, 31.3, 31.3, 31.4, 31.9, 30.6, 29.1, 29.8,
-        28.2, 26.4, 26.0, 25.8,
-        # TX Gulf coast
-        26.3, 27.5, 28.2, 28.6, 28.7, 29.2, 29.6, 29.8, 29.8,
-        29.5, 29.7, 30.0, 29.4,
-        # LA coast
-        29.1, 29.1, 29.3, 29.1, 28.9, 29.1, 28.9, 29.2, 29.3,
-        30.2, 30.4,
-        # MS-AL-FL Gulf coast
-        30.4, 30.3, 30.3, 30.4, 30.2, 29.9, 29.5, 29.9, 30.0,
-        29.9, 29.5, 29.1, 28.5, 27.0, 26.0, 25.3,
-        # FL Atlantic coast
-        25.5, 25.8, 26.5, 27.2, 28.0, 28.5, 29.0, 29.8, 30.5,
-        30.8, 31.2, 32.0,
-        # GA-SC-NC coast
-        32.1, 32.1, 32.6, 33.1, 33.2, 33.7, 33.9, 34.3, 34.7,
-        35.2, 35.8, 36.5, 36.9,
-        # VA-MD-DE-NJ coast
-        37.2, 37.5, 38.0, 38.5, 39.0, 39.3, 39.5, 40.5,
-        # NY-CT-RI-MA coast
-        40.7, 40.6, 40.8, 41.0, 41.5, 41.7, 42.0, 42.3, 42.0,
-        41.5, 41.5, 41.8, 43.4,
-        # ME coast
-        43.9, 44.2, 44.4, 44.5, 44.9, 47.3,
-        # Northern border — ME to MN
-        47.4, 47.1, 47.2, 47.5, 45.0, 45.0, 45.0, 45.0, 44.8,
-        43.6, 43.5, 43.2, 46.0, 46.1, 46.4, 46.0, 46.5, 48.2,
-        48.0, 48.1, 47.1, 47.0, 46.7, 46.1, 46.8, 49.0, 49.0,
-        # ND-MT-WA border (49°N)
-        49.0, 49.0, 49.0, 49.0, 49.0, 49.0, 49.0, 49.0,
-        49.0, 49.0, 49.0, 49.0, 49.0, 48.8, 48.7, 48.4,
-        # WA coast back to start
-        47.0, 44.0, 40.3,
-    ]
-    
-    # ════════════════════════════════════════════════════════════════
     # PARAMETER TABLES (bottom)
     # ════════════════════════════════════════════════════════════════
     ax_params = fig.add_subplot(gs[1, 0])
     ax_params.set_facecolor(BG)
     ax_params.axis("off")
+    ax_params.plot([0.04, 0.96], [0.92, 0.92], transform=ax_params.transAxes,
+                   color=BORDER, linewidth=0.6, alpha=0.4, zorder=0.3)
     
     # ── THERMODYNAMIC TABLE ──
-    header = f"{'':3s}{'':8s}  {'CAPE':>10s}  {'CIN':>10s}  {'LCL':>8s}"
-    
     sb_cape = fv(params.get("sb_cape"), "J/kg")
     sb_cin = fv(params.get("sb_cin"), "J/kg")
     sb_lcl = f"{params['sb_lcl_m']:.0f} m" if params.get('sb_lcl_m') is not None else fv(params.get("sb_lcl_p"), "hPa")
@@ -1361,38 +1475,99 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     fosberg_v = f"{params['fosberg_fwi']:.0f}" if params.get('fosberg_fwi') is not None else "---"
     haines_v = f"{params['haines']}" if params.get('haines') is not None else "---"
     hdw_v = f"{params['hdw']:.0f}" if params.get('hdw') is not None else "---"
-    
-    # Rows: (text, color, y_position) — evenly spaced for readability
-    thermo_rows = [
-        ("THERMODYNAMIC", ACCENT, 0.97),
-        (header, FG_FAINT, 0.90),
-        (f"   {'SB:':8s}  {sb_cape:>10s}  {sb_cin:>10s}  {sb_lcl:>8s}", CLR_SB_PARCEL, 0.84),
-        (f"   {'MU:':8s}  {mu_cape:>10s}  {mu_cin:>10s}  {mu_lcl:>8s}", CLR_MU_PARCEL, 0.77),
-        (f"   {'ML:':8s}  {ml_cape:>10s}  {ml_cin:>10s}  {ml_lcl:>8s}", CLR_ML_PARCEL, 0.70),
-        (f"   ML LFC: {ml_lfc_v}  |  ML EL: {ml_el_v}  |  WCD: {wcd_v}", FG_DIM, 0.63),
-        (f"   DCAPE: {dcape_v}  |  DCIN: {dcin_v}  |  ECAPE: {ecape_v}", FG_DIM, 0.57),
-        (f"   3CAPE: {cape3_v}  |  6CAPE: {cape6_v}  |  NCAPE: {ncape_v}", FG_DIM, 0.50),
-        (f"   \u03930-3: {lr03} \u00b0C/km   \u03933-6: {lr36} \u00b0C/km", FG_DIM, 0.43),
-        (f"   PWAT: {pwat}  |  FRZ: {frz}  |  WBO: {wbo_v}", FG_DIM, 0.37),
-        (f"   RH  0-1km: {rh_01}  1-3km: {rh_13}  3-6km: {rh_36}", FG_DIM, 0.30),
-        (f"   Precip Type: {precip_type_v}", "#22d3ee", 0.23),
-        (f"   STP: {stp_v}  STPeff: {stp_eff_v}  |  SCP: {fv(params.get('scp'), '', 1)}  |  SHIP: {fv(params.get('ship'), '', 1)}", ACCENT, 0.17),
-        (f"   DCP: {fv(params.get('dcp'), '', 1)}  |  FireWx: FWI {fosberg_v}  Haines {haines_v}", ACCENT, 0.10),
-        (f"   {'[SURFACE MODIFIED]' if params.get('surface_modified') else ''}{'  [CUSTOM SM]' if params.get('custom_storm_motion') else ''}", "#ff5555" if params.get('surface_modified') or params.get('custom_storm_motion') else BG, 0.03),
-    ]
-    
-    for text, color, y_pos in thermo_rows:
-        ax_params.text(0.01, y_pos, text,
-                      transform=ax_params.transAxes,
-                      fontsize=11, color=color, fontfamily="monospace",
-                      fontweight="bold", va="top")
+
+    # ── Title ──
+    ax_params.text(0.04, 0.96, "THERMODYNAMIC", transform=ax_params.transAxes,
+                   fontsize=14, color=ACCENT, fontfamily="monospace",
+                   fontweight="bold", ha="left", va="top")
+    ax_params.text(0.96, 0.96, "CAPE / MOISTURE / COMPOSITES",
+                   transform=ax_params.transAxes,
+                   fontsize=8.8, color=FG_FAINT, fontfamily="monospace",
+                   fontweight="bold", ha="right", va="top")
+
+    ax_params.text(0.05, 0.87, "Parcel Profiles", transform=ax_params.transAxes,
+                   fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                   fontweight="bold", ha="left", va="center")
+    ax_params.text(0.05, 0.61, "Layer Environment", transform=ax_params.transAxes,
+                   fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                   fontweight="bold", ha="left", va="center")
+    ax_params.text(0.05, 0.25, "Composite Indices", transform=ax_params.transAxes,
+                   fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                   fontweight="bold", ha="left", va="center")
+
+    # ── Parcel CAPE / CIN / LCL table ──
+    _t1 = ax_params.table(
+        cellText=[
+            ['SB', sb_cape, sb_cin, sb_lcl],
+            ['MU', mu_cape, mu_cin, mu_lcl],
+            ['ML', ml_cape, ml_cin, ml_lcl],
+        ],
+        colLabels=['', 'CAPE', 'CIN', 'LCL'],
+        cellLoc='center', loc='upper center',
+        bbox=[0.05, 0.65, 0.90, 0.20],
+    )
+    _parcel_clrs = [CLR_SB_PARCEL, CLR_MU_PARCEL, CLR_ML_PARCEL]
+    _style_table(_t1, header_rows=1, font_size=9.8, pad=0.09,
+                 body_color=FG, label_col=0, label_colors=_parcel_clrs)
+
+    # ── Detail parameters table (3-col key:value grid) ──
+    _t2 = ax_params.table(
+        cellText=[
+            [f'LFC: {ml_lfc_v}', f'EL: {ml_el_v}', f'WCD: {wcd_v}'],
+            [f'DCAPE: {dcape_v}', f'DCIN: {dcin_v}', f'ECAPE: {ecape_v}'],
+            [f'3CAPE: {cape3_v}', f'6CAPE: {cape6_v}', f'NCAPE: {ncape_v}'],
+            [f'\u03930-3: {lr03}\u00b0C/km', f'\u03933-6: {lr36}\u00b0C/km', f'PWAT: {pwat}'],
+            [f'FRZ: {frz}', f'WBO: {wbo_v}', f'Precip: {precip_type_v}'],
+            [f'RH 0-1: {rh_01}', f'RH 1-3: {rh_13}', f'RH 3-6: {rh_36}'],
+        ],
+        cellLoc='left', loc='center',
+        bbox=[0.05, 0.29, 0.90, 0.30],
+    )
+    _style_table(_t2, font_size=9.35, pad=0.11, body_color=FG_DIM)
+    for cell in _t2.get_celld().values():
+        txt = cell.get_text()
+        txt.set_ha("left")
+
+    # ── Composite indices table ──
+    _t3 = ax_params.table(
+        cellText=[
+            [f'STP: {stp_v}', f'STPeff: {stp_eff_v}', f'SCP: {fv(params.get("scp"), "", 1)}'],
+            [f'SHIP: {fv(params.get("ship"), "", 1)}', f'DCP: {fv(params.get("dcp"), "", 1)}', f'FWI: {fosberg_v}  H: {haines_v}'],
+            [f'EHI 0-1: {params.get("ehi_01", 0):.2f}', f'EHI 0-3: {params.get("ehi_03", 0):.2f}', f'VGP: {params.get("vgp", 0):.3f}'],
+        ],
+        cellLoc='center', loc='lower center',
+        bbox=[0.05, 0.08, 0.90, 0.15],
+    )
+    _style_table(_t3, font_size=9.3, pad=0.09, body_color=ACCENT)
+    if hdw_v != "---":
+        ax_params.text(0.95, 0.25, f"HDW {hdw_v}", transform=ax_params.transAxes,
+                       fontsize=8.4, color=FG_FAINT, fontfamily="monospace",
+                       fontweight="bold", ha="right", va="bottom")
+
+    # Surface modified / Custom SM flags
+    _flags = []
+    if params.get('surface_modified'):
+        _flags.append('[SURFACE MODIFIED]')
+    if params.get('custom_storm_motion'):
+        _flags.append('[CUSTOM SM]')
+    if _flags:
+        ax_params.text(0.5, 0.01, '  '.join(_flags),
+                       transform=ax_params.transAxes,
+                       fontsize=9, color='#ff5555', fontfamily='monospace',
+                       fontweight='bold', ha='center', va='bottom')
     
     # ── KINEMATIC TABLE ──
-    ax_kin = fig.add_subplot(gs[1, 1:5])
+    ax_kin = fig.add_subplot(gs[1, 1:3])
     ax_kin.set_facecolor(BG)
     ax_kin.axis("off")
-    
-    kin_header = f"{'':3s}{'':8s} {'BWD':>8s}   {'SRH':>12s}   {'SRW':>8s}"
+    ax_kin.plot([0.04, 0.96], [0.92, 0.92], transform=ax_kin.transAxes,
+                color=BORDER, linewidth=0.6, alpha=0.4, zorder=0.3)
+
+    ax_loc = fig.add_subplot(gs[1, 3:5])
+    ax_loc.set_facecolor(BG)
+    ax_loc.axis("off")
+    ax_loc.plot([0.04, 0.96], [0.92, 0.92], transform=ax_loc.transAxes,
+                color=BORDER, linewidth=0.6, alpha=0.4, zorder=0.3)
     
     bwd05 = fv(params.get("bwd_500m"), "kt")
     bwd1 = fv(params.get("bwd_1km"), "kt")
@@ -1429,17 +1604,44 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     srw3 = _srw_layer(3000)
     srw6 = _srw_layer(6000)
     
-    kin_rows = [
-        ("KINEMATIC", ACCENT, 0.97),
-        (kin_header, FG_FAINT, 0.89),
-        (f"   {'0-500m:':8s} {bwd05:>8s}   {srh05:>12s}   {srw05:>8s}", "#ff5555", 0.81),
-        (f"   {'0-1km:':8s} {bwd1:>8s}   {srh1:>12s}   {srw1:>8s}", "#ff3333", 0.73),
-        (f"   {'0-3km:':8s} {bwd3:>8s}   {srh3:>12s}   {srw3:>8s}", "#ff8800", 0.65),
-        (f"   {'0-6km:':8s} {bwd6:>8s}   {'':12s}   {srw6:>8s}", "#ffcc00", 0.57),
-        (f"   EFFECTIVE: BWD {ebwd_v}  ESRH {esrh_v}", "#44ddaa", 0.49),
-        (f"   EIL: {eil_bot_v}–{eil_top_v} m AGL", "#44ddaa", 0.41),
+    # ── Kinematic title ──
+    ax_kin.text(0.04, 0.96, "KINEMATIC", transform=ax_kin.transAxes,
+                fontsize=14, color=ACCENT, fontfamily="monospace",
+                fontweight="bold", ha="left", va="top")
+    ax_kin.text(0.96, 0.96, "SHEAR / MOTION", transform=ax_kin.transAxes,
+                fontsize=8.8, color=FG_FAINT, fontfamily="monospace",
+                fontweight="bold", ha="right", va="top")
+
+    ax_kin.text(0.05, 0.87, "Bulk Shear / Helicity", transform=ax_kin.transAxes,
+                fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                fontweight="bold", ha="left", va="center")
+    ax_kin.text(0.05, 0.56, "Effective Layer / Motion", transform=ax_kin.transAxes,
+                fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                fontweight="bold", ha="left", va="center")
+
+    # ── Shear table: BWD / SRH / SRW ──
+    _shear_row_clrs = ['#ff5555', '#ff3333', '#ff8800', '#ffcc00']
+    _t4 = ax_kin.table(
+        cellText=[
+            ['0-500m', bwd05, srh05, srw05],
+            ['0-1km', bwd1, srh1, srw1],
+            ['0-3km', bwd3, srh3, srw3],
+            ['0-6km', bwd6, '---', srw6],
+        ],
+        colLabels=['Layer', 'BWD', 'SRH', 'SRW'],
+        cellLoc='center', loc='upper left',
+        bbox=[0.05, 0.60, 0.90, 0.25],
+    )
+    _style_table(_t4, header_rows=1, font_size=9.6, pad=0.09,
+                 body_color=FG, label_col=0, label_colors=_shear_row_clrs)
+
+    # ── Info table: Effective layer + Storm motion ──
+    _info_cells = [
+        [f'EBWD: {ebwd_v}', f'ESRH: {esrh_v}'],
+        [f'EIL: {eil_bot_v}\u2013{eil_top_v} m AGL', ''],
     ]
-    
+    _info_row_clrs = ['#44ddaa', '#44ddaa']
+
     # Bunkers
     if params.get("rm_u") is not None:
         rm_spd = np.sqrt(params["rm_u"]**2 + params["rm_v"]**2).to("knot")
@@ -1448,55 +1650,97 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         lm_spd = np.sqrt(params["lm_u"]**2 + params["lm_v"]**2).to("knot")
         lm_toward = np.degrees(np.arctan2(params["lm_u"].magnitude,
                      params["lm_v"].magnitude)) % 360
-        
-        kin_rows.append(("   BUNKERS STORM MOTION:", ACCENT, 0.33))
-        kin_rows.append((
-            f"    RM: {rm_toward:.0f}° @ {rm_spd.magnitude:.0f} kt  |  "
-            f"LM: {lm_toward:.0f}° @ {lm_spd.magnitude:.0f} kt",
-            FG_DIM, 0.25
-        ))
+        _info_cells.append([f'RM: {rm_toward:.0f}\u00b0 @ {rm_spd.magnitude:.0f} kt',
+                            f'LM: {lm_toward:.0f}\u00b0 @ {lm_spd.magnitude:.0f} kt'])
+        _info_row_clrs.append(FG_DIM)
 
     # Corfidi MCS motion vectors
     _cup_spd = params.get("corfidi_up_spd")
     _cdn_spd = params.get("corfidi_dn_spd")
     if _cup_spd is not None and _cdn_spd is not None:
-        kin_rows.append(("   CORFIDI MCS MOTION:", "orange", 0.17))
-        kin_rows.append((
-            f"    UPW: {_cup_spd:.0f} kt  |  DNW: {_cdn_spd:.0f} kt",
-            FG_DIM, 0.09
-        ))
-    
-    for text, color, y_pos in kin_rows:
-        ax_kin.text(0.01, y_pos, text,
-                   transform=ax_kin.transAxes,
-                   fontsize=11, color=color, fontfamily="monospace",
-                   fontweight="bold", va="top")
+        _info_cells.append([f'UPW: {_cup_spd:.0f} kt', f'DNW: {_cdn_spd:.0f} kt'])
+        _info_row_clrs.append('orange')
+
+    _n_info = len(_info_cells)
+    _info_h = _n_info * 0.05
+    _info_top = 0.53
+    _t5 = ax_kin.table(
+        cellText=_info_cells,
+        cellLoc='center', loc='center left',
+        bbox=[0.05, _info_top - _info_h, 0.90, _info_h],
+    )
+    _style_table(_t5, font_size=9.25, pad=0.10, body_color=FG_DIM)
+    for (r, c), cell in _t5.get_celld().items():
+        txt = cell.get_text()
+        txt.set_color(_info_row_clrs[r] if 0 <= r < len(_info_row_clrs) else FG_DIM)
     
     # ════════════════════════════════════════════════════════════════
     # MINI MAP INSET (station location) — inside kinematic panel
     # ════════════════════════════════════════════════════════════════
-    ax_map = ax_kin.inset_axes([0.55, 0.05, 0.44, 0.90])  # right side of kinematic panel
-    ax_map.set_facecolor(BG_PANEL)
-    ax_map.plot(_conus_lon, _conus_lat, color=FG_FAINT, linewidth=0.8, zorder=2)
-    ax_map.plot(lon, lat, marker="o", color="#ff3333", markersize=6,
-                markeredgecolor=FG, markeredgewidth=0.8, zorder=10)
-    # Apply zoom: 1.0 = full CONUS, higher = zoomed in on station
     _mz = max(1.0, min(float(map_zoom), 8.0))
-    _full_lon_range = 63.0   # -128 to -65
-    _full_lat_range = 28.0   # 23 to 51
+    _full_lon_range = 63.0
+    _full_lat_range = 28.0
     _half_lon = (_full_lon_range / _mz) / 2
     _half_lat = (_full_lat_range / _mz) / 2
     _cx = max(-128 + _half_lon, min(lon, -65 - _half_lon))
     _cy = max(23 + _half_lat, min(lat, 51 - _half_lat))
-    ax_map.set_xlim(_cx - _half_lon, _cx + _half_lon)
-    ax_map.set_ylim(_cy - _half_lat, _cy + _half_lat)
-    ax_map.set_aspect(1.3)
+
+    ax_loc.text(0.04, 0.96, "STATION LOCATOR", transform=ax_loc.transAxes,
+                fontsize=14, color=ACCENT, fontfamily="monospace",
+                fontweight="bold", ha="left", va="top")
+    ax_loc.text(0.96, 0.96, f"Zoom x{_mz:.1f}", transform=ax_loc.transAxes,
+                fontsize=8.4, color=FG_FAINT, fontfamily="monospace",
+                fontweight="bold", ha="right", va="top")
+    ax_loc.text(0.04, 0.87, station_name, transform=ax_loc.transAxes,
+                fontsize=9.5, color=FG, fontfamily="monospace",
+                fontweight="bold", ha="left", va="center")
+    ax_loc.text(0.96, 0.87, f"{lat:.2f}, {lon:.2f}", transform=ax_loc.transAxes,
+                fontsize=8.4, color=FG_DIM, fontfamily="monospace",
+                fontweight="bold", ha="right", va="center")
+
+    ax_map = ax_loc.inset_axes([0.04, 0.04, 0.92, 0.78])
+    _MAP_BORDER = "#3a5068" if theme == "dark" else "#8899aa"
+
+    # Try to use real CartoDB map tiles
+    _tile_result = _fetch_map_image(lat, lon, _mz, theme)
+    if _tile_result is not None:
+        _map_img, _map_extent = _tile_result
+        ax_map.imshow(_map_img, extent=_map_extent,
+                      interpolation="bilinear", zorder=0)
+        ax_map.set_xlim(_map_extent[0], _map_extent[1])
+        ax_map.set_ylim(_map_extent[2], _map_extent[3])
+        ax_map.set_aspect("equal", adjustable="box")
+    else:
+        # Fallback: draw the simplified map
+        _MAP_LAND = "#1a2332" if theme == "dark" else "#d8dce2"
+        _MAP_WATER = "#0a0f18" if theme == "dark" else "#c4cdd8"
+        _MAP_STATE = "#2a3a4e" if theme == "dark" else "#b8c2cc"
+        ax_map.set_facecolor(_MAP_WATER)
+        ax_map.fill(CONUS_LON, CONUS_LAT, color=_MAP_LAND, zorder=1)
+        ax_map.plot(CONUS_LON, CONUS_LAT, color=_MAP_BORDER, linewidth=1.0, zorder=4)
+        for border in STATE_BORDERS:
+            bx = [pt[0] for pt in border]
+            by = [pt[1] for pt in border]
+            ax_map.plot(bx, by, color=_MAP_STATE, linewidth=0.45, alpha=0.72, zorder=3)
+        ax_map.set_xlim(_cx - _half_lon, _cx + _half_lon)
+        ax_map.set_ylim(_cy - _half_lat, _cy + _half_lat)
+        ax_map.set_aspect("equal", adjustable="box")
+
+    # Station marker (always drawn)
+    ax_map.scatter([lon], [lat], s=120, color="#ff4d4d", alpha=0.15, zorder=12)
+    ax_map.scatter([lon], [lat], s=40, color="#ff4d4d",
+                   edgecolors="white", linewidths=1.0, zorder=13)
+
     ax_map.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
     for spine in ax_map.spines.values():
-        spine.set_color(BORDER)
-        spine.set_linewidth(0.5)
+        spine.set_color(_MAP_BORDER)
+        spine.set_linewidth(0.95)
 
     # ── FOOTER ───────────────────────────────────────────────────────
+    # Separator line above footer
+    fig.patches.append(plt.Rectangle(
+        (0.045, 0.040), 0.93, 0.0015, transform=fig.transFigure,
+        facecolor=BORDER, edgecolor='none', alpha=0.5, zorder=1))
     # Determine data source label from station_info
     stn_name_lower = info.get("name", "").lower()
     if "rap analysis" in stn_name_lower:
@@ -1508,14 +1752,14 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     else:
         source_label = "Iowa Environmental Mesonet"
 
-    fig.text(0.04, 0.012,
-             "VERTICAL PROFILE ANALYSIS TOOL | "
-             f"Data: {source_label} | "
+    fig.text(0.04, 0.013,
+             "VERTICAL PROFILE ANALYSIS TOOL  \u2502  "
+             f"Data: {source_label}  \u2502  "
              f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')}",
              fontsize=10, color=FG_FAINT, fontfamily="monospace",
              fontweight="bold")
-    fig.text(0.96, 0.012,
-             f"Station: {station_name}  |  {lat:.4f}, {lon:.4f}",
+    fig.text(0.96, 0.013,
+             "shianmike.github.io/SoundingAnalysis",
              fontsize=10, color=ACCENT, ha="right", va="bottom",
              fontfamily="monospace", fontweight="bold")
     

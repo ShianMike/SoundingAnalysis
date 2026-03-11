@@ -138,6 +138,8 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ### Additional Panels
 - Storm-relative wind & streamwise vorticity profiles
 - **Theta (θ) / Theta-e (θe) profile** — potential temperature and equivalent potential temperature vs height, with moisture gap fill and key height markers
+- **Three-panel parameter layout** — Thermodynamic (CAPE/moisture/composites), Kinematic (shear/helicity/motion), and Station Locator (CartoDB map tile with station marker)
+- **Real map tiles** — CartoDB dark_matter / positron tiles with station marker, zoom control, and automatic fallback to drawn map
 - Comprehensive parameter text readout (thermodynamic + kinematic indices)
 - **Climatology percentile comparison** — horizontal bar chart ranking each parameter against SPC severe-weather proximity sounding climatology (color-coded: grey <50th, green 50th–75th, orange 75th–90th, red >95th)
 - **Predicted Convective Mode** — visual spectrum bar (Pulse → Multicell → Supercell) with active-mode highlight

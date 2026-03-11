@@ -86,6 +86,10 @@ function generateSoundingSummary(params, meta) {
   const scp    = n(params.scp);
   const ship   = n(params.ship);
   const dcp    = n(params.dcp);
+  const ehi01  = n(params.ehi01);
+  const ehi03  = n(params.ehi03);
+  const vgp    = n(params.vgp);
+  const critAngle = n(params.criticalAngle);
   const pwat   = n(params.pwat);
   const rh01   = n(params.rh01);
   const rh36   = n(params.rh36);
@@ -271,6 +275,10 @@ function generateSoundingSummary(params, meta) {
     if (scp != null) vals.push({ k: "SCP", v: `${fmt(scp, 1)}` });
     if (ship != null) vals.push({ k: "SHIP", v: `${fmt(ship, 1)}` });
     if (dcp != null) vals.push({ k: "DCP", v: `${fmt(dcp, 1)}` });
+    if (ehi01 != null && ehi01 > 0) vals.push({ k: "EHI 0-1", v: `${fmt(ehi01, 2)}` });
+    if (ehi03 != null && ehi03 > 0) vals.push({ k: "EHI 0-3", v: `${fmt(ehi03, 2)}` });
+    if (vgp != null && vgp > 0) vals.push({ k: "VGP", v: `${fmt(vgp, 3)}` });
+    if (critAngle != null) vals.push({ k: "Crit Angle", v: `${fmt(critAngle, 0)}\u00b0` });
 
     if (stp != null && bestCape >= 250) {
       if (stp >= 8) compLines.push("STP is in the top percentile â€” high-confidence setup for violent (EF3+) tornadoes.");
@@ -912,6 +920,8 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
         ["STP", `${params.stp ?? "---"}`], ["SCP", `${params.scp ?? "---"}`],
         ["SHIP", `${params.ship ?? "---"}`], ["DCP", `${params.dcp ?? "---"}`],
         ["BRN", `${params.brn ?? "---"}`],
+        ["EHI 0-1", `${params.ehi01 ?? "---"}`], ["EHI 0-3", `${params.ehi03 ?? "---"}`],
+        ["VGP", `${params.vgp ?? "---"}`], ["Crit Angle", `${params.criticalAngle != null ? params.criticalAngle + "\u00b0" : "---"}`],
       ];
 
       const pad = 40;
@@ -1169,6 +1179,28 @@ export default function ResultsView({ result, loading, error, riskData, showRisk
             params={params}
             theme={theme || "dark"}
           />
+          {/* Piecewise CAPE strip */}
+          {params.piecewiseCape && params.piecewiseCape.length > 0 && (
+            <div className="rv-piecewise-cape">
+              <div className="rv-pw-title">Piecewise CAPE (50 hPa layers)</div>
+              <div className="rv-pw-strip">
+                {params.piecewiseCape.map((layer, i) => {
+                  const maxCape = Math.max(...params.piecewiseCape.map(l => l.cape), 1);
+                  const barW = Math.max(2, (layer.cape / maxCape) * 100);
+                  const alpha = Math.min(1, layer.cape / maxCape * 0.8 + 0.2);
+                  return (
+                    <div key={i} className="rv-pw-row" title={`${layer.p_bot}\u2013${layer.p_top} hPa: CAPE ${layer.cape} J/kg`}>
+                      <span className="rv-pw-label">{layer.p_bot}</span>
+                      <div className="rv-pw-bar-bg">
+                        <div className="rv-pw-bar" style={{ width: `${barW}%`, opacity: alpha }} />
+                      </div>
+                      <span className="rv-pw-val">{Math.round(layer.cape)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Suspense>
       ) : (
       <div

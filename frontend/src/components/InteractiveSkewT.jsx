@@ -689,6 +689,15 @@ export default function InteractiveSkewT({
     [zoom]
   );
 
+  // Attach wheel listener imperatively with { passive: false } so
+  // preventDefault() works (React's onWheel is passive by default).
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
   /* ── Download ──────────────────────────────────────── */
   const handleDownload = useCallback(() => {
     const canvas = canvasRef.current;
@@ -768,7 +777,6 @@ export default function InteractiveSkewT({
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
-          onWheel={handleWheel}
         />
       </div>
     </div>

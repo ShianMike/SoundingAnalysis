@@ -122,4 +122,23 @@ def _serialize_params(params, data, station, dt, source):
         "lmV": _fmt(params.get("lm_v")),
         "mwU": _fmt(params.get("mw_u")),
         "mwV": _fmt(params.get("mw_v")),
+        # Shear vector components (m/s) for hodograph rendering
+        "bwdU500m": _fmt(params.get("bwd_u_500m"), decimals=1),
+        "bwdV500m": _fmt(params.get("bwd_v_500m"), decimals=1),
+        "bwdU1km": _fmt(params.get("bwd_u_1km"), decimals=1),
+        "bwdV1km": _fmt(params.get("bwd_v_1km"), decimals=1),
+        "bwdU3km": _fmt(params.get("bwd_u_3km"), decimals=1),
+        "bwdV3km": _fmt(params.get("bwd_v_3km"), decimals=1),
+        "bwdU6km": _fmt(params.get("bwd_u_6km"), decimals=1),
+        "bwdV6km": _fmt(params.get("bwd_v_6km"), decimals=1),
+        # Critical angle (degrees)
+        "criticalAngle": params.get("critical_angle"),
+        # Streamwiseness profile
+        "streamwiseness": _nan_safe(params.get("streamwiseness", []).tolist()) if hasattr(params.get("streamwiseness", []), "tolist") else None,
+        "streamwisenessSigned": _nan_safe(params.get("streamwiseness_signed", []).tolist()) if hasattr(params.get("streamwiseness_signed", []), "tolist") else None,
+        "streamwisenessHeight": _nan_safe(params.get("streamwiseness_height", []).tolist()) if hasattr(params.get("streamwiseness_height", []), "tolist") else None,
+        # Energy-Helicity Index & Vorticity Generation Parameter
+        "ehi01": params.get("ehi_01", 0),
+        "ehi03": params.get("ehi_03", 0),
+        "vgp": params.get("vgp", 0),
     }
