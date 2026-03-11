@@ -408,10 +408,14 @@ function warningStyle(feature) {
 
 function WarningsLayer({ data }) {
   if (!data || !data.features || data.features.length === 0) return null;
+  const geoKey = useMemo(() => {
+    const ids = data.features.map((f) => f.properties?.id || f.id || "").sort().join(",");
+    return ids || String(Date.now());
+  }, [data]);
   return (
     <Pane name="nws-warnings" style={{ zIndex: 420, pointerEvents: "auto" }}>
       <GeoJSON
-        key={data.features.length + (data.features[0]?.properties?.id || "")}
+        key={geoKey}
         data={data}
         style={warningStyle}
         onEachFeature={(feature, layer) => {
