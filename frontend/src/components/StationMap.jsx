@@ -407,11 +407,12 @@ function warningStyle(feature) {
 }
 
 function WarningsLayer({ data }) {
-  if (!data || !data.features || data.features.length === 0) return null;
   const geoKey = useMemo(() => {
+    if (!data?.features?.length) return "empty";
     const ids = data.features.map((f) => f.properties?.id || f.id || "").sort().join(",");
     return ids || String(Date.now());
   }, [data]);
+  if (!data || !data.features || data.features.length === 0) return null;
   return (
     <Pane name="nws-warnings" style={{ zIndex: 420, pointerEvents: "auto" }}>
       <GeoJSON
@@ -870,11 +871,16 @@ function spcStyle(feature, outlookType) {
 
 /* ── GeoJSON overlay in a non-interactive pane below markers ── */
 function OutlookLayer({ data, outlookType }) {
+  const geoKey = useMemo(() => {
+    if (!data?.features?.length) return "empty";
+    const validIso = data.features[0]?.properties?.VALID_ISO || "";
+    return `${validIso}-${data.features.length}-${outlookType}`;
+  }, [data, outlookType]);
   if (!data || !data.features || data.features.length === 0) return null;
   return (
     <Pane name="spc-outlook" style={{ zIndex: 250, pointerEvents: "none" }}>
       <GeoJSON
-        key={JSON.stringify(data).slice(0, 100) + outlookType}
+        key={geoKey}
         data={data}
         style={(f) => spcStyle(f, outlookType)}
         interactive={false}
