@@ -328,6 +328,16 @@ body.smap-fullscreen-active .control-panel {
   to   { transform: rotate(360deg); }
 }
 
+/* Global refresh button — continuous spin while refreshing */
+.smap-spin-active {
+  animation: smap-spin 1s linear infinite;
+}
+.smap-refreshing {
+  color: var(--text-accent, #3b82f6) !important;
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
+}
+
 .smap-radar-badge {
   font-size: 9px;
   background: rgba(59, 130, 246, 0.15);

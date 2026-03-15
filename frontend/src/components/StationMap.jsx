@@ -407,11 +407,12 @@ function warningStyle(feature) {
 }
 
 function WarningsLayer({ data }) {
-  if (!data || !data.features || data.features.length === 0) return null;
   const geoKey = useMemo(() => {
+    if (!data?.features?.length) return "empty";
     const ids = data.features.map((f) => f.properties?.id || f.id || "").sort().join(",");
     return ids || String(Date.now());
   }, [data]);
+  if (!data || !data.features || data.features.length === 0) return null;
   return (
     <Pane name="nws-warnings" style={{ zIndex: 420, pointerEvents: "auto" }}>
       <GeoJSON
@@ -870,11 +871,16 @@ function spcStyle(feature, outlookType) {
 
 /* ── GeoJSON overlay in a non-interactive pane below markers ── */
 function OutlookLayer({ data, outlookType }) {
+  const geoKey = useMemo(() => {
+    if (!data?.features?.length) return "empty";
+    const validIso = data.features[0]?.properties?.VALID_ISO || "";
+    return `${validIso}-${data.features.length}-${outlookType}`;
+  }, [data, outlookType]);
   if (!data || !data.features || data.features.length === 0) return null;
   return (
     <Pane name="spc-outlook" style={{ zIndex: 250, pointerEvents: "none" }}>
       <GeoJSON
-        key={JSON.stringify(data).slice(0, 100) + outlookType}
+        key={geoKey}
         data={data}
         style={(f) => spcStyle(f, outlookType)}
         interactive={false}
@@ -1016,6 +1022,10 @@ export default function StationMap({
 
   // SPC outlook refresh counter
   const [outlookRefresh, setOutlookRefresh] = useState(0);
+
+  // Global refresh epoch — bump to re-fetch all overlays at once
+  const [refreshEpoch, setRefreshEpoch] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Toolbar group dropdown (only one open at a time)
   const [openGroup, setOpenGroup] = useState(null); // "forecasts" | "radar" | "overlays" | "tools" | null
@@ -1162,7 +1172,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
-  }, [showVelocity, velocityRadar.id, velProduct, velCacheBust]);
+  }, [showVelocity, velocityRadar.id, velProduct, velCacheBust, refreshEpoch]);
 
   // Advance velocity animation frame
   useEffect(() => {
@@ -1375,7 +1385,7 @@ export default function StationMap({
       .catch((e) => console.error("ACARS airports fetch error:", e))
       .finally(() => { if (!cancelled) setAcarsLoading(false); });
     return () => { cancelled = true; };
-  }, [showAcars]);
+  }, [showAcars, refreshEpoch]);
 
   // Fetch NWS active warnings on mount + every 2 min when toggle is on
   useEffect(() => {
@@ -1389,7 +1399,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
-  }, [showWarnings]);
+  }, [showWarnings, refreshEpoch]);
 
   // Fetch Spotter Network positions + reports every 60s when toggle is on
   useEffect(() => {
@@ -1403,7 +1413,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [showSpotters]);
+  }, [showSpotters, refreshEpoch]);
 
   // Fetch storm attributes (TVS/Meso) every 60s when toggle is on
   useEffect(() => {
@@ -1417,7 +1427,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 60_000); // refresh every 1 min
     return () => { cancelled = true; clearInterval(id); };
-  }, [showStorms]);
+  }, [showStorms, refreshEpoch]);
 
   // Fetch SPC MDs & Watches every 2 min when toggle is on
   useEffect(() => {
@@ -1431,7 +1441,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 120_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [showMdWatch]);
+  }, [showMdWatch, refreshEpoch]);
 
   // Fetch wind field with scrub-friendly debounce to avoid UI jitter.
   useEffect(() => {
@@ -1460,7 +1470,7 @@ export default function StationMap({
       cancelled = true;
       clearTimeout(windFetchDebounceRef.current);
     };
-  }, [showWind, windLevel, windHourOffset]);
+  }, [showWind, windLevel, windHourOffset, refreshEpoch]);
 
   // Fetch SPC outlook on mount and when day/type changes
   useEffect(() => {
@@ -1740,6 +1750,18 @@ export default function StationMap({
                 {stormMotionGuide && <span className="smap-group-dot" />}
                 {boundaryGuide && <span className="smap-group-dot smap-dot-vel" />}
                 <ChevronDown size={10} className="smap-group-chevron" />
+              </button>
+              <button
+                className={`smap-expand${isRefreshing ? " smap-refreshing" : ""}`}
+                onClick={() => {
+                  setIsRefreshing(true);
+                  setRefreshEpoch((e) => e + 1);
+                  setOutlookRefresh((r) => r + 1);
+                  setTimeout(() => setIsRefreshing(false), 2000);
+                }}
+                title="Refresh all map data (forecasts, warnings, overlays)"
+              >
+                <RefreshCw size={14} className={isRefreshing ? "smap-spin-active" : ""} />
               </button>
               <span className="smap-utc-clock" title="Current UTC / Zulu time">
                 {utcNow.toISOString().slice(11, 16)}Z
