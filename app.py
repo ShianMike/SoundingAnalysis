@@ -53,7 +53,9 @@ csp = {
     "connect-src": "'self' https://api.rainviewer.com https://mesonet.agron.iastate.edu "
                    "https://api.open-meteo.com https://www.spc.noaa.gov https://spc.noaa.gov "
                    "https://api.weather.gov "
+                   "https://api.livestormchasing.com "
                    "https://soundinganalysis-752306366750.asia-southeast1.run.app",
+    "frame-src":   "'self' https://livestormchasing.com",
     "frame-ancestors": "'none'",
     "base-uri":    "'self'",
     "form-action": "'self'",
