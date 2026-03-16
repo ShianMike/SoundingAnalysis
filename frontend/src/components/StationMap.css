@@ -535,7 +535,8 @@ body.smap-fullscreen-active .control-panel {
 
 .smap-legend-outlook {
   gap: 4px 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .smap-outlook-cat {
