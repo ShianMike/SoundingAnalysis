@@ -505,7 +505,7 @@ body.smap-fullscreen-active .control-panel {
   flex-direction: column;
   gap: 6px;
   pointer-events: none;
-  max-width: 320px;
+  max-width: unset;
 }
 
 .smap-legend-float {
