@@ -5,8 +5,10 @@ import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play,
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports } from "../api";
 import { getFavorites } from "../favorites";
 import WindCanvas from "./WindCanvas";
+import ChaserPanel from "./ChaserPanel";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
+import "./ChaserPanel.css";
 
 /* ── Wrapper that keeps a SINGLE TileLayer alive and swaps URL via
    setUrl() instead of destroying / recreating the Leaflet layer.
@@ -935,6 +937,17 @@ function FlyToStation({ station, stations }) {
   return null;
 }
 
+/* ── fly-to arbitrary lat/lon (for chaser panel) ────────────── */
+function FlyToCoords({ coords, onDone }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!coords) return;
+    map.flyTo([coords.lat, coords.lon], Math.max(map.getZoom(), 9), { duration: 0.5 });
+    onDone?.();
+  }, [coords]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 /* ── Invalidate map size when container changes ────────────── */
 function MapResizeHandler({ trigger }) {
   const map = useMap();
@@ -1006,6 +1019,8 @@ export default function StationMap({
   const [spottersLoading, setSpottersLoading] = useState(false);
   const spotterCount = spotterData?.positions?.length || 0;
   const spotterReportCount = spotterData?.reports?.length || 0;
+  const [showChaserPanel, setShowChaserPanel] = useState(false);
+  const [flyToCoords, setFlyToCoords] = useState(null);
 
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
@@ -2105,6 +2120,15 @@ export default function StationMap({
                   {spotterReportCount > 0 && <span className="smap-radar-badge smap-warn-count">{spotterReportCount}</span>}
                   {spotterCount > 0 && <span className="smap-radar-badge">{spotterCount}</span>}
                 </button>
+                {showSpotters && (
+                  <button
+                    className={`smap-tbtn smap-tbtn-sub ${showChaserPanel ? "active" : ""}`}
+                    onClick={() => setShowChaserPanel((v) => !v)}
+                    title="Open Live Chasers panel"
+                  >
+                    Chaser List
+                  </button>
+                )}
                 <button
                   className={`smap-tbtn ${showLightning ? "active" : ""}`}
                   onClick={() => setShowLightning((v) => !v)}
@@ -2539,6 +2563,7 @@ export default function StationMap({
           />
           <MapViewTracker onCenterChange={handleCenterChange} onViewChange={setMapView} />
           <FlyToStation station={selectedStation} stations={stations} />
+          <FlyToCoords coords={flyToCoords} onDone={() => setFlyToCoords(null)} />
           <MapResizeHandler trigger={isFullscreen} />
 
           {/* ACARS airports overlay */}
@@ -2795,6 +2820,15 @@ export default function StationMap({
             </Pane>
           )}
         </MapContainer>
+
+        {/* Live Chasers panel */}
+        {showChaserPanel && showSpotters && spotterData && (
+          <ChaserPanel
+            spotterData={spotterData}
+            onFlyTo={(lat, lon) => setFlyToCoords({ lat, lon })}
+            onClose={() => setShowChaserPanel(false)}
+          />
+        )}
 
         {/* Floating legend overlays — each in its own container */}
         <div className="smap-legend-stack">
