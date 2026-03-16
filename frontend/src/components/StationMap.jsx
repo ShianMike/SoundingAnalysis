@@ -457,13 +457,16 @@ const TVS_ICON = L.divIcon({
   </svg>`,
 });
 
+const _mesoIconCache = new Map();
 function makeMesoIcon(color, rank) {
+  const key = `${color}-${rank}`;
+  if (_mesoIconCache.has(key)) return _mesoIconCache.get(key);
   const sz = Math.max(22, 18 + rank * 2);
   const half = sz / 2;
   const r = half - 2;
   const ir = r * 0.55;
   const dash = Math.max(2.5, r * 0.28);
-  return L.divIcon({
+  const icon = L.divIcon({
     className: "smap-meso-icon",
     iconSize: [sz, sz],
     iconAnchor: [half, half],
@@ -473,6 +476,8 @@ function makeMesoIcon(color, rank) {
       <circle cx="${half}" cy="${half}" r="1.5" fill="#fff" opacity="0.9"/>
     </svg>`,
   });
+  _mesoIconCache.set(key, icon);
+  return icon;
 }
 
 /* ── NEXRAD storm attribute (TVS / Mesocyclone) feed ───────── */
@@ -483,10 +488,13 @@ async function fetchStormAttr() {
     const res = await fetch(IEM_STORM_ATTR);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    // Only keep features that have TVS or Meso detection
-    const features = (data.features || []).filter(
-      (f) => f.properties?.tvs !== "NONE" || f.properties?.meso !== "NONE"
-    );
+    // Keep TVS detections + meso rank >= 3 (skip weak/marginal rotations)
+    const features = (data.features || []).filter((f) => {
+      const p = f.properties;
+      if (p?.tvs === "TVS") return true;
+      const rank = parseInt(p?.meso, 10);
+      return rank >= 3;
+    });
     return { type: "FeatureCollection", features };
   } catch (e) {
     console.error("Storm attr fetch error:", e);
@@ -2440,7 +2448,7 @@ export default function StationMap({
                     position={[lat, lng]}
                     icon={icon}
                   >
-                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip">
+                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip" permanent={false}>
                       <div className="smap-tt-inner">
                         <div className="smap-tt-header">
                           <span className="smap-tt-id" style={{ color }}>{isTvs ? "\u26a0 TVS" : `Meso ${mesoRank}`}</span>
