@@ -551,17 +551,28 @@ export default function ControlPanel({
       setLon(String(stn.lon));
     }
     if (autoFetch && !loading) {
-      const params = { source, station: id };
-      if (date) params.date = date.replace(/[-T:]/g, "").slice(0, 10);
-      if (source === "bufkit") {
-        params.model = model;
-        params.fhour = parseInt(fhour) || 0;
-      }
-      if (source === "rap") {
-        const s = stations.find((st) => st.id === id);
-        if (s) {
-          params.lat = s.lat;
-          params.lon = s.lon;
+      let params;
+      if (scanMode === "forecast" && riskData?.model) {
+        // Forecast risk scan — fetch forecast sounding with the scanned model/fhour
+        params = {
+          source: "psu",
+          station: id,
+          model: riskData.model.toLowerCase(),
+          fhour: riskData.fhour || 0,
+        };
+      } else {
+        params = { source, station: id };
+        if (date) params.date = date.replace(/[-T:]/g, "").slice(0, 10);
+        if (source === "bufkit" || source === "psu") {
+          params.model = model;
+          params.fhour = parseInt(fhour) || 0;
+        }
+        if (source === "rap") {
+          const s = stations.find((st) => st.id === id);
+          if (s) {
+            params.lat = s.lat;
+            params.lon = s.lon;
+          }
         }
       }
       onSubmit(params);

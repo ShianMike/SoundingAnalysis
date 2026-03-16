@@ -196,9 +196,9 @@ export default function App() {
   const handleRiskStationSelect = (stationId, riskMeta) => {
     // Load sounding for a station from risk scan results
     if (riskMeta?.model) {
-      // Forecast scan — load BUFKIT sounding with model/fhour
+      // Forecast scan — load PSU sounding (backend falls back to BUFKIT)
       handleSubmit({
-        source: "bufkit",
+        source: "psu",
         station: stationId,
         model: riskMeta.model.toLowerCase(),
         fhour: riskMeta.fhour || 0,
