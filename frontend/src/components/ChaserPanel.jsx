@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { X, Crosshair, Eye, Radio, Wifi, MapPin, Users } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { X, Crosshair, Radio, Wifi, MapPin, Users, Play, Square } from "lucide-react";
+import Hls from "hls.js";
 
 const LSC_API = "https://api.livestormchasing.com/api/v1/chasers";
-const LSC_THUMB = "https://edge.livestormchasing.com/thumbnails/";
-const LSC_STREAM = "https://livestormchasing.com/chasers/";
 const LSC_HLS = "https://edge.livestormchasing.com/hls/";
 
 function timeAgo(ts) {
@@ -14,6 +13,48 @@ function timeAgo(ts) {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+/* Inline HLS video player component */
+function HlsPlayer({ streamId, name }) {
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !streamId) return;
+    const src = `${LSC_HLS}${streamId}/index.m3u8`;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: false, lowLatencyMode: true });
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari native HLS
+      video.src = src;
+      video.addEventListener("loadedmetadata", () => video.play().catch(() => {}));
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [streamId]);
+
+  return (
+    <video
+      ref={videoRef}
+      className="chaser-video"
+      controls
+      playsInline
+      muted
+      title={`${name} live stream`}
+    />
+  );
 }
 
 export default function ChaserPanel({ onFlyTo, onClose }) {
@@ -78,11 +119,6 @@ export default function ChaserPanel({ onFlyTo, onClose }) {
     }
   };
 
-  const openExternal = (chaser) => {
-    const slug = chaser.username || chaser.id;
-    window.open(LSC_STREAM + slug, "_blank", "noopener");
-  };
-
   return (
     <div className="chaser-panel">
       <div className="chaser-header">
@@ -134,18 +170,14 @@ export default function ChaserPanel({ onFlyTo, onClose }) {
                   </div>
                   <div className="chaser-card-actions">
                     <button className="chaser-action-btn chaser-fly" onClick={(e) => { e.stopPropagation(); onFlyTo(c.lat, c.lon); }} title="Fly to"><Crosshair size={12} /></button>
-                    <button className="chaser-action-btn chaser-watch" onClick={(e) => { e.stopPropagation(); openExternal(c); }} title="Watch on livestormchasing.com"><Eye size={12} /></button>
+                    <button className="chaser-action-btn chaser-watch" onClick={(e) => { e.stopPropagation(); handleWatch(c); }} title={activeStream === c.id ? "Stop" : "Watch"}>
+                      {activeStream === c.id ? <Square size={12} /> : <Play size={12} />}
+                    </button>
                   </div>
                 </div>
                 {activeStream === c.id && (
                   <div className="chaser-stream-embed">
-                    <iframe
-                      src={`${LSC_STREAM}${c.username || c.id}`}
-                      title={`${c.name} live stream`}
-                      allow="autoplay; fullscreen"
-                      allowFullScreen
-                      className="chaser-iframe"
-                    />
+                    <HlsPlayer streamId={c.streamId} name={c.name} />
                   </div>
                 )}
               </div>

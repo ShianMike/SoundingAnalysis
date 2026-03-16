@@ -1021,6 +1021,7 @@ export default function StationMap({
   const spotterReportCount = spotterData?.reports?.length || 0;
   const [showChaserPanel, setShowChaserPanel] = useState(false);
   const [flyToCoords, setFlyToCoords] = useState(null);
+  const [highlightSpotter, setHighlightSpotter] = useState(null); // {lat, lon}
 
   // Animated wind flow overlay
   const [showWind, setShowWind] = useState(false);
@@ -2120,15 +2121,13 @@ export default function StationMap({
                   {spotterReportCount > 0 && <span className="smap-radar-badge smap-warn-count">{spotterReportCount}</span>}
                   {spotterCount > 0 && <span className="smap-radar-badge">{spotterCount}</span>}
                 </button>
-                {showSpotters && (
-                  <button
-                    className={`smap-tbtn smap-tbtn-sub ${showChaserPanel ? "active" : ""}`}
-                    onClick={() => setShowChaserPanel((v) => !v)}
-                    title="Open Live Chasers panel"
-                  >
-                    Chaser List
-                  </button>
-                )}
+                <button
+                  className={`smap-tbtn smap-tbtn-sub ${showChaserPanel ? "active" : ""}`}
+                  onClick={() => setShowChaserPanel((v) => !v)}
+                  title="Open Live Chasers panel"
+                >
+                  Chaser List
+                </button>
                 <button
                   className={`smap-tbtn ${showLightning ? "active" : ""}`}
                   onClick={() => setShowLightning((v) => !v)}
@@ -2553,6 +2552,21 @@ export default function StationMap({
             </Pane>
           )}
 
+          {/* Highlight ring for selected chaser */}
+          {highlightSpotter && (
+            <CircleMarker
+              center={[highlightSpotter.lat, highlightSpotter.lon]}
+              radius={14}
+              pathOptions={{
+                color: "#fbbf24",
+                fillColor: "#fbbf24",
+                fillOpacity: 0.25,
+                weight: 3,
+                className: "smap-tvs-pulse",
+              }}
+            />
+          )}
+
           <MapClickHandler
             enabled={latLonMode}
             onLatLonSelect={onLatLonSelect}
@@ -2824,8 +2838,11 @@ export default function StationMap({
         {/* Live Chasers panel */}
         {showChaserPanel && (
           <ChaserPanel
-            onFlyTo={(lat, lon) => setFlyToCoords({ lat, lon })}
-            onClose={() => setShowChaserPanel(false)}
+            onFlyTo={(lat, lon) => {
+              setFlyToCoords({ lat, lon });
+              setHighlightSpotter({ lat, lon });
+            }}
+            onClose={() => { setShowChaserPanel(false); setHighlightSpotter(null); }}
           />
         )}
 
