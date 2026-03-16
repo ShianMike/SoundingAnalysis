@@ -1,88 +1,97 @@
-import { useState, useMemo } from "react";
-import { X, Crosshair, AlertTriangle, Eye } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { X, Crosshair, Eye, Radio, Wifi, MapPin, Users } from "lucide-react";
 
-const SN_REPORT_COLORS = {
-  Tornado: "#ff0000",
-  "Funnel Cloud": "#ff6600",
-  "Rotating Wall Cloud": "#ff9900",
-  Hail: "#00ccff",
-  "Wind Damage": "#ffaa00",
-  Flooding: "#00ff66",
-  Other: "#cccccc",
-};
+const LSC_API = "https://api.livestormchasing.com/api/v1/chasers";
+const LSC_THUMB = "https://edge.livestormchasing.com/thumbnails/";
+const LSC_STREAM = "https://livestormchasing.com/chasers/";
+const LSC_HLS = "https://edge.livestormchasing.com/hls/";
 
-export default function ChaserPanel({ spotterData, onFlyTo, onClose }) {
-  const [tab, setTab] = useState("all"); // "all" | "reports"
+function timeAgo(ts) {
+  if (!ts) return "";
+  const d = new Date(ts + " UTC");
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+export default function ChaserPanel({ onFlyTo, onClose }) {
+  const [chasers, setChasers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [activeStream, setActiveStream] = useState(null); // chaser id being watched
 
-  const positions = spotterData?.positions || [];
-  const reports = spotterData?.reports || [];
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-
-    const reportItems = reports.map((r) => ({
-      kind: "report",
-      name: r.reporter,
-      detail: r.type,
-      time: r.time,
-      notes: r.notes,
-      lat: r.lat,
-      lon: r.lon,
-      color: SN_REPORT_COLORS[r.type] || SN_REPORT_COLORS.Other,
-      isTornado: r.type === "Tornado",
-      age: r.sheet === 3 ? "Recent" : r.sheet === 4 ? "Older" : "Old",
-    }));
-
-    const posItems = positions.map((s) => ({
-      kind: "position",
-      name: s.name,
-      detail: s.heading || "Active",
-      time: s.time,
-      lat: s.lat,
-      lon: s.lon,
-      color: "#00cc44",
-    }));
-
-    let items = tab === "reports" ? reportItems : [...reportItems, ...posItems];
-
-    if (q) {
-      items = items.filter(
-        (it) =>
-          it.name.toLowerCase().includes(q) ||
-          it.detail.toLowerCase().includes(q) ||
-          (it.notes || "").toLowerCase().includes(q)
-      );
+  const fetchChasers = useCallback(async () => {
+    try {
+      const res = await fetch(LSC_API);
+      if (!res.ok) return;
+      const data = await res.json();
+      setChasers(data);
+    } catch (e) {
+      console.error("Live chasers fetch error:", e);
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    return items;
-  }, [positions, reports, tab, search]);
+  useEffect(() => {
+    fetchChasers();
+    const id = setInterval(fetchChasers, 30_000);
+    return () => clearInterval(id);
+  }, [fetchChasers]);
+
+  const { live, position } = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const all = chasers.map((c) => {
+      const p = c.properties;
+      const [lon, lat] = c.geometry?.coordinates || [0, 0];
+      return {
+        id: p.id,
+        name: p.name,
+        location: p.location,
+        isLive: p.stream_status,
+        viewers: p.viewers || 0,
+        streamId: p.stream_id,
+        username: p.username,
+        gpsUpdate: p.gps_update,
+        liveTimestamp: p.live_timestamp,
+        lat,
+        lon,
+      };
+    });
+    const filtered = q
+      ? all.filter((c) => c.name.toLowerCase().includes(q) || (c.location || "").toLowerCase().includes(q))
+      : all;
+    return {
+      live: filtered.filter((c) => c.isLive).sort((a, b) => b.viewers - a.viewers),
+      position: filtered.filter((c) => !c.isLive),
+    };
+  }, [chasers, search]);
+
+  const handleWatch = (chaser) => {
+    if (activeStream === chaser.id) {
+      setActiveStream(null);
+    } else {
+      setActiveStream(chaser.id);
+      onFlyTo(chaser.lat, chaser.lon);
+    }
+  };
+
+  const openExternal = (chaser) => {
+    const slug = chaser.username || chaser.id;
+    window.open(LSC_STREAM + slug, "_blank", "noopener");
+  };
 
   return (
     <div className="chaser-panel">
-      <div className="chaser-panel-header">
-        <span className="chaser-panel-title">
-          <Eye size={14} />
-          Live Chasers
-        </span>
-        <button className="chaser-panel-close" onClick={onClose}>
-          <X size={14} />
-        </button>
-      </div>
-
-      <div className="chaser-panel-tabs">
-        <button
-          className={`chaser-tab ${tab === "all" ? "active" : ""}`}
-          onClick={() => setTab("all")}
-        >
-          All ({positions.length + reports.length})
-        </button>
-        <button
-          className={`chaser-tab ${tab === "reports" ? "active" : ""}`}
-          onClick={() => setTab("reports")}
-        >
-          Reports ({reports.length})
-        </button>
+      <div className="chaser-header">
+        <div className="chaser-header-left">
+          <Radio size={14} className="chaser-header-icon" />
+          <span className="chaser-header-title">Live Storm Chasers</span>
+          {live.length > 0 && <span className="chaser-live-badge">{live.length} LIVE</span>}
+        </div>
+        <button className="chaser-close" onClick={onClose}><X size={14} /></button>
       </div>
 
       <input
@@ -94,54 +103,85 @@ export default function ChaserPanel({ spotterData, onFlyTo, onClose }) {
       />
 
       <div className="chaser-list">
-        {filtered.length === 0 && (
+        {loading && <div className="chaser-empty"><span className="chaser-spinner" /> Loading chasers...</div>}
+        {!loading && live.length === 0 && position.length === 0 && (
           <div className="chaser-empty">No chasers found</div>
         )}
-        {filtered.map((it, i) => (
-          <div
-            key={`${it.kind}-${it.lat}-${it.lon}-${i}`}
-            className={`chaser-item ${it.kind === "report" ? "chaser-item-report" : ""} ${it.isTornado ? "chaser-item-tornado" : ""}`}
-          >
-            <div className="chaser-item-left" style={{ borderColor: it.color }}>
-              {it.kind === "report" ? (
-                <span className="chaser-badge chaser-badge-report" style={{ background: it.color }}>
-                  {it.isTornado ? "TOR" : it.detail.slice(0, 4).toUpperCase()}
-                </span>
-              ) : (
-                <span className="chaser-badge chaser-badge-active">ACTIVE</span>
-              )}
-            </div>
-            <div className="chaser-item-info">
-              <span className="chaser-name">{it.name || "Unknown"}</span>
-              <span className="chaser-detail">
-                {it.kind === "report" ? (
-                  <>
-                    <span style={{ color: it.color }}>{it.detail}</span>
-                    {it.age && <span className="chaser-age"> · {it.age}</span>}
-                  </>
-                ) : (
-                  <span>{it.detail}</span>
+
+        {live.length > 0 && (
+          <div className="chaser-section">
+            <div className="chaser-section-label"><Wifi size={10} /> Live Streams</div>
+            {live.map((c) => (
+              <div key={c.id} className={`chaser-card chaser-card-live ${activeStream === c.id ? "chaser-card-watching" : ""}`}>
+                <div className="chaser-card-row" onClick={() => handleWatch(c)}>
+                  <div className="chaser-avatar">
+                    <div className="chaser-avatar-pulse" />
+                    <Wifi size={12} />
+                  </div>
+                  <div className="chaser-card-info">
+                    <div className="chaser-card-name">
+                      {c.name}
+                      <span className="chaser-card-live-tag">
+                        <span className="chaser-live-dot" /> LIVE
+                      </span>
+                    </div>
+                    <div className="chaser-card-meta">
+                      <MapPin size={9} /> {c.location || "Unknown"}
+                      <span className="chaser-card-sep">·</span>
+                      <Users size={9} /> {c.viewers}
+                    </div>
+                    <div className="chaser-card-time">{timeAgo(c.liveTimestamp)}</div>
+                  </div>
+                  <div className="chaser-card-actions">
+                    <button className="chaser-action-btn chaser-fly" onClick={(e) => { e.stopPropagation(); onFlyTo(c.lat, c.lon); }} title="Fly to"><Crosshair size={12} /></button>
+                    <button className="chaser-action-btn chaser-watch" onClick={(e) => { e.stopPropagation(); openExternal(c); }} title="Watch on livestormchasing.com"><Eye size={12} /></button>
+                  </div>
+                </div>
+                {activeStream === c.id && (
+                  <div className="chaser-stream-embed">
+                    <iframe
+                      src={`${LSC_STREAM}${c.username || c.id}`}
+                      title={`${c.name} live stream`}
+                      allow="autoplay; fullscreen"
+                      allowFullScreen
+                      className="chaser-iframe"
+                    />
+                  </div>
                 )}
-              </span>
-              {it.time && <span className="chaser-time">{it.time}</span>}
-              {it.notes && <span className="chaser-notes">{it.notes}</span>}
-            </div>
-            <div className="chaser-item-actions">
-              <button
-                className="chaser-fly-btn"
-                onClick={() => onFlyTo(it.lat, it.lon)}
-                title="Fly to location"
-              >
-                <Crosshair size={13} />
-              </button>
-            </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {position.length > 0 && (
+          <div className="chaser-section">
+            <div className="chaser-section-label"><MapPin size={10} /> Position ({position.length})</div>
+            {position.map((c) => (
+              <div key={c.id} className="chaser-card chaser-card-pos">
+                <div className="chaser-card-row">
+                  <div className="chaser-avatar chaser-avatar-pos">
+                    <MapPin size={12} />
+                  </div>
+                  <div className="chaser-card-info">
+                    <div className="chaser-card-name">{c.name}</div>
+                    <div className="chaser-card-meta">
+                      <MapPin size={9} /> {c.location || "Unknown"}
+                    </div>
+                    <div className="chaser-card-time">{timeAgo(c.gpsUpdate)}</div>
+                  </div>
+                  <div className="chaser-card-actions">
+                    <button className="chaser-action-btn chaser-fly" onClick={() => onFlyTo(c.lat, c.lon)} title="Fly to"><Crosshair size={12} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="chaser-panel-footer">
-        <span>Data: Spotter Network</span>
-        <span>{filtered.length} chaser{filtered.length !== 1 ? "s" : ""}</span>
+      <div className="chaser-footer">
+        <span>Data: livestormchasing.com</span>
+        <span>{chasers.length} chaser{chasers.length !== 1 ? "s" : ""}</span>
       </div>
     </div>
   );

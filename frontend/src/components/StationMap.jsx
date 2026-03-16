@@ -2822,9 +2822,8 @@ export default function StationMap({
         </MapContainer>
 
         {/* Live Chasers panel */}
-        {showChaserPanel && showSpotters && spotterData && (
+        {showChaserPanel && (
           <ChaserPanel
-            spotterData={spotterData}
             onFlyTo={(lat, lon) => setFlyToCoords({ lat, lon })}
             onClose={() => setShowChaserPanel(false)}
           />

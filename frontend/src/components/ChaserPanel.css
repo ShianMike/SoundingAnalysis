@@ -2,238 +2,301 @@
   position: absolute;
   top: 46px;
   right: 0;
-  width: 300px;
+  width: 340px;
   max-height: calc(100% - 54px);
-  background: #1e1e2e;
-  border-left: 1px solid #333;
+  background: #16161e;
+  border-left: 1px solid #2a2a3a;
   display: flex;
   flex-direction: column;
   z-index: 1100;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.4);
-  animation: chaser-slide-in 0.2s ease-out;
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.5);
+  animation: chaser-slide-in 0.22s ease-out;
 }
-
 @keyframes chaser-slide-in {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
 
-.chaser-panel-header {
+/* ── Header ── */
+.chaser-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  background: #181825;
-  border-bottom: 1px solid #333;
+  padding: 10px 14px;
+  background: #111118;
+  border-bottom: 1px solid #2a2a3a;
   flex-shrink: 0;
 }
-
-.chaser-panel-title {
+.chaser-header-left {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+}
+.chaser-header-icon {
+  color: #ef4444;
+  animation: chaser-pulse 2s ease-in-out infinite;
+}
+@keyframes chaser-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.chaser-header-title {
   font-size: 13px;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-weight: 700;
+  color: #e8e8f0;
   letter-spacing: 0.02em;
 }
-
-.chaser-panel-close {
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  padding: 3px;
+.chaser-live-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-}
-.chaser-panel-close:hover {
+  background: #ef4444;
   color: #fff;
-  background: #333;
+  letter-spacing: 0.05em;
 }
-
-.chaser-panel-tabs {
-  display: flex;
-  border-bottom: 1px solid #333;
-  flex-shrink: 0;
-}
-.chaser-tab {
-  flex: 1;
-  padding: 7px 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: #888;
+.chaser-close {
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  color: #666;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  padding: 4px;
+  border-radius: 5px;
+  display: flex;
 }
-.chaser-tab:hover { color: #ccc; }
-.chaser-tab.active {
-  color: #60a5fa;
-  border-bottom-color: #60a5fa;
-}
+.chaser-close:hover { color: #fff; background: #333; }
 
+/* ── Search ── */
 .chaser-search {
-  margin: 8px 10px 4px;
-  padding: 6px 10px;
-  font-size: 11px;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #181825;
+  margin: 8px 12px 4px;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  border: 1px solid #2a2a3a;
+  border-radius: 8px;
+  background: #111118;
   color: #e0e0e0;
   outline: none;
   flex-shrink: 0;
+  transition: border-color 0.15s;
 }
-.chaser-search::placeholder { color: #555; }
+.chaser-search::placeholder { color: #4a4a5a; }
 .chaser-search:focus { border-color: #555; }
 
+/* ── List ── */
 .chaser-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 2px 0 6px;
 }
 .chaser-list::-webkit-scrollbar { width: 5px; }
-.chaser-list::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 4px;
-}
+.chaser-list::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
 .chaser-empty {
-  padding: 32px 12px;
+  padding: 40px 12px;
   text-align: center;
   font-size: 12px;
-  color: #555;
-}
-
-.chaser-item {
+  color: #4a4a5a;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #262630;
-  transition: background 0.12s;
-  cursor: default;
 }
-.chaser-item:hover { background: #262640; }
-
-.chaser-item-report { background: rgba(255, 255, 255, 0.02); }
-.chaser-item-tornado {
-  background: rgba(255, 0, 0, 0.06);
-  border-left: 3px solid #ff0000;
+.chaser-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #333;
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: chaser-spin 0.7s linear infinite;
 }
+@keyframes chaser-spin { to { transform: rotate(360deg); } }
 
-.chaser-item-left {
+/* ── Section labels ── */
+.chaser-section { margin-bottom: 4px; }
+.chaser-section-label {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding-top: 2px;
-}
-
-.chaser-badge {
-  font-size: 9px;
+  gap: 5px;
+  padding: 6px 14px 4px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 2px 5px;
-  border-radius: 3px;
-  color: #fff;
-  white-space: nowrap;
-}
-.chaser-badge-active {
-  background: #00cc44;
-  color: #000;
-  font-weight: 800;
-}
-.chaser-badge-report {
-  font-size: 8.5px;
+  color: #5a5a6a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.chaser-item-info {
+/* ── Cards ── */
+.chaser-card {
+  margin: 0 8px 4px;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: background 0.12s;
+}
+.chaser-card-live {
+  background: #1a1a28;
+  border: 1px solid #2a2a3a;
+}
+.chaser-card-live:hover { background: #1e1e30; border-color: #3a3a4a; }
+.chaser-card-watching {
+  border-color: #ef4444 !important;
+  background: #1e1018 !important;
+}
+.chaser-card-pos {
+  background: transparent;
+  border: 1px solid transparent;
+}
+.chaser-card-pos:hover { background: #1a1a28; }
+
+.chaser-card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+/* ── Avatar ── */
+.chaser-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  flex-shrink: 0;
+  position: relative;
+}
+.chaser-avatar-pos {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+.chaser-avatar-pulse {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  animation: chaser-ring-pulse 2s ease-out infinite;
+}
+@keyframes chaser-ring-pulse {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* ── Card info ── */
+.chaser-card-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+  gap: 2px;
 }
-
-.chaser-name {
-  font-size: 12px;
+.chaser-card-name {
+  font-size: 12.5px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #e8e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.chaser-detail {
-  font-size: 10.5px;
-  color: #999;
+.chaser-card-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #ef4444;
+  letter-spacing: 0.05em;
 }
-.chaser-age { color: #666; }
-
-.chaser-time {
-  font-size: 10px;
-  color: #666;
+.chaser-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: chaser-pulse 1.5s ease-in-out infinite;
 }
-
-.chaser-notes {
-  font-size: 10px;
-  color: #777;
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chaser-item-actions {
-  flex-shrink: 0;
+.chaser-card-meta {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-top: 2px;
+  font-size: 10.5px;
+  color: #6a6a7a;
+}
+.chaser-card-sep { color: #3a3a4a; }
+.chaser-card-time {
+  font-size: 9.5px;
+  color: #4a4a5a;
 }
 
-.chaser-fly-btn {
-  background: none;
-  border: 1px solid #444;
-  border-radius: 5px;
-  color: #888;
-  cursor: pointer;
-  padding: 4px;
+/* ── Actions ── */
+.chaser-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.chaser-action-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid #2a2a3a;
+  border-radius: 6px;
+  color: #5a5a6a;
+  cursor: pointer;
   transition: all 0.12s;
 }
-.chaser-fly-btn:hover {
-  color: #60a5fa;
-  border-color: #60a5fa;
+.chaser-action-btn:hover {
   background: rgba(96, 165, 250, 0.1);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+.chaser-watch:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
 }
 
-.chaser-panel-footer {
+/* ── Stream embed ── */
+.chaser-stream-embed {
+  padding: 0 8px 8px;
+}
+.chaser-iframe {
+  width: 100%;
+  height: 180px;
+  border: none;
+  border-radius: 8px;
+  background: #000;
+}
+
+/* ── Footer ── */
+.chaser-footer {
   display: flex;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 7px 14px;
   font-size: 10px;
-  color: #555;
-  border-top: 1px solid #333;
-  background: #181825;
+  color: #4a4a5a;
+  border-top: 1px solid #2a2a3a;
+  background: #111118;
   flex-shrink: 0;
 }
 
-/* Mobile */
+/* ── Mobile ── */
 @media (max-width: 600px) {
   .chaser-panel {
     width: 100%;
     top: auto;
     bottom: 0;
-    max-height: 55vh;
+    max-height: 60vh;
     border-left: none;
-    border-top: 1px solid #333;
-    border-radius: 14px 14px 0 0;
+    border-top: 1px solid #2a2a3a;
+    border-radius: 16px 16px 0 0;
     animation: chaser-slide-up 0.22s ease-out;
   }
   @keyframes chaser-slide-up {
