@@ -2835,17 +2835,6 @@ export default function StationMap({
           )}
         </MapContainer>
 
-        {/* Live Chasers panel */}
-        {showChaserPanel && (
-          <ChaserPanel
-            onFlyTo={(lat, lon) => {
-              setFlyToCoords({ lat, lon });
-              setHighlightSpotter({ lat, lon });
-            }}
-            onClose={() => { setShowChaserPanel(false); setHighlightSpotter(null); }}
-          />
-        )}
-
         {/* Floating legend overlays — each in its own container */}
         <div className="smap-legend-stack">
           {showSpotters && spotterData && (
@@ -3015,6 +3004,17 @@ export default function StationMap({
             : "Right-click map for nearest stations"}
         </div>
       </div>
+
+      {/* Live Chasers sidebar */}
+      {showChaserPanel && (
+        <ChaserPanel
+          onFlyTo={(lat, lon) => {
+            setFlyToCoords({ lat, lon });
+            setHighlightSpotter({ lat, lon });
+          }}
+          onClose={() => { setShowChaserPanel(false); setHighlightSpotter(null); }}
+        />
+      )}
     </section>
   );
 }
