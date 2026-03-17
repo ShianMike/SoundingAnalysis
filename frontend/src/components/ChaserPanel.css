@@ -1,16 +1,18 @@
+/* ═══ ChaserPanel ═══ */
 .chaser-panel {
   position: absolute;
   top: 46px;
   right: 0;
-  width: 340px;
+  width: 320px;
   max-height: calc(100% - 54px);
-  background: #16161e;
-  border-left: 1px solid #2a2a3a;
+  background: var(--bg-primary, #111118);
+  border-left: 1px solid var(--border, #2a2a3a);
   display: flex;
   flex-direction: column;
   z-index: 1100;
-  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.5);
-  animation: chaser-slide-in 0.22s ease-out;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.45);
+  animation: chaser-slide-in 0.2s ease-out;
+  overflow: hidden;
 }
 @keyframes chaser-slide-in {
   from { transform: translateX(100%); opacity: 0; }
@@ -22,18 +24,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: #111118;
-  border-bottom: 1px solid #2a2a3a;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #16161e);
+  border-bottom: 1px solid var(--border, #2a2a3a);
   flex-shrink: 0;
 }
 .chaser-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
 }
 .chaser-header-icon {
   color: #ef4444;
+  flex-shrink: 0;
   animation: chaser-pulse 2s ease-in-out infinite;
 }
 @keyframes chaser-pulse {
@@ -41,69 +45,72 @@
   50% { opacity: 0.4; }
 }
 .chaser-header-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
-  color: #e8e8f0;
-  letter-spacing: 0.02em;
+  color: var(--text-primary, #e8e8f0);
+  white-space: nowrap;
 }
 .chaser-live-badge {
   font-size: 9px;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   background: #ef4444;
   color: #fff;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 .chaser-close {
   background: none;
   border: none;
-  color: #666;
+  color: var(--text-muted, #666);
   cursor: pointer;
   padding: 4px;
-  border-radius: 5px;
+  border-radius: 4px;
   display: flex;
+  flex-shrink: 0;
 }
-.chaser-close:hover { color: #fff; background: #333; }
+.chaser-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
 
 /* ── Search ── */
 .chaser-search {
-  margin: 8px 12px 4px;
-  padding: 7px 11px;
-  font-size: 11.5px;
-  border: 1px solid #2a2a3a;
-  border-radius: 8px;
-  background: #111118;
-  color: #e0e0e0;
+  margin: 8px 10px 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 6px;
+  background: var(--bg-secondary, #111118);
+  color: var(--text-primary, #e0e0e0);
   outline: none;
   flex-shrink: 0;
   transition: border-color 0.15s;
 }
-.chaser-search::placeholder { color: #4a4a5a; }
+.chaser-search::placeholder { color: var(--text-muted, #4a4a5a); }
 .chaser-search:focus { border-color: #555; }
 
 /* ── List ── */
 .chaser-list {
   flex: 1;
   overflow-y: auto;
-  padding: 2px 0 6px;
+  overflow-x: hidden;
+  padding: 2px 0 4px;
 }
-.chaser-list::-webkit-scrollbar { width: 5px; }
+.chaser-list::-webkit-scrollbar { width: 4px; }
 .chaser-list::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
 .chaser-empty {
-  padding: 40px 12px;
+  padding: 32px 12px;
   text-align: center;
-  font-size: 12px;
-  color: #4a4a5a;
+  font-size: 11px;
+  color: var(--text-muted, #4a4a5a);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 .chaser-spinner {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border: 2px solid #333;
   border-top-color: #60a5fa;
   border-radius: 50%;
@@ -112,55 +119,56 @@
 @keyframes chaser-spin { to { transform: rotate(360deg); } }
 
 /* ── Section labels ── */
-.chaser-section { margin-bottom: 4px; }
+.chaser-section { margin-bottom: 2px; }
 .chaser-section-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 14px 4px;
-  font-size: 10px;
+  gap: 4px;
+  padding: 5px 12px 3px;
+  font-size: 9.5px;
   font-weight: 700;
-  color: #5a5a6a;
+  color: var(--text-muted, #5a5a6a);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 /* ── Cards ── */
 .chaser-card {
-  margin: 0 8px 4px;
-  border-radius: 10px;
+  margin: 2px 6px;
+  border-radius: 8px;
   overflow: hidden;
   transition: background 0.12s;
 }
 .chaser-card-live {
-  background: #1a1a28;
-  border: 1px solid #2a2a3a;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border, #2a2a3a);
 }
-.chaser-card-live:hover { background: #1e1e30; border-color: #3a3a4a; }
+.chaser-card-live:hover { background: rgba(255, 255, 255, 0.05); border-color: #3a3a4a; }
 .chaser-card-watching {
   border-color: #ef4444 !important;
-  background: #1e1018 !important;
+  background: rgba(239, 68, 68, 0.06) !important;
 }
 .chaser-card-pos {
   background: transparent;
   border: 1px solid transparent;
 }
-.chaser-card-pos:hover { background: #1a1a28; }
+.chaser-card-pos:hover { background: rgba(255, 255, 255, 0.03); }
 
 .chaser-card-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   cursor: pointer;
+  min-width: 0;
 }
 
 /* ── Avatar ── */
 .chaser-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -169,14 +177,14 @@
   position: relative;
 }
 .chaser-avatar-pos {
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(34, 197, 94, 0.08);
   color: #22c55e;
 }
 .chaser-avatar-pulse {
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  border: 2px solid rgba(239, 68, 68, 0.3);
+  border: 2px solid rgba(239, 68, 68, 0.25);
   animation: chaser-ring-pulse 2s ease-out infinite;
 }
 @keyframes chaser-ring-pulse {
@@ -190,27 +198,33 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .chaser-card-name {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: #e8e8f0;
+  color: var(--text-primary, #e8e8f0);
   display: flex;
   align-items: center;
-  gap: 6px;
-  white-space: nowrap;
+  gap: 5px;
+  overflow: hidden;
+}
+.chaser-card-name > span:first-child,
+.chaser-card-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .chaser-card-live-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   color: #ef4444;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 .chaser-live-dot {
   width: 5px;
@@ -222,56 +236,59 @@
 .chaser-card-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  color: #6a6a7a;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-muted, #6a6a7a);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .chaser-card-sep { color: #3a3a4a; }
 .chaser-card-time {
-  font-size: 9.5px;
-  color: #4a4a5a;
+  font-size: 9px;
+  color: var(--text-muted, #4a4a5a);
 }
 
 /* ── Actions ── */
 .chaser-card-actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex-shrink: 0;
 }
 .chaser-action-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
-  border: 1px solid #2a2a3a;
-  border-radius: 6px;
-  color: #5a5a6a;
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 5px;
+  color: var(--text-muted, #5a5a6a);
   cursor: pointer;
   transition: all 0.12s;
 }
 .chaser-action-btn:hover {
-  background: rgba(96, 165, 250, 0.1);
+  background: rgba(96, 165, 250, 0.08);
   border-color: #60a5fa;
   color: #60a5fa;
 }
-.chaser-watch:hover {
-  background: rgba(239, 68, 68, 0.1);
+.chaser-watch:hover,
+.chaser-watch.active {
+  background: rgba(239, 68, 68, 0.08);
   border-color: #ef4444;
   color: #ef4444;
 }
 
 /* ── Stream embed ── */
 .chaser-stream-embed {
-  padding: 0 8px 8px;
+  padding: 0 6px 6px;
 }
 .chaser-video {
   width: 100%;
-  height: 180px;
+  height: 170px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #000;
   object-fit: contain;
 }
@@ -280,11 +297,11 @@
 .chaser-footer {
   display: flex;
   justify-content: space-between;
-  padding: 7px 14px;
-  font-size: 10px;
-  color: #4a4a5a;
-  border-top: 1px solid #2a2a3a;
-  background: #111118;
+  padding: 6px 12px;
+  font-size: 9.5px;
+  color: var(--text-muted, #4a4a5a);
+  border-top: 1px solid var(--border, #2a2a3a);
+  background: var(--bg-secondary, #111118);
   flex-shrink: 0;
 }
 
@@ -294,11 +311,11 @@
     width: 100%;
     top: auto;
     bottom: 0;
-    max-height: 60vh;
+    max-height: 55vh;
     border-left: none;
-    border-top: 1px solid #2a2a3a;
-    border-radius: 16px 16px 0 0;
-    animation: chaser-slide-up 0.22s ease-out;
+    border-top: 1px solid var(--border, #2a2a3a);
+    border-radius: 14px 14px 0 0;
+    animation: chaser-slide-up 0.2s ease-out;
   }
   @keyframes chaser-slide-up {
     from { transform: translateY(100%); opacity: 0; }

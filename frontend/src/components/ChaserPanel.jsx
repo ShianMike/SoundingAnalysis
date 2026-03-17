@@ -152,11 +152,11 @@ export default function ChaserPanel({ onFlyTo, onClose }) {
                 <div className="chaser-card-row" onClick={() => handleWatch(c)}>
                   <div className="chaser-avatar">
                     <div className="chaser-avatar-pulse" />
-                    <Wifi size={12} />
+                    <Wifi size={11} />
                   </div>
                   <div className="chaser-card-info">
                     <div className="chaser-card-name">
-                      {c.name}
+                      <span className="chaser-card-name-text">{c.name}</span>
                       <span className="chaser-card-live-tag">
                         <span className="chaser-live-dot" /> LIVE
                       </span>
@@ -169,9 +169,9 @@ export default function ChaserPanel({ onFlyTo, onClose }) {
                     <div className="chaser-card-time">{timeAgo(c.liveTimestamp)}</div>
                   </div>
                   <div className="chaser-card-actions">
-                    <button className="chaser-action-btn chaser-fly" onClick={(e) => { e.stopPropagation(); onFlyTo(c.lat, c.lon); }} title="Fly to"><Crosshair size={12} /></button>
-                    <button className="chaser-action-btn chaser-watch" onClick={(e) => { e.stopPropagation(); handleWatch(c); }} title={activeStream === c.id ? "Stop" : "Watch"}>
-                      {activeStream === c.id ? <Square size={12} /> : <Play size={12} />}
+                    <button className="chaser-action-btn chaser-fly" onClick={(e) => { e.stopPropagation(); onFlyTo(c.lat, c.lon); }} title="Fly to"><Crosshair size={11} /></button>
+                    <button className={`chaser-action-btn chaser-watch ${activeStream === c.id ? "active" : ""}`} onClick={(e) => { e.stopPropagation(); handleWatch(c); }} title={activeStream === c.id ? "Stop" : "Watch"}>
+                      {activeStream === c.id ? <Square size={11} /> : <Play size={11} />}
                     </button>
                   </div>
                 </div>
@@ -192,17 +192,17 @@ export default function ChaserPanel({ onFlyTo, onClose }) {
               <div key={c.id} className="chaser-card chaser-card-pos">
                 <div className="chaser-card-row">
                   <div className="chaser-avatar chaser-avatar-pos">
-                    <MapPin size={12} />
+                    <MapPin size={11} />
                   </div>
                   <div className="chaser-card-info">
-                    <div className="chaser-card-name">{c.name}</div>
+                    <div className="chaser-card-name"><span className="chaser-card-name-text">{c.name}</span></div>
                     <div className="chaser-card-meta">
                       <MapPin size={9} /> {c.location || "Unknown"}
                     </div>
                     <div className="chaser-card-time">{timeAgo(c.gpsUpdate)}</div>
                   </div>
                   <div className="chaser-card-actions">
-                    <button className="chaser-action-btn chaser-fly" onClick={() => onFlyTo(c.lat, c.lon)} title="Fly to"><Crosshair size={12} /></button>
+                    <button className="chaser-action-btn chaser-fly" onClick={() => onFlyTo(c.lat, c.lon)} title="Fly to"><Crosshair size={11} /></button>
                   </div>
                 </div>
               </div>
