@@ -124,18 +124,21 @@ export default function App() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Auto-fetch from URL params once stations are loaded
+  // Auto-fetch from URL params (or latest for default station) once stations are loaded
   const autoFetchedRef = useRef(false);
   useEffect(() => {
     if (autoFetchedRef.current || initialLoading || stations.length === 0) return;
-    const up = urlParamsRef.current;
-    if (!up) return;
     autoFetchedRef.current = true;
-    // Sync parent state
-    if (up.source) setSource(up.source);
-    if (up.station) setSelectedStation(up.station);
-    // Fire the sounding fetch
-    handleSubmit(up);
+    const up = urlParamsRef.current;
+    if (up) {
+      // Sync parent state from URL params
+      if (up.source) setSource(up.source);
+      if (up.station) setSelectedStation(up.station);
+      handleSubmit(up);
+    } else {
+      // No URL params — auto-fetch latest sounding for default station
+      handleSubmit({ source, station: selectedStation, date: "", soundingHour: "latest" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLoading, stations]);
 
