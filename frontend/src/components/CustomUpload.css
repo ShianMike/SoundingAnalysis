@@ -244,6 +244,73 @@
   margin-bottom: 2px;
 }
 
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  .cu-page {
+    padding: 20px 16px;
+  }
+  .cu-title {
+    font-size: 17px;
+  }
+  .cu-textarea {
+    min-height: 200px;
+    font-size: 11px;
+  }
+  .cu-params {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .cu-page {
+    padding: 12px 10px;
+  }
+  .cu-container {
+    max-width: 100%;
+  }
+  .cu-title {
+    font-size: 15px;
+  }
+  .cu-subtitle {
+    font-size: 11px;
+  }
+  .cu-format-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .cu-format-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+  .cu-textarea {
+    min-height: 160px;
+    font-size: 11px;
+    padding: 10px 12px;
+  }
+  .cu-dropzone {
+    padding: 12px;
+    font-size: 11px;
+  }
+  .cu-analyze {
+    padding: 10px;
+    font-size: 12px;
+  }
+  .cu-params {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .cu-help {
+    padding: 12px;
+  }
+  .cu-help pre {
+    font-size: 10px;
+  }
+  .cu-back {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}
+
 .cu-param-value {
   font-size: 14px;
   font-weight: 700;

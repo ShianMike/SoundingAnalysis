@@ -139,4 +139,11 @@
     padding: 3px 7px;
     font-size: 9px;
   }
+  .stl-arrow {
+    width: 28px;
+    height: 28px;
+  }
+  .stl-label {
+    font-size: 9px;
+  }
 }

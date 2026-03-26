@@ -1151,7 +1151,29 @@
 .cp-scan-tab:hover { color: var(--text-primary, #e2e8f0); }
 .cp-scan-tab.active {
   background: var(--bg-tertiary, #334155);
-  color: #fff;
+  color: var(--text-primary, #fff);
+}
+[data-theme="light"] .cp-scan-tabs {
+  background: var(--bg-tertiary);
+}
+[data-theme="light"] .cp-scan-tab.active {
+  background: #fff;
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+[data-theme="light"] .cp-scan-valid-tag {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+[data-theme="light"] .cp-scan-slider {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+[data-theme="light"] .cp-scan-slider::-webkit-slider-thumb {
+  border-color: var(--bg-primary);
+}
+[data-theme="light"] .cp-scan-slider::-moz-range-thumb {
+  border-color: var(--bg-primary);
 }
 
 /* Forecast options row */
@@ -1768,8 +1790,16 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
   }
+  .cp-model-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
   .cp-tools-grid {
     grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .cp-settings-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 4px;
   }
 }
@@ -1778,16 +1808,47 @@
   .control-panel {
     padding: 0;
   }
+  .cp-brand {
+    padding: 8px 12px;
+  }
+  .cp-brand-title {
+    font-size: 12px;
+  }
+  .cp-brand-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .cp-nav {
+    padding: 6px 8px;
+  }
+  .cp-nav-tab {
+    padding: 8px 0;
+    font-size: 11px;
+  }
   .cp-tab-content {
     padding: 8px 10px 12px;
   }
   .cp-source-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 3px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .cp-source-btn {
+    padding: 8px 6px;
+  }
+  .cp-model-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .cp-model-btn {
+    padding: 7px 4px 6px;
   }
   .cp-tools-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 3px;
+    gap: 4px;
+  }
+  .cp-tool-btn {
+    padding: 9px 6px;
+    font-size: 10px;
   }
   .cp-station-list {
     max-height: 140px;
@@ -1796,12 +1857,35 @@
     font-size: 10px;
   }
   .cp-input, .cp-select {
-    font-size: 11px;
-    padding: 6px 8px;
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+  .cp-input-wrap .cp-input {
+    padding-left: 32px;
   }
   .cp-submit {
-    padding: 10px;
-    font-size: 12px;
+    padding: 12px;
+    font-size: 13px;
+  }
+  .cp-settings-btn {
+    padding: 9px 8px;
+    font-size: 10px;
+  }
+  .cp-footer-btn {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .cp-fhour-slider::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  .cp-fhour-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  .cp-fhour-preset {
+    padding: 6px 4px;
+    font-size: 10px;
   }
 }
 

@@ -754,6 +754,17 @@
     flex-wrap: wrap;
     gap: 4px;
   }
+  .rv-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .rv-meta-row-top {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .rv-meta-details {
+    flex-wrap: wrap;
+  }
   .rv-summary-body {
     padding: 12px 14px 16px;
   }
@@ -782,9 +793,26 @@
   .rv-section-title {
     font-size: 12px;
   }
+  .rv-btn {
+    width: 34px;
+    height: 34px;
+  }
   .rv-toolbar button, .rv-toolbar select {
     font-size: 10px;
     padding: 4px 6px;
+  }
+  .rv-meta-station {
+    font-size: 15px;
+  }
+  .rv-meta-date {
+    font-size: 10px;
+  }
+  .rv-meta-chip {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+  .rv-meta-actions {
+    gap: 2px;
   }
   .rv-summary-body {
     padding: 8px 10px 12px;
@@ -874,4 +902,12 @@
 }
 [data-theme="light"] .rv-sum-kv-v {
   color: var(--text-primary);
+}
+
+/* ── ResultsView main body — Light theme overrides ──────── */
+[data-theme="light"] .rv-plot-wrap {
+  background: var(--bg-primary);
+}
+[data-theme="light"] .rv-risk-table td {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }

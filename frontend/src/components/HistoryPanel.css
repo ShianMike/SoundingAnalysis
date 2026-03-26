@@ -284,3 +284,36 @@
     padding: 0 0 16px;
   }
 }
+
+@media (max-width: 480px) {
+  .history-panel {
+    max-height: 250px;
+    padding: 0 8px 12px;
+  }
+  .hp-header {
+    padding: 12px 0 8px;
+  }
+  .hp-header-left h3 {
+    font-size: 12px;
+  }
+  .hp-tab {
+    padding: 5px 6px;
+    font-size: 10px;
+  }
+  .hp-item {
+    padding: 8px;
+  }
+  .hp-close-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .hp-clear-btn {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+}
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .hp-tab-count {
+  background: rgba(0, 0, 0, 0.08);
+}

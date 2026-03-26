@@ -659,6 +659,39 @@
 @keyframes ens-spin { to { transform: rotate(360deg); } }
 .spin { animation: ens-spin 1s linear infinite; }
 
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .ens-back {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .ens-back:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .ens-help-btn {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .ens-station-option {
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .ens-suggestion-btn {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .ens-quick-combos {
+  border-color: var(--border);
+}
+[data-theme="light"] .ens-plot-wrap {
+  background: var(--bg-primary);
+}
+[data-theme="light"] .ens-loading-bar {
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] .ens-meta-bar {
+  background: rgba(0, 0, 0, 0.01);
+}
+[data-theme="light"] .ens-meta-badge {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border);
+}
+
 @keyframes ens-loading-progress {
   0%   { transform: scaleX(0); opacity: 0.5; }
   50%  { transform: scaleX(1); opacity: 1; }

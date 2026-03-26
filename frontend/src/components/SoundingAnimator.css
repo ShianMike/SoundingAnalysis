@@ -83,3 +83,52 @@
 .animator-error {
   color: #ef4444;
 }
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .animator-panel {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+[data-theme="light"] .animator-title {
+  color: var(--text-primary);
+}
+[data-theme="light"] .animator-close:hover {
+  background: var(--bg-hover);
+}
+[data-theme="light"] .animator-controls button {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .animator-controls button:hover {
+  background: var(--bg-hover);
+}
+[data-theme="light"] .animator-speed {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 480px) {
+  .animator-panel {
+    padding: 8px;
+    border-radius: 6px;
+  }
+  .animator-title {
+    font-size: 12px;
+  }
+  .animator-controls {
+    gap: 4px;
+  }
+  .animator-controls button {
+    padding: 6px 10px;
+  }
+  .animator-label {
+    font-size: 11px;
+    min-width: 36px;
+  }
+  .animator-speed {
+    font-size: 11px;
+  }
+}

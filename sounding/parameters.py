@@ -1153,10 +1153,15 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         params["hdw"] = None
 
     # ── Sounding-Derived Hazard Classification ───────────────────────
-    # Auto-scores: TORNADO, HAIL, WIND, FLOOD with LOW / MOD / HIGH
+    # Based on SHARPpy watch_type.py logic (Thompson et al. 2003/2012)
+    # Uses composite parameters with operationally-validated thresholds
     try:
         _hazards = []
         _mu_cape_hz = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _ml_cape_hz = float(params.get("ml_cape", 0 * units("J/kg")).magnitude)
+        _sb_cape_hz = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
+        _mu_cin_hz = float(params.get("mu_cin", 0 * units("J/kg")).magnitude)
+        _ml_cin_hz = float(params.get("ml_cin", 0 * units("J/kg")).magnitude)
         _stp_hz = params.get("stp", 0)
         _stp_eff_hz = params.get("stp_eff", 0)
         _scp_hz = params.get("scp", 0)
@@ -1164,53 +1169,117 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         _dcp_hz = params.get("dcp", 0)
         _dcape_hz = float(params.get("dcape", 0 * units("J/kg")).magnitude) if params.get("dcape") is not None else 0
         _bwd6_hz = float(params.get("bwd_6km", 0 * units.knot).magnitude)
+        _bwd6_ms = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        _bwd1_hz = float(params.get("bwd_1km", 0 * units.knot).magnitude)
         _srh1_hz = float(params.get("srh_1km", 0 * units("m^2/s^2")).magnitude)
+        _srh3_hz = float(params.get("srh_3km", 0 * units("m^2/s^2")).magnitude)
+        _esrh_hz = float(params.get("esrh", 0 * units("m^2/s^2")).magnitude)
+        _ebwd_hz = float(params.get("ebwd", 0 * units.knot).to("m/s").magnitude)
         _ml_lcl_hz = params.get("ml_lcl_m", 9999)
+        _sb_lcl_hz = params.get("sb_lcl_m", 9999)
         if _ml_lcl_hz is None:
             _ml_lcl_hz = 9999
+        if _sb_lcl_hz is None:
+            _sb_lcl_hz = 9999
         _pw_hz = float(params.get("pwat", 0 * units.mm).magnitude) if params.get("pwat") is not None else 0
+        _lr03_hz = params.get("lr_03") or 0
+        _lr36_hz = params.get("lr_36") or 0
+        _frz_hz = params.get("frz_level") or 0
+        _wcd_hz = params.get("wcd") or 0
+        _crit_angle = params.get("critical_angle")
+        _ehi01_hz = params.get("ehi_01", 0)
+        _eil_bot_hz = params.get("eil_bot_h")
+        _eil_is_sfc = _eil_bot_hz is not None and _eil_bot_hz < 250
+        _cup_spd_hz = params.get("corfidi_up_spd")
 
-        # Tornado
+        # ── Tornado (SHARPpy cascade: PDS TOR → TOR → MRGL TOR) ──
+        # PDS TOR: STP_eff ≥ 3, STP ≥ 3, SRH1 ≥ 200, ESRH ≥ 200,
+        #          SBLCL < 1000, MLLCL < 1200, MLCIN > -50, EIL at sfc
         _tor = 0
-        if _stp_eff_hz >= 4:
-            _tor = 3
-        elif _stp_eff_hz >= 1:
-            _tor = 2
-        elif _stp_hz >= 1 or (_srh1_hz >= 150 and _ml_lcl_hz < 1500 and _mu_cape_hz >= 500):
+        if (_stp_eff_hz >= 3 and _stp_hz >= 3
+                and _srh1_hz >= 200 and _esrh_hz >= 200
+                and _sb_lcl_hz < 1000 and _ml_lcl_hz < 1200
+                and _ml_cin_hz > -50 and _eil_is_sfc
+                and _lr03_hz >= 5.0):
+            _tor = 3  # HIGH — PDS Tornado
+        # TOR: (STP_eff ≥ 3 OR STP ≥ 4) AND CIN > -125 AND EIL sfc
+        #   OR (STP_eff ≥ 1 OR STP ≥ 1) AND EBWD ≥ 20 m/s AND CIN > -50
+        elif _eil_is_sfc and (
+            ((_stp_eff_hz >= 3 or _stp_hz >= 4) and _ml_cin_hz > -125)
+            or ((_stp_eff_hz >= 1 or _stp_hz >= 1)
+                and _ebwd_hz >= 15 and _ml_cin_hz > -50)
+            or ((_stp_eff_hz >= 1 or _stp_hz >= 1)
+                and _lr03_hz >= 5.0 and _ml_cin_hz > -50)):
+            _tor = 2  # MOD — Tornado
+        # MRGL TOR: (STP_eff ≥ 1 OR STP ≥ 1) AND CIN > -150
+        #   OR STP_eff ≥ 0.5 AND ESRH ≥ 150 AND CIN > -50
+        elif _eil_is_sfc and (
+            ((_stp_eff_hz >= 1 or _stp_hz >= 1) and _ml_cin_hz > -150)
+            or (_stp_eff_hz >= 0.5 and _esrh_hz >= 150 and _mu_cin_hz > -50)):
+            _tor = 1  # LOW — Marginal Tornado
+        # Fallback: strong SRH + low LCL + CAPE (non-STP path)
+        elif (_srh1_hz >= 150 and _ml_lcl_hz < 1500
+              and _ml_cape_hz >= 500 and _ml_cin_hz > -75):
             _tor = 1
         if _tor > 0:
             _hazards.append({"type": "TORNADO", "level": ["LOW", "MOD", "HIGH"][_tor - 1]})
 
-        # Hail
+        # ── Hail (SHIP thresholds + SCP/CAPE + mid-level lapse rates) ──
+        # SHIP ≥ 1.5 with steep 7-5km LR = sig hail; WCD modulates melting
         _hal = 0
-        if _ship_hz >= 3:
-            _hal = 3
-        elif _ship_hz >= 1.5:
-            _hal = 2
-        elif _ship_hz >= 0.5 or (_scp_hz >= 2 and _mu_cape_hz >= 1500):
-            _hal = 1
+        if _ship_hz >= 2.5 and _lr36_hz >= 6.5:
+            _hal = 3  # HIGH — Sig Hail (large/giant)
+        elif _ship_hz >= 1.5 or (_ship_hz >= 1.0 and _lr36_hz >= 7.0):
+            _hal = 2  # MOD — Large hail
+        elif (_ship_hz >= 0.5
+              or (_scp_hz >= 2 and _mu_cape_hz >= 1500 and _bwd6_ms >= 15)
+              or (_mu_cape_hz >= 1000 and _lr36_hz >= 6.5 and _bwd6_ms >= 15
+                  and _frz_hz >= 2400)):
+            _hal = 1  # LOW — Hail possible
+        # Reduce if warm cloud depth very large (hail melts)
+        if _hal >= 2 and _wcd_hz > 3500:
+            _hal = max(_hal - 1, 1)
         if _hal > 0:
             _hazards.append({"type": "HAIL", "level": ["LOW", "MOD", "HIGH"][_hal - 1]})
 
-        # Wind
+        # ── Wind (DCP + DCAPE + WNDG-inspired logic) ──
+        # DCP ≥ 4 with strong DCAPE = derecho-level; DCAPE alone for downbursts
         _wnd = 0
-        if _dcp_hz >= 6 or (_dcape_hz >= 1200 and _bwd6_hz >= 40):
-            _wnd = 3
-        elif _dcp_hz >= 3 or _dcape_hz >= 800:
-            _wnd = 2
-        elif _dcp_hz >= 1 or _dcape_hz >= 400:
-            _wnd = 1
+        _mean_wind_06_kt = 0
+        try:
+            _m06 = h_interp.magnitude <= 6000.0
+            if np.sum(_m06) >= 2:
+                _mwu = np.mean(u_interp.to("knot").magnitude[_m06])
+                _mwv = np.mean(v_interp.to("knot").magnitude[_m06])
+                _mean_wind_06_kt = np.sqrt(_mwu**2 + _mwv**2)
+        except Exception:
+            pass
+        if ((_dcp_hz >= 4 and _dcape_hz >= 800)
+                or (_dcape_hz >= 1200 and _bwd6_hz >= 35
+                    and _mean_wind_06_kt >= 25)):
+            _wnd = 3  # HIGH — Derecho / widespread damaging
+        elif (_dcp_hz >= 2
+              or (_dcape_hz >= 800 and _bwd6_hz >= 25)
+              or (_ml_cape_hz >= 2000 and _lr03_hz >= 7.0
+                  and _mean_wind_06_kt >= 15)):
+            _wnd = 2  # MOD — Damaging gusts
+        elif (_dcp_hz >= 1 or _dcape_hz >= 400
+              or (_ml_cape_hz >= 500 and _lr03_hz >= 7.0)):
+            _wnd = 1  # LOW — Wind gusts possible
         if _wnd > 0:
             _hazards.append({"type": "WIND", "level": ["LOW", "MOD", "HIGH"][_wnd - 1]})
 
-        # Flood
+        # ── Flood (PWAT + Corfidi upshear + CAPE + low shear) ──
+        # Slow cell motion (upshear Corfidi < 15 kt) + high PWAT = training
         _fld = 0
-        if _pw_hz >= 50 and _mu_cape_hz >= 1000:
-            _fld = 3
-        elif _pw_hz >= 40 and _mu_cape_hz >= 500:
-            _fld = 2
-        elif _pw_hz >= 30:
-            _fld = 1
+        _slow_motn = _cup_spd_hz is not None and _cup_spd_hz < 15
+        if _pw_hz >= 50 and _ml_cape_hz >= 1000 and _slow_motn:
+            _fld = 3  # HIGH — Flash flooding likely
+        elif ((_pw_hz >= 45 and _ml_cape_hz >= 500)
+              or (_pw_hz >= 40 and _ml_cape_hz >= 1000 and _slow_motn)):
+            _fld = 2  # MOD — Flash flood possible
+        elif (_pw_hz >= 30 and _ml_cape_hz >= 200) or _pw_hz >= 40:
+            _fld = 1  # LOW — Heavy rain
         if _fld > 0:
             _hazards.append({"type": "FLOOD", "level": ["LOW", "MOD", "HIGH"][_fld - 1]})
 
@@ -1263,6 +1332,8 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
         params["temp_advection"] = []
 
     # ── Bulk Richardson Number (BRN) & Convective Mode ──────────────────
+    # Based on Weisman & Klemp (1982), Thompson et al. (2003/2007/2012),
+    # and SHARPpy hodo.py supercell type classification
     try:
         _brn_cape = float(params.get("sb_cape", 0 * units("J/kg")).magnitude)
         _brn_shear = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
@@ -1272,25 +1343,81 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
             _brn = None
         params["brn"] = round(_brn, 1) if _brn is not None else None
 
-        # Convective mode estimate (Thompson et al. 2007 framework)
-        _bwd6_kt = float(params.get("bwd_6km", 0 * units.knot).magnitude)
-        _scp_val = float(params.get("scp", 0))
-        _srh1_val = float(params.get("srh_1km", 0 * units("m**2/s**2")).magnitude)
+        # Gather inputs for multi-parameter convective mode
+        _cm_scp = float(params.get("scp", 0))
+        _cm_stp = float(params.get("stp", 0))
+        _cm_stp_eff = float(params.get("stp_eff", 0))
+        _cm_mu_cape = float(params.get("mu_cape", 0 * units("J/kg")).magnitude)
+        _cm_ml_cape = float(params.get("ml_cape", 0 * units("J/kg")).magnitude)
+        _cm_bwd6_ms = float(params.get("bwd_6km", 0 * units.knot).to("m/s").magnitude)
+        _cm_bwd6_kt = float(params.get("bwd_6km", 0 * units.knot).magnitude)
+        _cm_ebwd_ms = float(params.get("ebwd", 0 * units.knot).to("m/s").magnitude)
+        _cm_srh1 = float(params.get("srh_1km", 0 * units("m^2/s^2")).magnitude)
+        _cm_srh3 = float(params.get("srh_3km", 0 * units("m^2/s^2")).magnitude)
+        _cm_esrh = float(params.get("esrh", 0 * units("m^2/s^2")).magnitude)
+        _cm_crit = params.get("critical_angle")
+        _cm_ehi01 = params.get("ehi_01", 0)
+        _cm_dcp = float(params.get("dcp", 0))
 
-        if _brn is not None and _brn < 10 and _bwd6_kt > 50:
-            _conv_mode = "Discrete Supercell"
-        elif _brn is not None and 10 <= _brn < 45 and _bwd6_kt >= 35:
-            _conv_mode = "Discrete / Supercell"
-        elif _bwd6_kt >= 30 and _scp_val >= 1:
-            _conv_mode = "Supercell likely"
-        elif _bwd6_kt >= 25 and _srh1_val >= 100:
-            _conv_mode = "Rotating Storms"
-        elif _bwd6_kt >= 20:
+        # Storm-relative wind at 9-11 km for supercell sub-type (SHARPpy)
+        _srw_9_11_kt = 0
+        try:
+            _rm_u_cm = float(params["rm_u"].to("knot").magnitude)
+            _rm_v_cm = float(params["rm_v"].to("knot").magnitude)
+            _m911 = (h_interp.magnitude >= 9000.0) & (h_interp.magnitude <= 11000.0)
+            if np.sum(_m911) >= 2:
+                _sr_u_911 = np.mean(u_interp.to("knot").magnitude[_m911]) - _rm_u_cm
+                _sr_v_911 = np.mean(v_interp.to("knot").magnitude[_m911]) - _rm_v_cm
+                _srw_9_11_kt = np.sqrt(_sr_u_911**2 + _sr_v_911**2)
+        except Exception:
+            pass
+
+        # Decision tree: SCP is the primary supercell discriminator
+        # (Thompson et al. 2004: SCP ≥ 1 strongly favors supercells)
+        # Secondary: BRN, EBWD, critical angle, EHI
+        _supercell_indicators = 0
+        if _cm_scp >= 1:
+            _supercell_indicators += 2
+        if _cm_ebwd_ms >= 12.5:
+            _supercell_indicators += 1
+        if _cm_srh1 >= 100 or _cm_esrh >= 100:
+            _supercell_indicators += 1
+        if _cm_crit is not None and 60 <= _cm_crit <= 120:
+            _supercell_indicators += 1
+        if _cm_ehi01 >= 1.0:
+            _supercell_indicators += 1
+        if _brn is not None and 10 <= _brn <= 45:
+            _supercell_indicators += 1
+
+        if _cm_scp >= 4 and _cm_ebwd_ms >= 15 and _cm_mu_cape >= 1000:
+            # Strong supercell environment — classify sub-type via SR wind
+            if _srw_9_11_kt > 70:
+                _conv_mode = "HP Supercell"
+            elif _srw_9_11_kt < 40 and _srw_9_11_kt > 0:
+                _conv_mode = "LP Supercell"
+            else:
+                _conv_mode = "Discrete Supercell"
+        elif _cm_scp >= 1 and _cm_ebwd_ms >= 12.5:
+            # Supercell composite meets threshold
+            if _srw_9_11_kt > 70:
+                _conv_mode = "HP Supercell"
+            elif _srw_9_11_kt < 40 and _srw_9_11_kt > 0:
+                _conv_mode = "LP Supercell"
+            else:
+                _conv_mode = "Supercell"
+        elif (_supercell_indicators >= 4
+              and _cm_bwd6_ms >= 15 and _cm_mu_cape >= 500):
+            _conv_mode = "Supercell Possible"
+        elif _cm_dcp >= 3 and _cm_bwd6_ms >= 10 and _cm_mu_cape >= 1000:
+            _conv_mode = "QLCS / Linear"
+        elif _cm_bwd6_ms >= 10 and _cm_mu_cape >= 500:
             _conv_mode = "Multicell / Clusters"
-        elif _bwd6_kt >= 10:
+        elif _cm_mu_cape >= 200 and _cm_bwd6_ms >= 5:
             _conv_mode = "Weak Multicell"
-        else:
+        elif _cm_mu_cape >= 100:
             _conv_mode = "Single Cell / Pulse"
+        else:
+            _conv_mode = "Non-Convective"
 
         params["convective_mode"] = _conv_mode
     except Exception as e:

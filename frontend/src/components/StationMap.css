@@ -1655,6 +1655,57 @@ body.smap-fullscreen-active .control-panel {
   }
 }
 
+@media (max-width: 768px) {
+  .smap-groups {
+    padding: 6px 10px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .smap-group-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+  .smap-group-panel {
+    padding: 6px 10px 8px;
+    gap: 6px;
+  }
+  .smap-tbtn {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+  .smap-day-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .smap-toolbar-end {
+    gap: 3px;
+  }
+  .smap-utc-clock {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .smap-legend-stack {
+    bottom: 6px;
+    left: 6px;
+    max-width: calc(100vw - 60px);
+  }
+  .smap-legend {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .smap-legend-float {
+    padding: 5px 8px;
+  }
+  .smap-expand {
+    width: 32px;
+    height: 32px;
+  }
+  .smap-discussion-body {
+    max-height: 180px;
+    font-size: 10px;
+  }
+}
+
 @media (max-width: 480px) {
   .smap-container {
     min-height: 220px;
@@ -1663,8 +1714,75 @@ body.smap-fullscreen-active .control-panel {
   .smap-leaflet {
     min-height: 220px;
   }
+  .smap-groups {
+    padding: 4px 8px;
+    gap: 3px;
+  }
+  .smap-group-btn {
+    padding: 5px 8px;
+    font-size: 9px;
+    gap: 3px;
+  }
+  .smap-group-panel {
+    padding: 4px 8px 6px;
+    gap: 4px;
+  }
+  .smap-tbtn {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+  .smap-tbtn-sub {
+    padding: 3px 5px;
+    font-size: 9px;
+  }
+  .smap-day-btns {
+    gap: 1px;
+  }
+  .smap-day-btn {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+  .smap-day-ext {
+    padding: 3px 5px;
+    font-size: 8px;
+  }
+  .smap-tag {
+    font-size: 9px;
+    padding: 3px 7px;
+  }
+  .smap-utc-clock {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
   .smap-legend {
     font-size: 9px;
     padding: 4px 6px;
+  }
+  .smap-legend-outlook {
+    flex-wrap: wrap;
+  }
+  .smap-legend-stack {
+    bottom: 4px;
+    left: 4px;
+    max-width: calc(100vw - 40px);
+  }
+  .smap-discussion-body {
+    max-height: 140px;
+    font-size: 10px;
+    padding: 6px 8px 8px;
+  }
+  .smap-hint-bar {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+  .station-map-panel {
+    border-radius: 8px;
+  }
+  .smap-controls {
+    gap: 4px;
+  }
+  .smap-radar-badge {
+    font-size: 8px;
+    padding: 1px 4px;
   }
 }

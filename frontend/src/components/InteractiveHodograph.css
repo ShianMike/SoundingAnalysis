@@ -42,3 +42,16 @@
   pointer-events: auto;
   cursor: crosshair;
 }
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .hodo-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .hodo-btn:hover {
+  background: var(--bg-hover);
+}
+[data-theme="light"] .hodo-btn.active {
+  color: #fff;
+}

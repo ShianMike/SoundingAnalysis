@@ -509,51 +509,39 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
         except Exception as e:
             print(f"[PLOT] VAD barbs on Skew-T failed: {e}")
 
-    # Annotate key levels
+    # Annotate key levels — collect all right-side labels first,
+    # then apply minimum separation so they never overlap on the Skew-T.
     pe = path_effects.withStroke(linewidth=3, foreground=BG)
+    _level_labels = []  # (label_text, pressure_hPa, color, fontsize)
     
     if params.get("sb_lcl_p") is not None:
         skew.ax.axhline(y=params["sb_lcl_p"].magnitude, color=CLR_LCL,
                         linestyle="--", alpha=0.6, linewidth=1.0)
-        skew.ax.text(
-            skew.ax.get_xlim()[1] - 2, params["sb_lcl_p"].magnitude,
+        _level_labels.append((
             f"←SBLCL ({fv(params['sb_lcl_p'],'hPa')})",
-            color=CLR_LCL, fontsize=12, va="center",
-            fontfamily="monospace", fontweight="bold", path_effects=[pe]
-        )
+            params["sb_lcl_p"].magnitude, CLR_LCL, 12))
     
     if params.get("sb_lfc_p") is not None:
         skew.ax.axhline(y=params["sb_lfc_p"].magnitude, color=CLR_LFC,
                         linestyle="--", alpha=0.5, linewidth=1.0)
-        skew.ax.text(
-            skew.ax.get_xlim()[1] - 2, params["sb_lfc_p"].magnitude,
-            f"←LFC", color=CLR_LFC, fontsize=12, va="center",
-            fontfamily="monospace", fontweight="bold", path_effects=[pe]
-        )
+        _level_labels.append((
+            f"←LFC", params["sb_lfc_p"].magnitude, CLR_LFC, 12))
     
     if params.get("sb_el_p") is not None:
         skew.ax.axhline(y=params["sb_el_p"].magnitude, color=CLR_EL,
                         linestyle="--", alpha=0.5, linewidth=1.0)
-        skew.ax.text(
-            skew.ax.get_xlim()[1] - 2, params["sb_el_p"].magnitude,
-            f"←EL", color=CLR_EL, fontsize=12, va="center",
-            fontfamily="monospace", fontweight="bold", path_effects=[pe]
-        )
+        _level_labels.append((
+            f"←EL", params["sb_el_p"].magnitude, CLR_EL, 12))
     
     if params.get("frz_level") is not None:
-        # Find pressure at freezing level (frz_level is AGL, h is MSL)
         frz_h_agl = params["frz_level"]
         frz_h_msl = frz_h_agl + h[0].magnitude
         frz_idx = np.argmin(np.abs(h.magnitude - frz_h_msl))
         frz_p = p.magnitude[frz_idx]
         skew.ax.axhline(y=frz_p, color="#44bbee", linestyle=":",
                         alpha=0.5, linewidth=1.0)
-        skew.ax.text(
-            skew.ax.get_xlim()[1] - 2, frz_p,
-            f"←FRZ ({frz_h_agl:.0f}m)", color="#44bbee",
-            fontsize=12, va="center", fontfamily="monospace",
-            fontweight="bold", path_effects=[pe]
-        )
+        _level_labels.append((
+            f"←FRZ ({frz_h_agl:.0f}m)", frz_p, "#44bbee", 12))
     
     # --- Dendritic Growth Zone (DGZ) shading: -12°C to -17°C ---
     # --- Piecewise CAPE colored bars on left side of Skew-T ---
@@ -703,15 +691,29 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
             pbl_p = p.magnitude[pbl_idx]
             skew.ax.axhline(y=pbl_p, color="#bb88ff", linestyle="-.",
                             alpha=0.5, linewidth=1.0)
-            skew.ax.text(
-                skew.ax.get_xlim()[1] - 2, pbl_p,
-                f"←PBL ({ml_lcl_m:.0f}m)", color="#bb88ff",
-                fontsize=10, va="center", fontfamily="monospace",
-                fontweight="bold",
-                path_effects=[path_effects.withStroke(linewidth=3, foreground=BG)]
-            )
+            _level_labels.append((
+                f"←PBL ({ml_lcl_m:.0f}m)", pbl_p, "#bb88ff", 10))
     except Exception:
         pass
+
+    # --- Draw all right-side level labels with overlap prevention ---
+    if _level_labels:
+        # Sort by pressure descending (bottom of plot = high pressure first)
+        _level_labels.sort(key=lambda x: -x[1])
+        # Work in log-pressure space for visually uniform separation
+        _log_p = [np.log(lbl[1]) for lbl in _level_labels]
+        _min_sep_log = 0.045  # minimum gap in log-pressure units
+        for _i in range(1, len(_log_p)):
+            if _log_p[_i - 1] - _log_p[_i] < _min_sep_log:
+                _log_p[_i] = _log_p[_i - 1] - _min_sep_log
+        _x_right = skew.ax.get_xlim()[1] - 2
+        for _i, (_lbl_text, _orig_p, _lbl_clr, _lbl_fs) in enumerate(_level_labels):
+            _draw_p = np.exp(_log_p[_i])
+            skew.ax.text(
+                _x_right, _draw_p, _lbl_text,
+                color=_lbl_clr, fontsize=_lbl_fs, va="center",
+                fontfamily="monospace", fontweight="bold",
+                path_effects=[pe])
     
     # Set axis limits
     skew.ax.set_xlim(-50, 50)
@@ -1673,7 +1675,79 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     for (r, c), cell in _t5.get_celld().items():
         txt = cell.get_text()
         txt.set_color(_info_row_clrs[r] if 0 <= r < len(_info_row_clrs) else FG_DIM)
-    
+
+    # ── Convective Mode & Hazard Type table ──
+    _conv_mode = params.get("convective_mode")
+    _hazards = params.get("hazards") or []
+    ax_kin.text(0.05, 0.27, "Convective Mode / Hazards",
+                transform=ax_kin.transAxes,
+                fontsize=9.5, color=ACCENT, fontfamily="monospace",
+                fontweight="bold", ha="left", va="center")
+
+    # Build cell grid and per-cell color map
+    _mh_cells = []
+    _mh_color_map = {}  # (row, col) -> color
+
+    if _conv_mode:
+        _cm_clr = ("#ef4444" if "Supercell" in _conv_mode
+                   else "#ff6633" if "QLCS" in _conv_mode or "Linear" in _conv_mode
+                   else "#eab308" if ("Multicell" in _conv_mode and "Weak" not in _conv_mode)
+                   else "#22c55e")
+        _mh_cells.append([f'Mode: {_conv_mode}', ''])
+        _mh_color_map[(0, 0)] = _cm_clr
+
+    if _hazards:
+        # Pair hazards into 2-column rows
+        _hz_items = [f'{h["type"]}: {h["level"]}' for h in _hazards]
+        _hz_clrs = [("#ef4444" if h["level"] == "HIGH"
+                     else "#f59e0b" if h["level"] == "MOD"
+                     else "#eab308") for h in _hazards]
+
+        _hi = 0
+        while _hi < len(_hz_items):
+            # Try to fill empty col-1 on last row first
+            if _mh_cells and _mh_cells[-1][1] == '':
+                _r = len(_mh_cells) - 1
+                _mh_cells[_r][1] = _hz_items[_hi]
+                _mh_color_map[(_r, 1)] = _hz_clrs[_hi]
+                _hi += 1
+            else:
+                _r = len(_mh_cells)
+                c1 = _hz_items[_hi + 1] if _hi + 1 < len(_hz_items) else ''
+                _mh_cells.append([_hz_items[_hi], c1])
+                _mh_color_map[(_r, 0)] = _hz_clrs[_hi]
+                if _hi + 1 < len(_hz_items):
+                    _mh_color_map[(_r, 1)] = _hz_clrs[_hi + 1]
+                _hi += 2 if c1 else 1
+    else:
+        # No hazards — fill the empty second column or add a new row
+        if _mh_cells and _mh_cells[-1][1] == '':
+            _mh_cells[-1][1] = 'Hazards: None'
+            _mh_color_map[(len(_mh_cells) - 1, 1)] = FG_FAINT
+        else:
+            _r = len(_mh_cells)
+            _mh_cells.append(['Hazards: None', ''])
+            _mh_color_map[(_r, 0)] = FG_FAINT
+
+    if not _mh_cells:
+        _mh_cells = [['Mode: ---', 'Hazards: None']]
+
+    _n_mh = len(_mh_cells)
+    _mh_h = _n_mh * 0.05
+    _mh_top = 0.24
+    _t6 = ax_kin.table(
+        cellText=_mh_cells,
+        cellLoc='center', loc='center left',
+        bbox=[0.05, _mh_top - _mh_h, 0.90, _mh_h],
+    )
+    _style_table(_t6, font_size=9.25, pad=0.10, body_color=FG_DIM)
+    for (r, c), cell in _t6.get_celld().items():
+        txt = cell.get_text()
+        if (r, c) in _mh_color_map:
+            txt.set_color(_mh_color_map[(r, c)])
+        elif txt.get_text() == '':
+            txt.set_color(BG)
+
     # ════════════════════════════════════════════════════════════════
     # MINI MAP INSET (station location) — inside kinematic panel
     # ════════════════════════════════════════════════════════════════

@@ -571,3 +571,44 @@
     grid-template-columns: 1fr !important;
   }
 }
+
+@media (max-width: 480px) {
+  .cv-slots {
+    gap: 8px;
+  }
+  .cv-slot {
+    padding: 8px;
+  }
+  .cv-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cv-table td,
+  .cv-table th {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+}
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .cv-download-btn {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+[data-theme="light"] .cv-download-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+[data-theme="light"] .cv-compare-btn {
+  color: #fff;
+}
+[data-theme="light"] .cv-td-label {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .cv-td-val {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .cv-td-diff {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}

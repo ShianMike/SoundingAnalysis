@@ -296,3 +296,42 @@ body.smap-fullscreen-active [data-theme="light"] .control-panel {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
+
+/* ── Fullscreen map on mobile ── */
+@media (max-width: 768px) {
+  body.smap-fullscreen-active .control-panel {
+    width: calc(100vw - 24px);
+    max-width: 320px;
+    max-height: min(440px, calc(100vh - 24px));
+    top: 12px;
+    left: 12px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  body.smap-fullscreen-active .control-panel .cp-drag-handle {
+    padding: 8px 10px;
+  }
+  body.smap-fullscreen-active .control-panel .cp-tab-content {
+    padding: 6px 10px 8px;
+  }
+  body.smap-fullscreen-active .control-panel .cp-nav {
+    padding: 4px 8px;
+  }
+  body.smap-fullscreen-active .control-panel .cp-nav-tab {
+    padding: 5px 0;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  body.smap-fullscreen-active .control-panel {
+    width: calc(100vw - 16px);
+    max-height: min(380px, calc(100vh - 16px));
+    top: 8px;
+    left: 8px;
+    border-radius: 10px;
+  }
+  body.smap-fullscreen-active .control-panel.cp-float-collapsed {
+    max-height: 40px;
+  }
+}

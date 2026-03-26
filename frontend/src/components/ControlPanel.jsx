@@ -33,7 +33,6 @@ import {
   X,
   GripVertical,
   ChevronUp,
-  PanelLeftClose,
   Sliders,
   Wrench,
   AlertTriangle,
@@ -127,14 +126,14 @@ const SOURCE_META = {
 
 /* Model metadata: short label, resolution hint, max forecast hour, step */
 const MODEL_META = {
-  hrrr:    { short: "HRRR",     res: "3 km · hourly",     maxF: 48,  step: 1 },
-  rap:     { short: "RAP",      res: "13 km · hourly",    maxF: 21,  step: 1 },
-  nam:     { short: "NAM",      res: "12 km · hourly",    maxF: 84,  step: 1 },
-  namnest: { short: "NAM Nest", res: "3 km · hourly",     maxF: 60,  step: 1 },
-  nam4km:  { short: "NAM 4km",  res: "4 km · hourly",     maxF: 60,  step: 1 },
-  gfs:     { short: "GFS",      res: "global · 3-hourly", maxF: 384, step: 3 },
-  sref:    { short: "SREF",     res: "ens mean · 3-hr",   maxF: 87,  step: 3 },
-  hiresw:  { short: "HiResW",   res: "NMMB / ARW",        maxF: 48,  step: 1 },
+  hrrr:    { short: "HRRR",     res: "3 km · hourly",     maxF: 48,  step: 1, lag: 3, interval: 1 },
+  rap:     { short: "RAP",      res: "13 km · hourly",    maxF: 21,  step: 1, lag: 3, interval: 1 },
+  nam:     { short: "NAM",      res: "12 km · hourly",    maxF: 84,  step: 1, lag: 5, interval: 6 },
+  namnest: { short: "NAM Nest", res: "3 km · hourly",     maxF: 60,  step: 1, lag: 5, interval: 6 },
+  nam4km:  { short: "NAM 4km",  res: "4 km · hourly",     maxF: 60,  step: 1, lag: 5, interval: 6 },
+  gfs:     { short: "GFS",      res: "global · 3-hourly", maxF: 384, step: 3, lag: 6, interval: 6 },
+  sref:    { short: "SREF",     res: "ens mean · 3-hr",   maxF: 87,  step: 3, lag: 6, interval: 6 },
+  hiresw:  { short: "HiResW",   res: "NMMB / ARW",        maxF: 48,  step: 1, lag: 5, interval: 6 },
 };
 
 /* Common quick-pick forecast hours */
@@ -752,9 +751,16 @@ export default function ControlPanel({
 
               {/* Forecast model + fhour pickers */}
               {scanMode === "forecast" && (() => {
-                const meta = MODEL_META[fcstModel] || { maxF: 48, step: 1 };
+                const meta = MODEL_META[fcstModel] || { maxF: 48, step: 1, lag: 3, interval: 1 };
                 const fh = parseInt(fcstFhour) || 0;
-                const validDate = new Date(Date.now() + fh * 3600000);
+                /* Mirror backend cycle logic: candidate = now - lag, snap to interval */
+                const lag = meta.lag || 3;
+                const interval = meta.interval || 1;
+                const candidate = new Date(Date.now() - lag * 3600000);
+                let initHour = candidate.getUTCHours();
+                if (interval > 1) initHour = Math.floor(initHour / interval) * interval;
+                const initDate = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth(), candidate.getUTCDate(), initHour));
+                const validDate = new Date(initDate.getTime() + fh * 3600000);
                 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const zLabel = `${validDate.getUTCDate()} ${months[validDate.getUTCMonth()]} ${String(validDate.getUTCHours()).padStart(2,"0")}Z`;
                 return (

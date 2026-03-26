@@ -322,3 +322,32 @@
     to   { transform: translateY(0);    opacity: 1; }
   }
 }
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .chaser-panel {
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .chaser-close:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .chaser-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+[data-theme="light"] .chaser-spinner {
+  border-color: var(--border);
+  border-top-color: var(--accent);
+}
+[data-theme="light"] .chaser-card-live {
+  background: rgba(0, 0, 0, 0.02);
+}
+[data-theme="light"] .chaser-card-live:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border-focus);
+}
+[data-theme="light"] .chaser-card-pos:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] .chaser-card-sep {
+  color: var(--border);
+}

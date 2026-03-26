@@ -264,3 +264,64 @@
   color: var(--text-secondary, #888);
   font-size: 0.85rem;
 }
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .vwp-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .vwp-image-wrap {
+  background: var(--bg-tertiary);
+}
+[data-theme="light"] .vwp-fetch-btn {
+  color: #fff;
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  .vwp-controls {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .vwp-radar-trigger {
+    min-width: 140px;
+    font-size: 0.75rem;
+  }
+  .vwp-radar-menu {
+    width: min(300px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 480px) {
+  .vwp-header {
+    padding: 8px 10px;
+  }
+  .vwp-header h3 {
+    font-size: 0.8rem;
+  }
+  .vwp-controls {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .vwp-radar-trigger {
+    min-width: 120px;
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
+  .vwp-radar-menu {
+    width: min(280px, calc(100vw - 24px));
+    max-height: 260px;
+  }
+  .vwp-radar-option {
+    padding: 6px 10px;
+  }
+  .vwp-fetch-btn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+  .vwp-image-wrap {
+    padding: 4px;
+  }
+  .vwp-close-btn {
+    padding: 6px;
+  }
+}

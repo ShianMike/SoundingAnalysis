@@ -321,6 +321,14 @@
   .meso-page { padding: 16px; }
 }
 
+@media (max-width: 768px) {
+  .meso-page { padding: 12px; }
+  .meso-table { font-size: 11px; }
+  .meso-table th { font-size: 9px; }
+  .meso-table td { padding: 5px 4px; }
+  .meso-param-row { padding: 8px 12px; }
+}
+
 @media (max-width: 480px) {
   .meso-page {
     padding: 8px;
@@ -332,4 +340,15 @@
   .meso-table td { padding: 4px; }
   .meso-th-name { display: none; }
   .meso-name-cell { display: none; }
+}
+
+/* ── Light theme overrides ──────────────────────────────── */
+[data-theme="light"] .meso-back:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .meso-table td {
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .meso-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
