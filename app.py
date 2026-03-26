@@ -20,6 +20,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 ALLOWED_ORIGINS = [
     "https://shianmike.github.io",
     "https://soundinganalysis-752306366750.asia-southeast1.run.app",
+    "https://soundinganalysis-uvktu4ziyq-as.a.run.app",
 ]
 # In local dev, also allow localhost origins
 if os.environ.get("FLASK_DEBUG") or os.environ.get("FLASK_ENV") == "development":
@@ -54,7 +55,9 @@ csp = {
                    "https://api.open-meteo.com https://www.spc.noaa.gov https://spc.noaa.gov "
                    "https://api.weather.gov "
                    "https://api.livestormchasing.com https://edge.livestormchasing.com "
-                   "https://soundinganalysis-752306366750.asia-southeast1.run.app",
+                   "https://soundinganalysis-752306366750.asia-southeast1.run.app "
+                   "https://soundinganalysis-uvktu4ziyq-as.a.run.app "
+                   "https://*.run.app https://*.a.run.app",
     "media-src":   "'self' blob:",
     "frame-ancestors": "'none'",
     "base-uri":    "'self'",
