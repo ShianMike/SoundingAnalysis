@@ -262,3 +262,73 @@ export async function fetchAcarsAirports() {
   if (!res.ok) throw new Error("Failed to fetch ACARS airports");
   return res.json();
 }
+
+/**
+ * Fetch NWS active warnings via backend proxy (avoids CORS issues).
+ */
+export async function fetchNwsWarnings() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/overlays/warnings`, {}, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (e) {
+    console.error("NWS warnings fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+/**
+ * Fetch NEXRAD storm attributes (TVS/Meso) via backend proxy.
+ */
+export async function fetchStormAttributes() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/overlays/storm-attributes`, {}, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (e) {
+    console.error("Storm attr fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+/**
+ * Fetch SPC Mesoscale Discussions via backend proxy.
+ */
+export async function fetchSpcMds() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/overlays/spc-mds`, {}, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (e) {
+    console.error("SPC MDs fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+/**
+ * Fetch SPC Watches via backend proxy.
+ */
+export async function fetchSpcWatches() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/overlays/spc-watches`, {}, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (e) {
+    console.error("SPC watch fetch error:", e);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
+/**
+ * Fetch Spotter Network positions + reports via backend proxy.
+ */
+export async function fetchSpotterNetwork() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/overlays/spotters`, {}, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (e) {
+    console.error("Spotter Network fetch error:", e);
+    return { positions: [], reports: [] };
+  }
+}

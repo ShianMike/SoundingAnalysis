@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Plane, Navigation, Search, FileText, Minus, Compass } from "lucide-react";
-import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports } from "../api";
+import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork } from "../api";
 import { getFavorites } from "../favorites";
 import WindCanvas from "./WindCanvas";
 import ChaserPanel from "./ChaserPanel";
@@ -103,41 +103,15 @@ function frameToHourOffset(frameIdx, frameCount, maxOffset = WIND_MAX_HOUR_OFFSE
 }
 
 /* ── NWS Active Warnings ─────────────────────────────────────── */
-const NWS_ALERTS_API = "https://api.weather.gov/alerts/active?status=actual";
+// Fetched via backend proxy: /api/overlays/warnings (see api.js)
 
 /* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
-const SPC_WATCH_URL =
-  "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query" +
-  "?where=(phenom%3D%27TO%27+OR+phenom%3D%27SV%27)+AND+sig%3D%27A%27" +
-  "&f=geojson&outFields=prod_type,event,sig,phenom,wfo,expiration,issuance" +
-  "&returnGeometry=true&outSR=4326";
+// Fetched via backend proxy: /api/overlays/spc-mds, /api/overlays/spc-watches (see api.js)
 
 const WATCH_STYLES = {
   "Tornado Watch":           { color: "#ff0000", fill: "#ff000022", label: "TOR" },
   "Severe Thunderstorm Watch": { color: "#ffa500", fill: "#ffa50022", label: "SVR" },
 };
-
-async function fetchSpcMds() {
-  // IEM removed the spc_mcd.geojson endpoint; no alternative GeoJSON source exists
-  return { type: "FeatureCollection", features: [] };
-}
-
-async function fetchSpcWatches() {
-  try {
-    const res = await fetch(SPC_WATCH_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    // Map NWS MapServer property names to what MdWatchLayer expects
-    for (const f of data.features || []) {
-      f.properties.type = f.properties.prod_type;
-      f.properties.number = f.properties.event;
-    }
-    return data;
-  } catch (e) {
-    console.error("SPC Watch fetch error:", e);
-    return { type: "FeatureCollection", features: [] };
-  }
-}
 
 function mdStyle() {
   return {
@@ -377,24 +351,8 @@ const WARNING_PRIORITY = [
   "Special Weather Statement", "Flood Warning",
 ];
 
-async function fetchNwsWarnings() {
-  try {
-    const res = await fetch(NWS_ALERTS_API, {
-      headers: { "Accept": "application/geo+json", "User-Agent": "SoundingAnalysis/1.0" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    // Keep only events we have styles for, and that have geometry
-    const validEvents = new Set(Object.keys(WARNING_STYLES));
-    const features = (data.features || []).filter(
-      (f) => f.geometry && validEvents.has(f.properties?.event)
-    );
-    return { type: "FeatureCollection", features };
-  } catch (e) {
-    console.error("NWS warnings fetch error:", e);
-    return { type: "FeatureCollection", features: [] };
-  }
-}
+// fetchNwsWarnings is now imported from api.js (backend proxy)
+// Client-side filtering of valid warning events is applied in the useEffect
 
 function warningStyle(feature) {
   const ev = feature.properties?.event || "";
@@ -483,32 +441,14 @@ function makeMesoIcon(color, rank) {
 }
 
 /* ── NEXRAD storm attribute (TVS / Mesocyclone) feed ───────── */
-const IEM_STORM_ATTR = "https://mesonet.agron.iastate.edu/geojson/nexrad_attr.geojson";
-
-async function fetchStormAttr() {
-  try {
-    const res = await fetch(IEM_STORM_ATTR);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    // Keep TVS detections + meso rank >= 3 (skip weak/marginal rotations)
-    const features = (data.features || []).filter((f) => {
-      const p = f.properties;
-      if (p?.tvs === "TVS") return true;
-      const rank = parseInt(p?.meso, 10);
-      return rank >= 3;
-    });
-    return { type: "FeatureCollection", features };
-  } catch (e) {
-    console.error("Storm attr fetch error:", e);
-    return { type: "FeatureCollection", features: [] };
-  }
-}
+// fetchStormAttributes is now imported from api.js (backend proxy)
+// Client-side filtering of TVS/Meso detections is applied in the useEffect
 
 /* ── Spotter Network live chaser positions + reports ─────── */
-const SN_POSITIONS = "https://www.spotternetwork.org/feeds/gr.txt";
-const SN_REPORTS   = "https://www.spotternetwork.org/feeds/reports.txt";
+// fetchSpotterNetwork is now imported from api.js (backend proxy)
+// Parsing of GR-format feed is done server-side in routes/overlays.py
 
-// Report icon-index → type mapping (from SN sprite sheet)
+// Report type → colour mapping (still needed client-side for rendering)
 const SN_REPORT_TYPES = { 1: "Tornado", 2: "Funnel Cloud", 3: "Rotating Wall Cloud", 4: "Hail", 5: "Wind Damage", 6: "Flooding", 7: "Other" };
 const SN_REPORT_COLORS = {
   Tornado:                "#ff0000",
@@ -519,75 +459,6 @@ const SN_REPORT_COLORS = {
   Flooding:               "#00ff66",
   Other:                  "#cccccc",
 };
-
-/** Parse Spotter Network GR-format position feed → [{lat,lon,name,time,heading}] */
-function parseSpotterPositions(text) {
-  const lines = text.split(/\r?\n/);
-  const spotters = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line.startsWith("Object:")) continue;
-    const coords = line.slice(7).trim().split(",");
-    const lat = parseFloat(coords[0]), lon = parseFloat(coords[1]);
-    if (isNaN(lat) || isNaN(lon)) continue;
-    let name = "", time = "", heading = "";
-    // Look ahead for Icon line with tooltip
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-      const l = lines[j].trim();
-      if (l.startsWith("Icon:") && l.includes('"')) {
-        const m = l.match(/"([^"]*)"/); // tooltip in quotes
-        if (m) {
-          const parts = m[1].split("\\n");
-          name = parts[0] || "";
-          time = parts[1] || "";
-          heading = parts[2] || "";
-        }
-        break;
-      }
-    }
-    spotters.push({ lat, lon, name, time, heading });
-  }
-  return spotters;
-}
-
-/** Parse Spotter Network report feed → [{lat,lon,reporter,type,time,notes,sheet}] */
-function parseSpotterReports(text) {
-  const lines = text.split(/\r?\n/);
-  const reports = [];
-  for (const line of lines) {
-    const l = line.trim();
-    if (!l.startsWith("Icon:")) continue;
-    const m = l.match(/^Icon:\s*([\d.-]+),([\d.-]+),\d+,(\d+),(\d+),"(.+)"$/);
-    if (!m) continue;
-    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-    const sheet = parseInt(m[3], 10);    // 3=recent, 4=older, 5=oldest
-    const idx = parseInt(m[4], 10);      // report type index
-    const tooltip = m[5];
-    const parts = tooltip.split("\\n");
-    const reporter = (parts[0] || "").replace(/^Reported By:\s*/, "");
-    const type = parts[1] || "Other";
-    const timePart = (parts[2] || "").replace(/^Time:\s*/, "");
-    // Remaining parts may have Size / Notes
-    const rest = parts.slice(3).join(" · ").replace(/^(Size:|Notes:)\s*/g, "");
-    reports.push({ lat, lon, reporter, type, time: timePart, notes: rest, sheet, idx });
-  }
-  return reports;
-}
-
-async function fetchSpotterNetwork() {
-  try {
-    const [posRes, repRes] = await Promise.all([
-      fetch(SN_POSITIONS),
-      fetch(SN_REPORTS),
-    ]);
-    const positions = posRes.ok ? parseSpotterPositions(await posRes.text()) : [];
-    const reports = repRes.ok ? parseSpotterReports(await repRes.text()) : [];
-    return { positions, reports };
-  } catch (e) {
-    console.error("Spotter Network fetch error:", e);
-    return { positions: [], reports: [] };
-  }
-}
 
 /* ── colours ────────────────────────────────────────────────── */
 const RISK_COLORS = {
@@ -1415,10 +1286,15 @@ export default function StationMap({
   useEffect(() => {
     if (!showWarnings) { setWarningsData(null); return; }
     let cancelled = false;
+    const validEvents = new Set(Object.keys(WARNING_STYLES));
     const load = async () => {
       setWarningsLoading(true);
       const data = await fetchNwsWarnings();
-      if (!cancelled) { setWarningsData(data); setWarningsLoading(false); }
+      // Client-side filter: keep only events we style + that have geometry
+      const features = (data.features || []).filter(
+        (f) => f.geometry && validEvents.has(f.properties?.event)
+      );
+      if (!cancelled) { setWarningsData({ type: "FeatureCollection", features }); setWarningsLoading(false); }
     };
     load();
     const id = setInterval(load, 120_000); // refresh every 2 min
@@ -1445,7 +1321,15 @@ export default function StationMap({
     let cancelled = false;
     const load = async () => {
       setStormsLoading(true);
-      const data = await fetchStormAttr();
+      const raw = await fetchStormAttributes();
+      // Client-side filter: keep TVS detections + meso rank >= 3
+      const features = (raw.features || []).filter((f) => {
+        const p = f.properties;
+        if (p?.tvs === "TVS") return true;
+        const rank = parseInt(p?.meso, 10);
+        return rank >= 3;
+      });
+      const data = { type: "FeatureCollection", features };
       if (!cancelled) { setStormData(data); setStormsLoading(false); }
     };
     load();
