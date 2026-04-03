@@ -28,15 +28,10 @@ const MIXING_RATIOS = [1, 2, 4, 7, 10, 16, 24];
 /* ── Thermo helpers ───────────────────────────────────── */
 function skewX(t, p, yScale, width) {
   const y = yScale(p);
-  const totalHeight = yScale(P_MAX) - yScale(P_MIN);
-  const skewFactor = Math.tan((SKEW_ANGLE * Math.PI) / 180);
-  const yNorm = (yScale(P_MAX) - y) / totalHeight;
-  const tRange = T_MAX - T_MIN;
-  const xFrac = (t - T_MIN) / tRange + yNorm * skewFactor * (totalHeight / (width || 1)) * (tRange > 0 ? 1 : 0);
-  // Simple linear mapping with skew offset
-  const xBase = ((t - T_MIN) / tRange) * width;
-  const skewOffset = yNorm * skewFactor * width * 0.45;
-  return xBase + skewOffset;
+  const yBottom = yScale(P_MAX);
+  const yFromBottom = yBottom - y;
+  const xBase = ((t - T_MIN) / (T_MAX - T_MIN)) * width;
+  return xBase + yFromBottom; // 1:1 pixel ratio → true 45° visual angle
 }
 
 /** Saturation vapor pressure (Bolton 1980) in hPa */
@@ -60,27 +55,21 @@ function tFromTheta(th, pHpa) {
   return th / Math.pow(1000 / pHpa, 0.286) - 273.15;
 }
 
-/** Wet-bulb potential temperature pseudo-adiabat (simple approximation) */
-function moistAdiabat(thetaW, pHpa) {
-  // Iterative: descend from low pressure
-  let t = thetaW;
-  const pLevels = [];
-  for (let pp = 100; pp <= 1050; pp += 5) pLevels.push(pp);
+/** Moist (pseudo) adiabat via stepwise integration from the surface upward */
+function moistAdiabat(thetaW) {
   const result = [];
-  // Start from 200 hPa and work down
-  t = tFromTheta(thetaW + 273.15, 1000);
-  for (const pp of pLevels) {
-    // Simple Bolton approximation of moist adiabat
-    const lclT = thetaW - (1000 - pp) * 0.005; // rough
-    const ws = satMixingRatio(t, pp);
+  let t = thetaW; // temperature at ~1000 hPa in °C
+  // Integrate from surface upward (decreasing pressure)
+  for (let pp = 1050; pp >= 100; pp -= 5) {
+    result.push({ p: pp, t });
+    const rs = satMixingRatio(t, pp) / 1000; // g/kg → kg/kg
     const Lv = 2501000 - 2370 * t;
     const cp = 1005.7;
-    const dTdp = (287 * (t + 273.15) / (pp * 100)) * (1 + (Lv * ws) / (287 * (t + 273.15))) /
-                 (1 + (Lv * Lv * ws) / (cp * 461.5 * (t + 273.15) * (t + 273.15)));
-    result.push({ p: pp, t });
-    if (pp < 1050) {
-      t += dTdp * 5 * 100; // dp in Pa
-    }
+    const Tk = t + 273.15;
+    const dTdp = (287 * Tk / (pp * 100)) *
+      (1 + (Lv * rs) / (287 * Tk)) /
+      (1 + (Lv * Lv * rs) / (cp * 461.5 * Tk * Tk));
+    t -= dTdp * 5 * 100; // going up: dp = −5 hPa
   }
   return result;
 }
@@ -219,7 +208,7 @@ export default function InteractiveSkewT({
     const ro = new ResizeObserver((entries) => {
       const { width } = entries[0].contentRect;
       const w = Math.max(400, Math.floor(width));
-      const h = Math.max(400, Math.floor(w * 0.625));
+      const h = Math.max(500, Math.floor(w * 0.9));
       setDims({ w, h });
     });
     ro.observe(el);
@@ -297,7 +286,7 @@ export default function InteractiveSkewT({
     ctx.strokeStyle = colors.moistAdiabat;
     ctx.lineWidth = 0.8;
     for (const tw of MOIST_ADIABATS) {
-      const pts = moistAdiabat(tw, 1000);
+      const pts = moistAdiabat(tw);
       ctx.beginPath();
       let first = true;
       for (const pt of pts) {

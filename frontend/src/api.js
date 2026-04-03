@@ -67,6 +67,16 @@ export async function fetchForecastRiskScan({ model, fhour }) {
   return data;
 }
 
+export async function fetchOutlook() {
+  const res = await fetchWithTimeout(`${API_BASE}/api/outlook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  }, 120000);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Outlook generation failed");
+  return data;
+}
+
 export async function fetchSounding(params) {
   const res = await fetchWithTimeout(`${API_BASE}/api/sounding`, {
     method: "POST",

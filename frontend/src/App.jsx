@@ -406,6 +406,7 @@ export default function App() {
             onCloseCompare={() => setShowCompare(false)}
             showVwp={showVwp}
             onCloseVwp={() => setShowVwp(false)}
+
             compareHistoryData={compareHistoryData}
             onCompareHistoryConsumed={() => setCompareHistoryData(null)}
             stations={stations}
@@ -431,6 +432,7 @@ export default function App() {
               onClose: () => setShowMap(false),
               onFetchLatest: handleFetchLatest,
               onCompareStations: handleCompareStations,
+
             }}
           />
         </main>

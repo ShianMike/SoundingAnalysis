@@ -44,7 +44,7 @@ def fetch_iem_sounding(station_id, dt, quiet=False):
         last_url = url
         if not quiet:
             print(f"  Fetching from IEM: {url}")
-        resp = requests.get(url, timeout=30)
+        resp = requests.get(url, timeout=12)
         resp.raise_for_status()
         result = resp.json()
         profiles = result.get("profiles", [])

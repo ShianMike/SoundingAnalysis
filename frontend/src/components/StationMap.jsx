@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Plane, Navigation, Search, FileText, Minus, Compass } from "lucide-react";
-import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork } from "../api";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Plane, Navigation, Search, FileText, Minus, Compass, Shield } from "lucide-react";
+import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork, fetchOutlook } from "../api";
 import { getFavorites } from "../favorites";
 import WindCanvas from "./WindCanvas";
 import ChaserPanel from "./ChaserPanel";
@@ -770,6 +770,26 @@ function OutlookLayer({ data, outlookType }) {
   );
 }
 
+/* ── Custom outlook GeoJSON overlay ────────────────────────── */
+function CustomOutlookLayer({ data, outlookType }) {
+  const geoKey = useMemo(() => {
+    if (!data?.features?.length) return "empty";
+    const validIso = data.features[0]?.properties?.VALID_ISO || "";
+    return `custom-${validIso}-${data.features.length}-${outlookType}`;
+  }, [data, outlookType]);
+  if (!data || !data.features || data.features.length === 0) return null;
+  return (
+    <Pane name="custom-outlook" style={{ zIndex: 260, pointerEvents: "none" }}>
+      <GeoJSON
+        key={geoKey}
+        data={data}
+        style={(f) => spcStyle(f, outlookType)}
+        interactive={false}
+      />
+    </Pane>
+  );
+}
+
 /* ── click-for-coords layer ─────────────────────────────────── */
 function MapClickHandler({ enabled, onLatLonSelect, onRightClick, onMapClick, onMouseMove, disableRightClick = false }) {
   useMapEvents({
@@ -917,6 +937,16 @@ export default function StationMap({
 
   // SPC outlook refresh counter
   const [outlookRefresh, setOutlookRefresh] = useState(0);
+
+  // Custom outlook loading state
+  const [customOutlookLoading, setCustomOutlookLoading] = useState(false);
+  const [showCustomOutlook, setShowCustomOutlook] = useState(false);
+  const [customOutlookGeo, setCustomOutlookGeo] = useState(null); // categorical GeoJSON
+  const [customOutlookMeta, setCustomOutlookMeta] = useState(null); // {validTime, stationCount}
+  const [customTornadoGeo, setCustomTornadoGeo] = useState(null);
+  const [customWindGeo, setCustomWindGeo] = useState(null);
+  const [customHailGeo, setCustomHailGeo] = useState(null);
+  const [customOutlookType, setCustomOutlookType] = useState("cat"); // cat | torn | wind | hail
 
   // Global refresh epoch — bump to re-fetch all overlays at once
   const [refreshEpoch, setRefreshEpoch] = useState(0);
@@ -1749,12 +1779,92 @@ export default function StationMap({
               <div className="smap-controls">
                 <button
                   className={`smap-tbtn ${showOutlook ? "active" : ""}`}
-                  onClick={() => setShowOutlook((v) => !v)}
-                  title="Toggle SPC outlook overlay"
+                  onClick={() => {
+                    setShowOutlook((v) => {
+                      if (!v) setShowCustomOutlook(false); // turn off custom when SPC turns on
+                      return !v;
+                    });
+                  }}
+                  disabled={showCustomOutlook}
+                  title={showCustomOutlook ? "Turn off Custom Outlook first" : "Toggle SPC outlook overlay"}
                 >
                   <CloudLightning size={11} />
                   SPC Outlook
                 </button>
+                <button
+                  className={`smap-tbtn${showCustomOutlook ? " active" : ""}${customOutlookLoading ? " active" : ""}`}
+                  onClick={async () => {
+                    if (showCustomOutlook) {
+                      // Toggle off
+                      setShowCustomOutlook(false);
+                      return;
+                    }
+                    // Turn off SPC, generate custom
+                    setShowOutlook(false);
+                    setCustomOutlookLoading(true);
+                    try {
+                      const data = await fetchOutlook();
+                      setCustomOutlookGeo(data.geojson);
+                      setCustomTornadoGeo(data.tornadoGeo);
+                      setCustomWindGeo(data.windGeo);
+                      setCustomHailGeo(data.hailGeo);
+                      setCustomOutlookMeta({ validTime: data.validTime, stationCount: data.stationCount });
+                      setCustomOutlookType("cat");
+                      setShowCustomOutlook(true);
+                    } catch (e) {
+                      console.error("Custom outlook failed:", e);
+                    } finally {
+                      setCustomOutlookLoading(false);
+                    }
+                  }}
+                  disabled={customOutlookLoading || showOutlook}
+                  title={showOutlook ? "Turn off SPC Outlook first" : "Generate custom severe weather outlook using our formulas"}
+                >
+                  <Shield size={11} />
+                  {customOutlookLoading ? "Generating..." : "Custom Outlook"}
+                </button>
+                {showCustomOutlook && customOutlookGeo && (
+                  <button
+                    className="smap-tbtn smap-refresh-btn"
+                    onClick={async () => {
+                      setCustomOutlookLoading(true);
+                      try {
+                        const data = await fetchOutlook();
+                        setCustomOutlookGeo(data.geojson);
+                        setCustomTornadoGeo(data.tornadoGeo);
+                        setCustomWindGeo(data.windGeo);
+                        setCustomHailGeo(data.hailGeo);
+                        setCustomOutlookMeta({ validTime: data.validTime, stationCount: data.stationCount });
+                      } catch (e) {
+                        console.error("Custom outlook refresh failed:", e);
+                      } finally {
+                        setCustomOutlookLoading(false);
+                      }
+                    }}
+                    disabled={customOutlookLoading}
+                    title="Regenerate custom outlook"
+                  >
+                    <RefreshCw size={10} />
+                  </button>
+                )}
+                {showCustomOutlook && (
+                  <div className="smap-day-btns smap-type-btns">
+                    {[
+                      { id: "cat",  name: "Categorical" },
+                      { id: "torn", name: "Tornado" },
+                      { id: "wind", name: "Wind" },
+                      { id: "hail", name: "Hail" },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        className={`smap-day-btn ${customOutlookType === t.id ? "active" : ""}`}
+                        onClick={() => setCustomOutlookType(t.id)}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {showOutlook && (
                   <button
                     className="smap-tbtn smap-refresh-btn"
@@ -2309,6 +2419,13 @@ export default function StationMap({
           {/* SPC outlook polygons (render first so stations sit on top) */}
           {showOutlook && outlookData && <OutlookLayer data={outlookData} outlookType={effectiveType} />}
 
+          {/* Custom outlook polygons */}
+          {showCustomOutlook && (() => {
+            const geoMap = { cat: customOutlookGeo, torn: customTornadoGeo, wind: customWindGeo, hail: customHailGeo };
+            const activeGeo = geoMap[customOutlookType] || customOutlookGeo;
+            return activeGeo ? <CustomOutlookLayer data={activeGeo} outlookType={customOutlookType === "cat" ? "cat" : customOutlookType} /> : null;
+          })()}
+
           {/* NWS active warnings (tornado, severe, flash flood, watches) */}
           {showWarnings && warningsData && <WarningsLayer data={warningsData} />}
 
@@ -2826,6 +2943,38 @@ export default function StationMap({
               </div>
             </div>
           )}
+          {showCustomOutlook && (() => {
+            const geoMap = { cat: customOutlookGeo, torn: customTornadoGeo, wind: customWindGeo, hail: customHailGeo };
+            const activeGeo = geoMap[customOutlookType] || customOutlookGeo;
+            if (!activeGeo?.features?.length) return null;
+            const typeLabel = { cat: "Categorical", torn: "Tornado", wind: "Wind", hail: "Hail" }[customOutlookType] || "Categorical";
+            return (
+              <div className="smap-legend-float">
+                <div className="smap-legend smap-legend-outlook">
+                  <span className="smap-legend-ci-label">CUSTOM OUTLOOK · {typeLabel} · {customOutlookMeta?.validTime || ""} · {customOutlookMeta?.stationCount || 0} stations</span>
+                  {customOutlookType === "cat" ? (
+                    SPC_CATEGORIES.filter((c) =>
+                      activeGeo.features.some((f) => f.properties?.LABEL === c.label)
+                    ).map((c) => (
+                      <span key={c.label} className="smap-legend-item smap-outlook-cat" title={c.info}>
+                        <span className="smap-dot-rect" style={{ background: c.fill, borderColor: c.color }} />
+                        <span className="smap-cat-label">{c.name}</span>
+                      </span>
+                    ))
+                  ) : (
+                    (PROB_COLORS[customOutlookType] || []).filter((p) =>
+                      activeGeo.features.some((f) => f.properties?.LABEL === p.label)
+                    ).map((p) => (
+                      <span key={p.label} className="smap-legend-item smap-outlook-cat">
+                        <span className="smap-dot-rect" style={{ background: p.fill, borderColor: p.color }} />
+                        <span className="smap-cat-label">{p.pct}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {showAcars && acarsAirports && (
             <div className="smap-legend-float">
               <div className="smap-legend">

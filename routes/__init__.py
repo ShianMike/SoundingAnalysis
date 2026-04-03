@@ -9,6 +9,7 @@ from .risk import bp as risk_bp
 from .spc import bp as spc_bp
 from .feedback import bp as feedback_bp
 from .overlays import bp as overlays_bp
+from .outlook import bp as outlook_bp
 
 ALL_BLUEPRINTS = [
     meta_bp,
@@ -19,6 +20,7 @@ ALL_BLUEPRINTS = [
     spc_bp,
     feedback_bp,
     overlays_bp,
+    outlook_bp,
 ]
 
 

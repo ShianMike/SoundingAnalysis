@@ -64,14 +64,14 @@ def risk_scan():
 
     results = []
     station_ids = list(STATIONS.keys())
-    scan_workers = int(os.environ.get("SCAN_WORKERS", "6"))
+    scan_workers = int(os.environ.get("SCAN_WORKERS", "20"))
 
     try:
         with ThreadPoolExecutor(max_workers=scan_workers) as executor:
             futures = {executor.submit(_scan_one, sid): sid for sid in station_ids}
-            for future in as_completed(futures, timeout=150):
+            for future in as_completed(futures, timeout=90):
                 try:
-                    r = future.result(timeout=30)
+                    r = future.result(timeout=15)
                     if r is not None:
                         results.append(r)
                 except Exception:
@@ -155,16 +155,16 @@ def forecast_risk_scan():
             return None
 
     results = []
-    scan_workers = int(os.environ.get("SCAN_WORKERS", "6"))
+    scan_workers = int(os.environ.get("SCAN_WORKERS", "20"))
     print(f"[forecast-risk-scan] model={model} init={dt:%Y-%m-%d %H}Z fhour={fhour} "
           f"valid={valid_time:%Y-%m-%d %H}Z stations={len(station_ids)}")
 
     try:
         with ThreadPoolExecutor(max_workers=scan_workers) as executor:
             futures = {executor.submit(_scan_one, sid): sid for sid in station_ids}
-            for future in as_completed(futures, timeout=180):
+            for future in as_completed(futures, timeout=90):
                 try:
-                    r = future.result(timeout=30)
+                    r = future.result(timeout=15)
                     if r is not None:
                         results.append(r)
                 except Exception:

@@ -168,6 +168,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - **SPC outlook overlays:** Day 1 through Day 8 convective outlook GeoJSON with color-coded risk categories and legend
 - **SPC watch boxes:** Tornado and Severe Thunderstorm watch outlines from NWS MapServer
 - **SPC mesoscale discussions:** active MD polygons on the map
+- **Custom Outlook overlay:** formula-based severe-weather outlook with categorical and probabilistic (Tornado/Wind/Hail) GeoJSON polygons, generated from latest observed radiosonde data
 - **Wind flow animation:** surface streamlines and 500 hPa steering flow from Open-Meteo, rendered on a Canvas layer with animated particle trails
 - **Wind barbs on map:** toggle surface / 850 hPa / 500 hPa Open-Meteo wind barbs
 - **Lightning overlay:** real-time lightning strikes via Blitzortung WebSocket feed
@@ -197,6 +198,18 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - 00Z + 12Z resolution for ≤ 7 days, 12Z only for > 7 days
 - Grouped parameter selector with exclusive group selection
 - Custom dark-themed Recharts line charts with tooltips
+
+### Custom Severe-Weather Outlook
+- **Formula-based outlook generation** — scans all 73 CONUS upper-air stations using latest observed radiosonde data
+- Computes STP, SCP, SHIP, DCP, CAPE, SRH, and 0–6 km BWD for each station via MetPy
+- **Categorical risk classification** (TSTM → MRGL → SLGT → ENH → MDT → HIGH) using custom composite thresholds
+- **Probabilistic hazard layers** — Tornado (2%/5%/10%/30%), Wind (5%/15%/30%), Hail (5%/15%/30%)
+- GeoJSON polygons via Shapely convex hull with graduated buffer sizes per risk level for natural nesting
+- **Type selector** — toggle between Categorical, Tornado, Wind, and Hail views
+- **In-memory caching** — 10-minute cache per sounding cycle; instant on refresh within the same 00Z/12Z window
+- 20 parallel workers for fast I/O-bound station scanning (~20–40 s first load)
+- Mutually exclusive with SPC Outlook overlay; legend updates dynamically per hazard type
+- SPC-style color scheme matching real SPC outlook categories and probability contours
 
 ### Ensemble Sounding Plume
 - Spaghetti plume by fetching multiple BUFKIT forecast hours
@@ -303,6 +316,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 │   ├── analysis.py          # /api/compare, /api/composite, /api/merge-profiles,
 │   │                        #   /api/time-series, /api/ensemble-plume, /api/forecast-profiles
 │   ├── risk.py              # /api/risk-scan, /api/forecast-risk-scan
+│   ├── outlook.py           # /api/outlook (custom severe-weather outlook generation)
 │   ├── wind.py              # /api/vad, /api/vwp-display, /api/wind-field
 │   ├── spc.py               # /api/spc-outlook, /api/spc-discussion, /api/spc-outlook-stations
 │   ├── meta.py              # /api/health, /api/stations, /api/sources, /api/acars-airports
@@ -446,6 +460,7 @@ The backend deploys via Cloud Build from source to Cloud Run.
 | `GET` | `/api/spc-outlook` | SPC convective outlook GeoJSON (Day 1–8) |
 | `GET` | `/api/spc-discussion` | SPC convective outlook narrative text (Day 1–8) |
 | `GET` | `/api/spc-outlook-stations` | Stations within SPC outlook polygons by risk level |
+| `POST` | `/api/outlook` | Generate custom severe-weather outlook (categorical + tornado/wind/hail probabilistic) |
 | `POST` | `/api/feedback` | Submit user feedback / suggestion / bug report |
 | `GET` | `/api/feedback` | Retrieve all submitted feedback |
 
