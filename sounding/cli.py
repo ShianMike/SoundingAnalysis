@@ -26,27 +26,24 @@ def main():
         epilog="""
 Data sources (--source):
   obs      Observed radiosonde (IEM / UWyo) — default
-  rap      RAP model analysis — any lat/lon, CONUS (needs siphon)
   bufkit   BUFKIT forecast models — station-based (Iowa State)
-  acars    ACARS/AMDAR aircraft obs — airport-based (IEM)
+  psu      PSU BUFKIT feed — latest run (Penn State)
 
 Examples:
   python sounding.py --station OUN                                 # Observed
-  python sounding.py --source rap --lat 35.2 --lon -97.4           # RAP at point
   python sounding.py --source bufkit --model hrrr --station OUN    # HRRR forecast
-  python sounding.py --source acars --station KDFW                 # Aircraft obs
+  python sounding.py --source bufkit --model rap --station OUN     # RAP analysis
 """,
     )
     parser.add_argument("--station", type=str, default=None,
-                        help="3-letter station ID (e.g. OUN) or ICAO airport "
-                             "code for ACARS (e.g. KDFW)")
+                        help="3-letter station ID (e.g. OUN)")
     parser.add_argument("--date", type=str, default=None,
                         help="Date/time as YYYYMMDDHH (e.g. 2024061200). "
                              "Defaults to most recent sounding time.")
     parser.add_argument("--lat", type=float, default=None,
-                        help="Latitude — required for rap if no --station")
+                        help="Latitude (for nearest station lookup)")
     parser.add_argument("--lon", type=float, default=None,
-                        help="Longitude — required for rap if no --station")
+                        help="Longitude (for nearest station lookup)")
     parser.add_argument("--source", type=str, default=None,
                         choices=list(DATA_SOURCES.keys()),
                         help="Data source (default: obs). See below for details.")
@@ -94,21 +91,18 @@ Examples:
         print("  |  Select a data source:                            |")
         print("  |                                                   |")
         print("  |  [1] Observed radiosonde   (IEM / UWyo)           |")
-        print("  |  [2] RAP model analysis    (any lat/lon, CONUS)   |")
-        print("  |  [3] BUFKIT forecast model (station-based)        |")
-        print("  |  [5] ACARS aircraft obs    (airport-based)        |")
+        print("  |  [2] BUFKIT forecast model (station-based)        |")
         print("  |                                                   |")
         print("  |  [0] Auto-select (tornado risk scan, observed)    |")
         print("  +====================================================+")
         try:
-            choice = input("\n  Enter choice [0-5]: ").strip()
+            choice = input("\n  Enter choice [0-2]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return
 
         source_map = {
-            "0": None, "1": "obs", "2": "rap", "3": "bufkit",
-            "4": "acars",
+            "0": None, "1": "obs", "2": "bufkit",
         }
         source = source_map.get(choice)
         if choice not in source_map:
@@ -116,16 +110,6 @@ Examples:
             source = "obs"
 
         # Additional interactive prompts depending on source
-        if source == "rap":
-            try:
-                lat_str = input("  Latitude  (e.g. 35.22): ").strip()
-                lon_str = input("  Longitude (e.g. -97.46): ").strip()
-                args.lat = float(lat_str)
-                args.lon = float(lon_str)
-            except (ValueError, EOFError, KeyboardInterrupt):
-                print("  Invalid coordinates. Aborting.")
-                return
-
         if source in ("obs", "bufkit"):
             if args.station is None:
                 try:
@@ -159,16 +143,6 @@ Examples:
                     args.fhour = int(fh)
             except (ValueError, EOFError, KeyboardInterrupt):
                 pass
-
-        if source == "acars":
-            if args.station is None:
-                try:
-                    args.station = input(
-                        "  Airport ICAO code (e.g. KDFW, KORD): "
-                    ).strip()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                    return
 
     if source is None:
         source = "obs"
@@ -211,9 +185,7 @@ Examples:
         sys.exit(1)
 
     # ── Build descriptive label ─────────────────────────────────────
-    if source == "rap" and lat is not None:
-        label = f"{source.upper()} ({lat:.2f}, {lon:.2f})"
-    elif station:
+    if station:
         label = f"{station} ({STATIONS.get(station, (station,))[0]})"
     else:
         label = source.upper()

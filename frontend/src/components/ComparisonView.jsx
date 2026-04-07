@@ -100,9 +100,7 @@ function SlotCard({ slot, index, stations, onUpdate, onRemove, canRemove }) {
           onChange={(e) => onUpdate({ ...slot, source: e.target.value })}
         >
           <option value="obs">OBS</option>
-          <option value="rap">RAP</option>
           <option value="bufkit">BUFKIT</option>
-          <option value="acars">ACARS</option>
         </select>
       </div>
 
@@ -139,7 +137,7 @@ function SlotCard({ slot, index, stations, onUpdate, onRemove, canRemove }) {
       {/* Date picker */}
       <div className="cv-slot-field">
         <Calendar size={12} />
-        {slot.source === "obs" || slot.source === "acars" ? (
+        {slot.source === "obs" ? (
           <div className="cv-date-obs">
             <input
               type="date"

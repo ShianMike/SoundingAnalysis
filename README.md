@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-Educational%20%2F%20Research-green?style=flat-square)](#license)
 [![MetPy](https://img.shields.io/badge/MetPy-powered-orange?style=flat-square&logo=python&logoColor=white)](https://unidata.github.io/MetPy/)
 
-A full-stack atmospheric sounding analysis platform that fetches real upper-air data from six data sources, computes 50+ thermodynamic and kinematic parameters, and renders comprehensive Skew-T / Hodograph analysis with interactive overlays, live radar, and severe-weather risk scanning — all in a single Progressive Web App.
+A full-stack atmospheric sounding analysis platform that fetches real upper-air data from multiple sources, computes 50+ thermodynamic and kinematic parameters, and renders comprehensive Skew-T / Hodograph analysis with interactive overlays, live radar, and severe-weather risk scanning — all in a single Progressive Web App. Supports point soundings at any lat/lon via Open-Meteo pressure-level API.
 
 **Live site:** <https://shianmike.github.io/SoundingAnalysis/>
 
@@ -34,7 +34,7 @@ Color-coded parameter cards with severity thresholds. Horizontal bar charts rank
 ![Parameters & Climatology](docs/screenshots/parameters-and-climo.png)
 
 ### Station Map with Radar, Warnings & Overlays
-Interactive Leaflet map with station markers, animated composite + mosaic radar, storm-relative velocity, NWS active warnings, SPC Day 1–8 convective outlooks, watch boxes, mesoscale discussions, wind flow animation, lightning strikes, storm spotters, live chasers, and ACARS airport markers:
+Interactive Leaflet map with station markers, animated composite + mosaic radar, storm-relative velocity, NWS active warnings, SPC Day 1–8 convective outlooks, watch boxes, mesoscale discussions, wind flow animation, lightning strikes, storm spotters, and live chasers:
 
 ![Station Map with Radar](docs/screenshots/station-map-radar.png)
 
@@ -73,7 +73,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ## Features
 
 ### Skew-T Log-P Diagram
-- **Source-aware plot titles** — "OBSERVED UPPER-AIR SOUNDING", "HRRR FORECAST (INIT + FHOUR → VALID)", "RAP ANALYSIS", or "ACARS AIRCRAFT OBS" depending on data source
+- **Source-aware plot titles** — "OBSERVED UPPER-AIR SOUNDING", "HRRR FORECAST (INIT + FHOUR → VALID)", or "GFS POINT SOUNDING" depending on data source
 - **Temperature** & **Dewpoint** profiles with **wet-bulb** and **virtual temperature** traces
 - **SB / MU / ML parcel traces** with color-coded dashed lines and **Downdraft (DCAPE) parcel** trace
 - **CAPE/CIN shading** — red fill (CAPE) and blue fill (CIN) between SB parcel and environment
@@ -94,7 +94,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - **Critical angle** between 0–500 m shear and storm-relative inflow
 - VAD Wind Profiler overlay (green) and Effective inflow layer SRH fill
 - **Storm-relative mode** — shift all winds into the storm-relative frame (SM → origin crosshair)
-- **Profile smoothing** — Gaussian filter (adjustable σ) for noisy ACARS profiles
+- **Profile smoothing** — Gaussian filter (adjustable σ) for noisy profiles
 - **Boundary line** — user-defined boundary orientation plotted on the hodograph
 
 ### Computed Parameters (50+)
@@ -155,10 +155,17 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - Auto-opens interactive station map with color-coded risk markers
 - **Mesoscale panel:** sortable multi-station parameter table with color-coded threshold chips
 
+### Point Soundings (Arbitrary Lat/Lon)
+- Click anywhere on the map for a model-profile sounding at the exact clicked location — no station required
+- Uses Open-Meteo pressure-level API (GFS Seamless — auto-selects HRRR 3 km for CONUS, GFS 25 km elsewhere)
+- 36 pressure levels from 1000 to 50 hPa with temperature, dewpoint, wind, and geopotential height
+- Model and forecast hour selectors auto-appear in point sounding mode
+- Green "POINT SOUNDING" banner with coordinates and dismiss button
+
 ### Interactive Station Map
 - Dark-themed Leaflet map centered on CONUS with CartoDB dark_matter / positron tiles
 - Station markers color-coded by risk scan data (STP thresholds)
-- Click station markers to select them; click anywhere on map to set lat/lon for RAP source
+- Click station markers to select them; click anywhere on map to auto-select nearest station
 - Fly-to animation on station selection
 
 **Radar & Weather Overlays:**
@@ -181,7 +188,6 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 - **Shear vectors:** 0–6 km bulk shear direction arrows on station markers (requires risk scan)
 - **Proximity search:** "Near me" button finds the closest upper-air stations to your browser location
 - **Favorite station stars:** gold star markers highlight pinned stations
-- **ACARS airport markers:** blue aircraft icons on 60+ major ACARS-capable airports with click-to-fetch
 
 ### Multi-Sounding Comparison
 - Compare up to 4 soundings side-by-side
@@ -226,7 +232,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ### Sounding Modifications
 - **Surface modification** — override surface T, Td, wind speed/direction and re-compute all parameters
 - **Custom storm motion** — input direction + speed for SRH/SRW recalculation; also settable by drawing on the station map
-- **Profile smoothing** — Gaussian filter with adjustable σ (great for noisy ACARS profiles)
+- **Profile smoothing** — Gaussian filter with adjustable σ for noisy profiles
 - **Boundary orientation** — plot boundary line on hodograph at custom angle; also settable by drawing on the station map
 
 ### Sounding History & Favorites
@@ -292,10 +298,9 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 | Source | Flag | Description |
 |---|---|---|
 | **Observed (IEM/UWyo)** | `--source obs` | Real radiosonde observations from CONUS upper-air sites |
-| **RAP Analysis** | `--source rap` | Rapid Refresh model analysis at any lat/lon |
 | **BUFKIT Forecasts** | `--source bufkit` | HRRR, RAP, NAM, NAM-Nest, GFS, SREF forecasts from Iowa State |
-| **ACARS/AMDAR** | `--source acars` | Aircraft observations at 60+ major airports (IEM) |
 | **PSU BUFKIT** | `--source psu` | Latest model run from Penn State's real-time feed (RAP, HRRR, NAM, GFS, etc.) |
+| **Point Sounding** | (map click) | Model profile at any lat/lon via Open-Meteo pressure-level API |
 | **Custom Upload** | (UI only) | Paste CSV/SHARPpy/CM1 text or upload WRF netCDF files |
 
 ---
@@ -319,7 +324,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 │   ├── outlook.py           # /api/outlook (custom severe-weather outlook generation)
 │   ├── wind.py              # /api/vad, /api/vwp-display, /api/wind-field
 │   ├── spc.py               # /api/spc-outlook, /api/spc-discussion, /api/spc-outlook-stations
-│   ├── meta.py              # /api/health, /api/stations, /api/sources, /api/acars-airports
+│   ├── meta.py              # /api/health, /api/stations, /api/sources
 │   ├── feedback.py          # /api/feedback (GET/POST)
 │   └── helpers.py           # Shared utilities (safe_round, parse_date, etc.)
 ├── sounding/              # Core analysis package
@@ -327,7 +332,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 │   ├── __main__.py          # CLI entry (python -m sounding)
 │   ├── cli.py               # Interactive CLI menu
 │   ├── constants.py         # Station database, BUFKIT model metadata
-│   ├── fetchers.py          # Data fetchers (OBS, RAP, BUFKIT, PSU, ACARS)
+│   ├── fetchers.py          # Data fetchers (OBS, BUFKIT, PSU, Point Sounding)
 │   ├── parameters.py        # 50+ computed atmospheric parameters
 │   ├── plotting.py          # Matplotlib Skew-T, hodograph, parameter panels
 │   ├── tornado.py           # Risk scoring (STP/SCP/SHIP/DCP)
@@ -383,9 +388,8 @@ pip install -r requirements.txt
 python -m sounding                                            # Interactive menu
 python -m sounding --station OUN                              # Latest observed
 python -m sounding --station OUN --date 2024061200            # Specific date/time
-python -m sounding --source rap --lat 36.4 --lon -99.4        # RAP at any point
+python -m sounding --source bufkit --model rap --station OUN  # RAP analysis
 python -m sounding --source bufkit --model hrrr --station OUN # HRRR forecast
-python -m sounding --source acars --station KDFW              # Aircraft obs
 python -m sounding --list-sources                             # Show all sources
 ```
 
@@ -442,7 +446,6 @@ The backend deploys via Cloud Build from source to Cloud Run.
 | `GET` | `/api/health` | Health check |
 | `GET` | `/api/stations` | List all known sounding stations (70+ CONUS) |
 | `GET` | `/api/sources` | List available data sources and BUFKIT models |
-| `GET` | `/api/acars-airports` | List 60+ ACARS-capable airport locations |
 | `POST` | `/api/sounding` | Fetch sounding, compute params, return base64 plot + data |
 | `POST` | `/api/custom-sounding` | Upload custom sounding (SHARPpy/CSV paste or file) |
 | `POST` | `/api/upload-file` | File upload handler (WRF netCDF, binary formats) |
@@ -508,7 +511,7 @@ The backend deploys via Cloud Build from source to Cloud Run.
 | numpy | 2.4.2 | Numerical arrays |
 | scipy | 1.17.1 | Scientific computing |
 | requests | 2.32.5 | HTTP data fetching |
-| siphon | 0.10.0 | NOAA TDS data access (RAP source) |
+| siphon | 0.10.0 | NOAA TDS data access |
 | netCDF4 | latest | WRF / model file I/O |
 | shapely | 2.1.2 | Geometric operations (SPC outlook polygons) |
 

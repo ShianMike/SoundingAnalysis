@@ -22,10 +22,9 @@ from .utils import get_latest_sounding_time, find_nearest_station
 from .fetchers import (
     fetch_iem_sounding,
     fetch_wyoming_sounding,
-    fetch_rap_sounding,
     fetch_bufkit_sounding,
     fetch_psu_bufkit,
-    fetch_acars_sounding,
+    fetch_point_sounding,
     fetch_sounding,
     _parse_bufkit,
 )
@@ -52,8 +51,8 @@ __all__ = [
     "STATIONS", "STATION_WMO", "BUFKIT_MODELS", "PSU_MODELS",
     "DATA_SOURCES", "TORNADO_SCAN_STATIONS",
     "get_latest_sounding_time", "find_nearest_station",
-    "fetch_iem_sounding", "fetch_wyoming_sounding", "fetch_rap_sounding",
-    "fetch_bufkit_sounding", "fetch_psu_bufkit", "fetch_acars_sounding",
+    "fetch_iem_sounding", "fetch_wyoming_sounding",
+    "fetch_bufkit_sounding", "fetch_psu_bufkit",
     "fetch_sounding", "_parse_bufkit",
     "fetch_vad_data", "fetch_vwp_timeseries", "plot_vwp",
     "_quick_tornado_score", "_quick_forecast_score", "find_highest_tornado_risk",

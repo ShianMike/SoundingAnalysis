@@ -41,7 +41,7 @@ def compute_parameters(data, storm_motion=None, surface_mod=None, smoothing=None
     smoothing : float or None
         Gaussian smoothing sigma (in number of data levels).
         Typical values: 2-5. Applied to T, Td, u, v before computation.
-        Useful for noisy profiles (e.g. ACARS). Preserves surface values.
+        Useful for noisy profiles. Preserves surface values.
     """
     p = data["pressure"]
     T = data["temperature"].copy()

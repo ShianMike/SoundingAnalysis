@@ -129,10 +129,8 @@ PSU_MODELS = {
 
 DATA_SOURCES = {
     "obs":    "Observed radiosonde (IEM / UWyo)",
-    "rap":    "RAP model analysis - any lat/lon, CONUS (NCEI THREDDS)",
     "bufkit": "BUFKIT forecast models - station-based (Iowa State)",
     "psu":    "PSU BUFKIT feed - latest run, station-based (Penn State)",
-    "acars":  "ACARS/AMDAR aircraft obs - airport-based (IEM)",
 }
 
 

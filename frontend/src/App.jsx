@@ -218,7 +218,7 @@ export default function App() {
   };
 
   const handleMapLatLonSelect = (lat, lon) => {
-    // stored for ControlPanel to pick up via props
+    // Store lat/lon for ControlPanel to pick up — point sounding mode
     setLastParams((prev) => ({ ...prev, _mapLat: lat, _mapLon: lon }));
   };
 
@@ -428,7 +428,6 @@ export default function App() {
               onLatLonSelect: handleMapLatLonSelect,
               onStormMotionSelect: handleMapStormMotionSelect,
               onBoundaryOrientationSelect: handleMapBoundaryOrientationSelect,
-              latLonMode: source === "rap",
               onClose: () => setShowMap(false),
               onFetchLatest: handleFetchLatest,
               onCompareStations: handleCompareStations,

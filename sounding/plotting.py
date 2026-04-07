@@ -293,23 +293,20 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     tag_str = f" [{', '.join(title_tags)}]" if title_tags else ""
     # Build title based on data source
     _src = (source or "obs").lower()
-    if _src in ("bufkit", "psu") and model:
+    if _src == "point" and model:
+        _valid_dt = dt + timedelta(hours=int(fhour or 0))
+        title_str = (
+            f"{model.upper()} POINT SOUNDING | {station_id} | "
+            f"INIT: {dt.strftime('%m/%d/%Y %HZ')} F{int(fhour):03d} | "
+            f"VALID: {_valid_dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
+        )
+    elif _src in ("bufkit", "psu") and model:
         _valid_dt = dt + timedelta(hours=int(fhour or 0))
         _src_label = f"{model.upper()} FORECAST"
         title_str = (
             f"{_src_label} | {station_id} | "
             f"INIT: {dt.strftime('%m/%d/%Y %HZ')} F{int(fhour):03d} | "
             f"VALID: {_valid_dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
-        )
-    elif _src == "rap":
-        title_str = (
-            f"RAP ANALYSIS | {station_id} | "
-            f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
-        )
-    elif _src == "acars":
-        title_str = (
-            f"ACARS AIRCRAFT OBS | {station_id} | "
-            f"VALID: {dt.strftime('%m/%d/%Y %HZ')}{tag_str}"
         )
     else:
         title_str = (
@@ -1819,8 +1816,6 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
     stn_name_lower = info.get("name", "").lower()
     if "rap analysis" in stn_name_lower:
         source_label = "RAP Model Analysis (NCEI)"
-    elif "acars" in stn_name_lower:
-        source_label = "ACARS/AMDAR Aircraft Obs (IEM)"
     elif any(m in stn_name_lower for m in ("rap f", "hrrr f", "nam f", "gfs f", "sref f")):
         source_label = "BUFKIT Forecast (Iowa State)"
     else:

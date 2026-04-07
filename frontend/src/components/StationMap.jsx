@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Plane, Navigation, Search, FileText, Minus, Compass, Shield } from "lucide-react";
-import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchAcarsAirports, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork, fetchOutlook } from "../api";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Navigation, Search, FileText, Minus, Compass, Shield } from "lucide-react";
+import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork, fetchOutlook } from "../api";
 import { getFavorites } from "../favorites";
 import WindCanvas from "./WindCanvas";
 import ChaserPanel from "./ChaserPanel";
@@ -859,7 +859,6 @@ export default function StationMap({
   onLatLonSelect,
   onStormMotionSelect,
   onBoundaryOrientationSelect,
-  latLonMode,   // true when source is rap
   onClose,
   onFetchLatest,            // (stationId) => void  — triggers auto-fetch with best source
   onCompareStations,        // (stationIds[]) => void — compare nearest stations
@@ -988,11 +987,6 @@ export default function StationMap({
     window.addEventListener("focus", handler);
     return () => window.removeEventListener("focus", handler);
   }, []);
-
-  // ── ACARS airports overlay ────────────────────────────────
-  const [showAcars, setShowAcars] = useState(false);
-  const [acarsAirports, setAcarsAirports] = useState(null);
-  const [acarsLoading, setAcarsLoading] = useState(false);
 
   // Animated radar state — unified for both composite (RainViewer) and mosaic (IEM)
   const [radarPlaying, setRadarPlaying] = useState(false);
@@ -1300,18 +1294,6 @@ export default function StationMap({
     }
   }, [drawMode, drawPoints]);
 
-  // ── Fetch ACARS airports when toggled on ─────────────────────
-  useEffect(() => {
-    if (!showAcars) { setAcarsAirports(null); return; }
-    let cancelled = false;
-    setAcarsLoading(true);
-    fetchAcarsAirports()
-      .then((data) => { if (!cancelled) setAcarsAirports(data); })
-      .catch((e) => console.error("ACARS airports fetch error:", e))
-      .finally(() => { if (!cancelled) setAcarsLoading(false); });
-    return () => { cancelled = true; };
-  }, [showAcars, refreshEpoch]);
-
   // Fetch NWS active warnings on mount + every 2 min when toggle is on
   useEffect(() => {
     if (!showWarnings) { setWarningsData(null); return; }
@@ -1524,6 +1506,12 @@ export default function StationMap({
     north: 52,
     east: -66,
   });
+  const handleViewChange = useCallback((v) => {
+    setMapView((prev) => {
+      if (prev.zoom === v.zoom && prev.south === v.south && prev.west === v.west && prev.north === v.north && prev.east === v.east) return prev;
+      return v;
+    });
+  }, []);
 
   const stationRender = useMemo(() => {
     if (!stations.length) {
@@ -1646,7 +1634,6 @@ export default function StationMap({
         <div className="smap-toolbar-bottom">
           {/* ── Group header buttons + controls ── */}
           <div className="smap-groups">
-            {latLonMode && <span className="smap-tag">Click map to set coordinates</span>}
             <button
               className={`smap-group-btn${openGroup === "forecasts" ? " open" : ""}${showOutlook ? " has-active" : ""}`}
               onClick={() => toggleGroup("forecasts")}
@@ -2197,16 +2184,6 @@ export default function StationMap({
                   Favorites
                   {favorites.length > 0 && <span className="smap-radar-badge">{favorites.length}</span>}
                 </button>
-                <button
-                  className={`smap-tbtn ${showAcars ? "active" : ""}`}
-                  onClick={() => setShowAcars((v) => !v)}
-                  title="Show ACARS/AMDAR aircraft observation airports — click to fetch profile"
-                >
-                  <Plane size={11} />
-                  ACARS
-                  {acarsLoading && <span className="smap-outlook-loading-dot">...</span>}
-                  {acarsAirports && <span className="smap-radar-badge">{acarsAirports.length}</span>}
-                </button>
               </div>
             </div>
           )}
@@ -2569,69 +2546,17 @@ export default function StationMap({
           )}
 
           <MapClickHandler
-            enabled={latLonMode}
+            enabled={true}
             onLatLonSelect={onLatLonSelect}
             onRightClick={handleProximitySearch}
             onMapClick={handleMapToolClick}
             onMouseMove={handleDrawMouseMove}
             disableRightClick={Boolean(drawMode)}
           />
-          <MapViewTracker onCenterChange={handleCenterChange} onViewChange={setMapView} />
+          <MapViewTracker onCenterChange={handleCenterChange} onViewChange={handleViewChange} />
           <FlyToStation station={selectedStation} stations={stations} />
           <FlyToCoords coords={flyToCoords} onDone={() => setFlyToCoords(null)} />
           <MapResizeHandler trigger={isFullscreen} />
-
-          {/* ACARS airports overlay */}
-          {showAcars && acarsAirports && (
-            <Pane name="acars-layer" style={{ zIndex: 440 }}>
-              {acarsAirports.map((ap) => (
-                <CircleMarker
-                  key={ap.id}
-                  center={[ap.lat, ap.lon]}
-                  radius={6}
-                  pathOptions={{
-                    color: "#a855f7",
-                    fillColor: "#a855f7",
-                    fillOpacity: 0.7,
-                    weight: 2,
-                  }}
-                  eventHandlers={{
-                    click: () => {
-                      // Select best nearby sounding station or use ACARS source
-                      onStationSelect(ap.id.replace(/^K/, ""));
-                    },
-                  }}
-                >
-                  <Tooltip direction="top" offset={[0, -8]} className="smap-tooltip">
-                    <div className="smap-tt-inner">
-                      <div className="smap-tt-header">
-                        <span className="smap-tt-id" style={{ color: "#a855f7" }}>✈ {ap.id}</span>
-                        <span className="smap-tt-name">{ap.name}</span>
-                      </div>
-                      <span className="smap-tt-type">ACARS aircraft profiles</span>
-                    </div>
-                  </Tooltip>
-                  <Popup className="smap-popup" maxWidth={260} minWidth={200}>
-                    <div className="smap-popup-inner">
-                      <div className="smap-popup-header">
-                        <span className="smap-popup-id" style={{ color: "#a855f7" }}>✈ {ap.id}</span>
-                        <span className="smap-popup-name">{ap.name}</span>
-                      </div>
-                      <div className="smap-popup-meta">
-                        <span className="smap-popup-coords">{ap.lat.toFixed(2)}°, {ap.lon.toFixed(2)}°</span>
-                      </div>
-                      <div className="smap-popup-outlook">
-                        <span className="smap-outlook-badge" style={{ background: "#a855f722", color: "#a855f7", borderColor: "#a855f755" }}>ACARS Airport</span>
-                        <div className="smap-forecast-btns">
-                          <button className="smap-forecast-btn smap-forecast-btn-auto" onClick={(e) => { e.stopPropagation(); onFetchLatest?.(ap.id.replace(/^K/, "")); }}>Fetch ACARS Profile</button>
-                        </div>
-                      </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
-            </Pane>
-          )}
 
           {/* Proximity search result markers + lines */}
           {proximityResult && (
@@ -2975,14 +2900,6 @@ export default function StationMap({
               </div>
             );
           })()}
-          {showAcars && acarsAirports && (
-            <div className="smap-legend-float">
-              <div className="smap-legend">
-                <span className="smap-legend-item"><span className="smap-dot" style={{ background: "#a855f7" }} />{acarsAirports.length} ACARS airports</span>
-                <span className="smap-legend-hint">Click airport for aircraft profile</span>
-              </div>
-            </div>
-          )}
           {showWindBarbs && riskData && (
             <div className="smap-legend-float">
               <div className="smap-legend">

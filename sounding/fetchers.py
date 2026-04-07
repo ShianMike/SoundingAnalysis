@@ -301,121 +301,6 @@ def fetch_wyoming_sounding(station_id, dt):
 
 
 
-def fetch_rap_sounding(lat, lon, dt):
-    """
-    Fetch RAP model analysis sounding for any lat/lon via NCEI THREDDS.
-    Provides analysis profiles at ~13 km resolution over CONUS.
-    Available from ~2012 to near-present (with ~1-2 day archival lag).
-    """
-    try:
-        from siphon.catalog import TDSCatalog
-    except ImportError:
-        raise ImportError(
-            "siphon is required for RAP data. Install with: pip install siphon"
-        )
-
-    print(f"  Fetching RAP analysis for ({lat:.2f}, {lon:.2f}) at {dt}...")
-
-    # NCEI archive of RAP 130-km analysis GRIB2 files
-    cat_url = (
-        f"https://www.ncei.noaa.gov/thredds/catalog/model-rap130anl/"
-        f"{dt:%Y%m}/{dt:%Y%m%d}/catalog.xml"
-    )
-
-    try:
-        cat = TDSCatalog(cat_url)
-    except Exception as e:
-        raise ValueError(f"Cannot access RAP archive for {dt:%Y-%m-%d}: {e}")
-
-    # Dataset naming convention: rap_130_YYYYMMDD_HH00_000.grb2
-    target = f"rap_130_{dt:%Y%m%d}_{dt:%H}00_000.grb2"
-    if target not in cat.datasets:
-        available = sorted(cat.datasets.keys())
-        match = next((n for n in available if f"_{dt:%H}00_000" in n), None)
-        if match is None:
-            raise ValueError(
-                f"RAP file not found for {dt:%Y-%m-%d %H}Z. "
-                f"Available files: {available[:5]}…"
-            )
-        target = match
-
-    ds = cat.datasets[target]
-    ncss = ds.subset()
-
-    query = ncss.query()
-    query.lonlat_point(lon, lat)
-    query.time(dt)
-    query.accept("netcdf4")
-    query.variables(
-        "Temperature_isobaric",
-        "Relative_humidity_isobaric",
-        "Geopotential_height_isobaric",
-        "u-component_of_wind_isobaric",
-        "v-component_of_wind_isobaric",
-    )
-
-    print(f"  Querying NCSS for point ({lat:.2f}, {lon:.2f})...")
-    nc = ncss.get_data(query)
-
-    # ── Helper to find a variable by several possible names ──
-    def _var(nc, *names):
-        for n in names:
-            if n in nc.variables:
-                return nc.variables[n][:]
-        raise KeyError(
-            f"None of {names} found.  Available: {list(nc.variables.keys())}"
-        )
-
-    pres_pa = _var(nc, "isobaric", "isobaric1", "isobaric3", "pressure")
-    temp_k  = _var(nc, "Temperature_isobaric")
-    rh_pct  = _var(nc, "Relative_humidity_isobaric")
-    hgt_m   = _var(nc, "Geopotential_height_isobaric")
-    u_ms    = _var(nc, "u-component_of_wind_isobaric")
-    v_ms    = _var(nc, "v-component_of_wind_isobaric")
-    nc.close()
-
-    # Flatten leading (time, …) dimensions
-    if temp_k.ndim > 1:
-        temp_k = temp_k.squeeze()
-        rh_pct = rh_pct.squeeze()
-        hgt_m  = hgt_m.squeeze()
-        u_ms   = u_ms.squeeze()
-        v_ms   = v_ms.squeeze()
-
-    pres_hpa = pres_pa / 100.0
-    temp_c   = temp_k - 273.15
-
-    # RH → dewpoint (Magnus-Tetens)
-    a, b = 17.625, 243.04
-    alpha = (a * temp_c) / (b + temp_c) + np.log(np.clip(rh_pct, 1, 100) / 100.0)
-    td_c = (b * alpha) / (a - alpha)
-
-    # Wind components → speed / direction
-    wspd_kt = np.sqrt(u_ms**2 + v_ms**2) * 1.94384
-    wdir_deg = (np.degrees(np.arctan2(-u_ms, -v_ms)) + 360) % 360
-
-    # Sort surface-first (descending pressure), keep ≥ 50 hPa
-    order = np.argsort(pres_hpa)[::-1]
-    mask = pres_hpa[order] >= 50
-    idx = order[mask]
-
-    data = {
-        "pressure":       np.array(pres_hpa[idx])  * units.hPa,
-        "height":         np.array(hgt_m[idx])     * units.meter,
-        "temperature":    np.array(temp_c[idx])    * units.degC,
-        "dewpoint":       np.array(td_c[idx])      * units.degC,
-        "wind_direction": np.array(wdir_deg[idx])  * units.degree,
-        "wind_speed":     np.array(wspd_kt[idx])   * units.knot,
-        "has_wind":       np.ones(len(idx), dtype=bool),
-        "station_info": {
-            "lat": lat, "lon": lon,
-            "name": f"RAP Analysis ({lat:.2f}, {lon:.2f})",
-        },
-    }
-    return data
-
-
-
 def _parse_bufkit(text, fhour=0):
     """
     Parse a BUFKIT text file and return sounding data for a given
@@ -595,129 +480,6 @@ def fetch_bufkit_sounding(station_id, dt, model="rap", fhour=0):
     return data
 
 
-def fetch_acars_sounding(airport, dt):
-    """
-    Fetch ACARS/AMDAR aircraft-observation profiles from the IEM.
-    
-    Parameters
-    ----------
-    airport : str  ICAO airport code (e.g. 'KORD', 'KDFW') or 3-letter ID.
-    dt      : datetime  Target time (nearest available profile is returned).
-    """
-    if len(airport) == 3:
-        airport = f"K{airport.upper()}"
-    airport = airport.upper()
-
-    # IEM ACARS endpoint returns profiles within ±3 h of the given date
-    url = (
-        f"https://mesonet.agron.iastate.edu/json/acars_profiles.py?"
-        f"airport={airport}&date={dt:%Y-%m-%d}"
-    )
-    print(f"  Fetching ACARS profiles for {airport} on {dt:%Y-%m-%d}...")
-    print(f"  URL: {url}")
-
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    result = resp.json()
-
-    profiles = result.get("profiles", [])
-    if not profiles:
-        raise ValueError(
-            f"No ACARS profiles found for {airport} on {dt:%Y-%m-%d}. "
-            f"ACARS coverage depends on flight traffic at this airport."
-        )
-
-    # Pick the profile whose timestamp is closest to dt
-    best_profile = None
-    best_delta = 1e18
-    for prof in profiles:
-        ts_str = prof.get("utcvalid", prof.get("ts", ""))
-        try:
-            ts = datetime.strptime(ts_str[:16], "%Y-%m-%dT%H:%M").replace(
-                tzinfo=timezone.utc
-            )
-        except (ValueError, TypeError):
-            continue
-        delta = abs((ts - dt).total_seconds())
-        if delta < best_delta:
-            best_delta = delta
-            best_profile = prof
-
-    if best_profile is None:
-        raise ValueError(f"No usable ACARS profiles found for {airport}")
-
-    levels = best_profile.get("profile", [])
-    if not levels:
-        raise ValueError(f"Selected ACARS profile is empty for {airport}")
-
-    pressure, height, temp, dewpoint, wind_dir, wind_spd = (
-        [], [], [], [], [], [],
-    )
-
-    for lvl in levels:
-        p  = lvl.get("pressure")
-        h  = lvl.get("altitude")
-        t  = lvl.get("temperature")
-        td = lvl.get("dewpoint")
-        wd = lvl.get("direction")
-        ws = lvl.get("speed")
-
-        if p is None or h is None or t is None:
-            continue
-
-        pressure.append(float(p))
-        height.append(float(h))
-        temp.append(float(t))
-        dewpoint.append(float(td) if td is not None else float(t) - 30)
-        wind_dir.append(float(wd) if wd is not None else np.nan)
-        wind_spd.append(float(ws) if ws is not None else np.nan)
-
-    if len(pressure) < 5:
-        raise ValueError(
-            f"Insufficient ACARS data ({len(pressure)} levels) for {airport}"
-        )
-
-    # Sort by pressure descending (surface first)
-    order = np.argsort(pressure)[::-1]
-    pressure  = np.array(pressure)[order]
-    height    = np.array(height)[order]
-    temp      = np.array(temp)[order]
-    dewpoint  = np.array(dewpoint)[order]
-    wind_dir  = np.array(wind_dir)[order]
-    wind_spd  = np.array(wind_spd)[order]
-
-    # Interpolate missing winds (same method as IEM RAOB fetcher)
-    valid = ~np.isnan(wind_dir) & ~np.isnan(wind_spd)
-    has_wind = valid.copy()
-    if np.any(~valid) and np.sum(valid) >= 2:
-        u_v, v_v = mpcalc.wind_components(
-            wind_spd[valid] * units.knot, wind_dir[valid] * units.degree
-        )
-        u_all = np.interp(height, height[valid], u_v.to("knot").m)
-        v_all = np.interp(height, height[valid], v_v.to("knot").m)
-        wind_dir = mpcalc.wind_direction(
-            u_all * units.knot, v_all * units.knot
-        ).to("degree").m
-        wind_spd = mpcalc.wind_speed(
-            u_all * units.knot, v_all * units.knot
-        ).to("knot").m
-
-    data = {
-        "pressure":       pressure  * units.hPa,
-        "height":         height    * units.meter,
-        "temperature":    temp      * units.degC,
-        "dewpoint":       dewpoint  * units.degC,
-        "wind_direction": wind_dir  * units.degree,
-        "wind_speed":     wind_spd  * units.knot,
-        "has_wind":       has_wind,
-        "station_info": {
-            "lat": best_profile.get("latitude", 0),
-            "lon": best_profile.get("longitude", 0),
-            "name": f"ACARS {airport}",
-        },
-    }
-    return data
-
 def fetch_psu_bufkit(station_id, model="rap", fhour=0):
     """
     Fetch latest-run BUFKIT sounding from Penn State's e-wall server.
@@ -819,6 +581,133 @@ def fetch_psu_bufkit(station_id, model="rap", fhour=0):
 
 
 
+def fetch_point_sounding(lat, lon, dt, model="gfs", fhour=0):
+    """
+    Fetch a model-profile point sounding at an arbitrary lat/lon
+    from the Open-Meteo pressure-level API.
+
+    Parameters
+    ----------
+    lat, lon : float
+        WGS-84 coordinates.
+    dt : datetime
+        Model initialisation time (used to pick the correct forecast step).
+    model : str
+        Model name from our BUFKIT naming (hrrr, rap, gfs, nam, …).
+    fhour : int
+        Forecast hour offset from init time.
+    """
+    PRESSURE_LEVELS = [
+        1000, 975, 950, 925, 900, 875, 850, 825, 800,
+        775, 750, 725, 700, 675, 650, 625, 600, 575,
+        550, 525, 500, 475, 450, 425, 400, 375, 350,
+        325, 300, 275, 250, 225, 200, 150, 100, 70, 50,
+    ]
+
+    # Build variable list for each pressure level
+    var_names = []
+    for p in PRESSURE_LEVELS:
+        var_names.extend([
+            f"temperature_{p}hPa",
+            f"dew_point_{p}hPa",
+            f"wind_speed_{p}hPa",
+            f"wind_direction_{p}hPa",
+            f"geopotential_height_{p}hPa",
+        ])
+
+    # Use gfs_seamless (auto-selects HRRR for CONUS, GFS elsewhere)
+    om_model = "gfs_seamless"
+
+    # Compute target valid time
+    valid_dt = dt + timedelta(hours=int(fhour))
+    start_hour = valid_dt.strftime("%Y-%m-%dT%H:00")
+    end_hour = start_hour
+
+    url = "https://api.open-meteo.com/v1/gfs"
+    params = {
+        "latitude": round(float(lat), 4),
+        "longitude": round(float(lon), 4),
+        "hourly": ",".join(var_names),
+        "models": om_model,
+        "wind_speed_unit": "kn",
+        "timezone": "GMT",
+        "start_hour": start_hour,
+        "end_hour": end_hour,
+    }
+
+    print(f"  Fetching point sounding at {lat:.2f}, {lon:.2f} "
+          f"({model.upper()} F{fhour:03d}) via Open-Meteo...")
+    try:
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+    except requests.exceptions.Timeout:
+        raise ValueError(
+            "Open-Meteo API timed out. The service may be temporarily "
+            "unavailable. Please try again in a few minutes."
+        )
+    except requests.exceptions.HTTPError as e:
+        raise ValueError(
+            f"Open-Meteo API error ({e.response.status_code}). "
+            f"The service may be temporarily unavailable."
+        )
+    data = resp.json()
+
+    hourly = data.get("hourly", {})
+    times = hourly.get("time", [])
+    if not times:
+        raise ValueError(
+            f"No data returned from Open-Meteo for {lat:.2f}, {lon:.2f} "
+            f"at {valid_dt:%Y-%m-%d %HZ}"
+        )
+
+    # Use the first (and only) timestep
+    idx = 0
+
+    pressure, height, temp, dewpoint, wind_dir, wind_spd = [], [], [], [], [], []
+
+    for p in PRESSURE_LEVELS:
+        t_val = hourly.get(f"temperature_{p}hPa", [None])[idx]
+        td_val = hourly.get(f"dew_point_{p}hPa", [None])[idx]
+        ws_val = hourly.get(f"wind_speed_{p}hPa", [None])[idx]
+        wd_val = hourly.get(f"wind_direction_{p}hPa", [None])[idx]
+        gh_val = hourly.get(f"geopotential_height_{p}hPa", [None])[idx]
+
+        # Skip levels with missing critical data
+        if any(v is None for v in [t_val, td_val, gh_val]):
+            continue
+
+        pressure.append(float(p))
+        height.append(float(gh_val))
+        temp.append(float(t_val))
+        dewpoint.append(float(td_val))
+        wind_dir.append(float(wd_val) if wd_val is not None else np.nan)
+        wind_spd.append(float(ws_val) if ws_val is not None else np.nan)
+
+    if len(pressure) < 5:
+        raise ValueError(
+            f"Insufficient point sounding data ({len(pressure)} levels) "
+            f"from Open-Meteo for {lat:.2f}, {lon:.2f}"
+        )
+
+    lat_str = f"{abs(float(lat)):.2f}°{'N' if float(lat) >= 0 else 'S'}"
+    lon_str = f"{abs(float(lon)):.2f}°{'W' if float(lon) < 0 else 'E'}"
+
+    return {
+        "pressure": np.array(pressure) * units.hPa,
+        "height": np.array(height) * units.meter,
+        "temperature": np.array(temp) * units.degC,
+        "dewpoint": np.array(dewpoint) * units.degC,
+        "wind_direction": np.array(wind_dir) * units.degree,
+        "wind_speed": np.array(wind_spd) * units.knot,
+        "has_wind": np.ones(len(pressure), dtype=bool),
+        "station_info": {
+            "lat": float(lat),
+            "lon": float(lon),
+            "name": f"Point Sounding ({lat_str}, {lon_str})",
+        },
+    }
+
+
 def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
                    model="rap", fhour=0):
     """
@@ -831,9 +720,9 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
     dt : datetime
         Target date/time (UTC).
     source : str
-        One of: obs, rap, bufkit, acars.
+        One of: obs, bufkit, psu.
     lat, lon : float or None
-        Required for rap (point-based source).
+        For point soundings at arbitrary coordinates.
     model : str
         BUFKIT model name (rap, hrrr, nam, …).  Ignored for other sources.
     fhour : int
@@ -888,17 +777,6 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
             f"or the data hasn't been ingested yet. Try a forecast model (HRRR/RAP/NAM) instead."
         )
 
-    # ── RAP Analysis ────────────────────────────────────────────────
-    if source == "rap":
-        if lat is None or lon is None:
-            if station_id and station_id.upper() in STATIONS:
-                _, lat, lon = STATIONS[station_id.upper()]
-            else:
-                raise ValueError(
-                    "RAP source requires --lat / --lon (or a known --station)."
-                )
-        return fetch_rap_sounding(lat, lon, dt)
-
     # ── BUFKIT ──────────────────────────────────────────────────────
     if source == "bufkit":
         if station_id is None:
@@ -910,14 +788,6 @@ def fetch_sounding(station_id, dt, source="obs", lat=None, lon=None,
         if station_id is None:
             raise ValueError("PSU source requires --station.")
         return fetch_psu_bufkit(station_id, model=model, fhour=fhour)
-
-    # ── ACARS ───────────────────────────────────────────────────────
-    if source == "acars":
-        airport = station_id or ""
-        if not airport:
-            raise ValueError("ACARS source requires --station (airport code).")
-        return fetch_acars_sounding(airport, dt)
-
 
     raise ValueError(
         f"Unknown source '{source}'. Options: {list(DATA_SOURCES.keys())}"

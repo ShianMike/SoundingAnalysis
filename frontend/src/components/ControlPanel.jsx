@@ -106,10 +106,6 @@ const SOURCE_META = {
     label: "Observed Radiosonde",
     desc: "Real observed upper-air data from the Iowa Environmental Mesonet and University of Wyoming archives.",
   },
-  rap: {
-    label: "RAP Model Analysis",
-    desc: "Rapid Refresh model analysis at any lat/lon point over CONUS via NCEI THREDDS. ~13 km resolution.",
-  },
   bufkit: {
     label: "BUFKIT Forecast",
     desc: "Station-based forecast soundings from HRRR, RAP, NAM, GFS, and other models via Iowa State archive.",
@@ -117,10 +113,6 @@ const SOURCE_META = {
   psu: {
     label: "PSU BUFKIT (Latest)",
     desc: "Latest model run from Penn State's real-time BUFKIT feed. Supports RAP, HRRR, NAM, GFS, and more.",
-  },
-  acars: {
-    label: "ACARS Aircraft Obs",
-    desc: "ACARS/AMDAR aircraft observation profiles at major airports from the IEM archive.",
   },
 };
 
@@ -272,8 +264,6 @@ export default function ControlPanel({
   const [model, setModel] = useState(urlParams?.model || "hrrr");
   const [fhour, setFhour] = useState(urlParams?.fhour != null ? String(urlParams.fhour) : "0");
   const [stationSearch, setStationSearch] = useState("");
-  const [rapStationSearch, setRapStationSearch] = useState("");
-  const [rapDropOpen, setRapDropOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanMode, setScanMode] = useState("obs"); // "obs" | "forecast"
   const [fcstModel, setFcstModel] = useState("hrrr");
@@ -327,10 +317,14 @@ export default function ControlPanel({
     if (onStationChange) onStationChange(id);
   };
 
+  // Point sounding mode — set when user clicks map for arbitrary lat/lon
+  const [pointMode, setPointMode] = useState(false);
+
   // Sync station from parent (map click) and scroll into view
   useEffect(() => {
     if (selectedStation && selectedStation !== station) {
       setStationLocal(selectedStation);
+      setPointMode(false);  // Station selection exits point mode
       const stn = stations.find((s) => s.id === selectedStation);
       if (stn) {
         setLat(String(stn.lat));
@@ -346,13 +340,14 @@ export default function ControlPanel({
     }
   }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync lat/lon from map click
+  // Sync lat/lon from map click — enter point sounding mode
   useEffect(() => {
     if (mapLatLon) {
       setLat(String(mapLatLon.lat));
       setLon(String(mapLatLon.lon));
+      setPointMode(true);
     }
-  }, [mapLatLon]);
+  }, [mapLatLon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync custom storm motion from map draw tool
   useEffect(() => {
@@ -375,16 +370,6 @@ export default function ControlPanel({
     }
   }, [mapBoundaryOrientation]);
 
-  // Close RAP station dropdown on outside click
-  useEffect(() => {
-    if (!rapDropOpen) return;
-    const handler = (e) => {
-      if (!e.target.closest(".cp-rap-station-pick")) setRapDropOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [rapDropOpen]);
-
   // Scroll selected station into view on mount
   useEffect(() => {
     if (listRef.current) {
@@ -393,9 +378,8 @@ export default function ControlPanel({
     }
   }, [stations]);
 
-  const needsLatLon = source === "rap";
-  const needsStation = source === "obs" || source === "bufkit" || source === "acars" || source === "psu";
-  const needsModel = source === "bufkit" || source === "psu";
+  const needsStation = source === "obs" || source === "bufkit" || source === "psu";
+  const needsModel = source === "bufkit" || source === "psu" || pointMode;
 
   // Build risk lookup from scan results
   const riskMap = {};
@@ -479,8 +463,17 @@ export default function ControlPanel({
     e.preventDefault();
     const params = { source };
 
-    if (needsStation) params.station = station;
-    if (needsLatLon) {
+    // Point sounding: send lat/lon only, no station
+    if (pointMode && lat && lon) {
+      params.lat = parseFloat(lat);
+      params.lon = parseFloat(lon);
+      // Point soundings need a model source
+      if (source === "obs") params.source = "bufkit";
+    } else if (needsStation) {
+      params.station = station;
+    }
+    // Include lat/lon when available (for obs nearest-station lookup)
+    if (!pointMode && lat && lon) {
       params.lat = parseFloat(lat);
       params.lon = parseFloat(lon);
     }
@@ -544,6 +537,7 @@ export default function ControlPanel({
   const handleStationSelect = (id, autoFetch = false) => {
     setStation(id);
     setStationSearch("");
+    setPointMode(false);  // Exit point mode when selecting a station
     const stn = stations.find((s) => s.id === id);
     if (stn) {
       setLat(String(stn.lat));
@@ -565,13 +559,6 @@ export default function ControlPanel({
         if (source === "bufkit" || source === "psu") {
           params.model = model;
           params.fhour = parseInt(fhour) || 0;
-        }
-        if (source === "rap") {
-          const s = stations.find((st) => st.id === id);
-          if (s) {
-            params.lat = s.lat;
-            params.lon = s.lon;
-          }
         }
       }
       onSubmit(params);
@@ -890,102 +877,43 @@ export default function ControlPanel({
                 ))}
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Lat/Lon */}
-        {needsLatLon && (
-          <div className="cp-section">
-            <label className="cp-label">
-              <MapPin size={14} />
-              Coordinates
-            </label>
-
-            {/* Quick-pick from station */}
-            <div className="cp-rap-station-pick">
-              <div className="cp-input-wrap cp-search-flex">
-                <Search size={14} className="cp-input-icon" />
-                <input
-                  type="text"
-                  className="cp-input"
-                  placeholder="Jump to station..."
-                  value={rapStationSearch}
-                  onChange={(e) => setRapStationSearch(e.target.value)}
-                  onFocus={() => setRapDropOpen(true)}
-                />
-              </div>
-              {rapDropOpen && rapStationSearch.trim().length > 0 && (
-                <div className="cp-rap-dropdown">
-                  {stations
-                    .filter((s) =>
-                      s.id.toLowerCase().includes(rapStationSearch.toLowerCase()) ||
-                      s.name.toLowerCase().includes(rapStationSearch.toLowerCase())
-                    )
-                    .slice(0, 8)
-                    .map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className="cp-rap-drop-item"
-                        onClick={() => {
-                          setLat(String(s.lat));
-                          setLon(String(s.lon));
-                          setRapStationSearch("");
-                          setRapDropOpen(false);
-                        }}
-                      >
-                        <span className="cp-rap-drop-id">{s.id}</span>
-                        <span className="cp-rap-drop-name">{s.name}</span>
-                        <span className="cp-rap-drop-coords">{s.lat.toFixed(2)}, {s.lon.toFixed(2)}</span>
-                      </button>
-                    ))}
-                  {stations.filter((s) =>
-                    s.id.toLowerCase().includes(rapStationSearch.toLowerCase()) ||
-                    s.name.toLowerCase().includes(rapStationSearch.toLowerCase())
-                  ).length === 0 && (
-                    <div className="cp-rap-drop-empty">No stations found</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <p className="cp-rap-hint">
-              <Crosshair size={12} />
-              Type a station or click anywhere on the map
-            </p>
-
-            <div className="cp-row">
-              <div className="cp-field">
-                <span className="cp-field-label">Lat</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="cp-input cp-input-sm"
-                  placeholder="35.22"
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="cp-field">
-                <span className="cp-field-label">Lon</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="cp-input cp-input-sm"
-                  placeholder="-97.46"
-                  value={lon}
-                  onChange={(e) => setLon(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            {lat && lon && (
-              <div className="cp-rap-coords-preview">
+            {lat && lon && !pointMode && (
+              <div className="cp-coords-preview">
                 <MapPin size={12} />
                 <span>{parseFloat(lat).toFixed(2)}°N, {Math.abs(parseFloat(lon)).toFixed(2)}°{parseFloat(lon) < 0 ? "W" : "E"}</span>
+                <span className="cp-coords-hint">· station selected</span>
               </div>
             )}
+            {pointMode && lat && lon && (
+              <div className="cp-point-banner">
+                <div className="cp-point-row">
+                  <Crosshair size={13} />
+                  <span className="cp-point-tag">POINT SOUNDING</span>
+                  <button
+                    type="button"
+                    className="cp-point-clear"
+                    onClick={() => {
+                      setPointMode(false);
+                      const stn = stations.find((s) => s.id === station);
+                      if (stn) {
+                        setLat(String(stn.lat));
+                        setLon(String(stn.lon));
+                      }
+                    }}
+                    title="Switch back to station mode"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <span className="cp-point-coords">
+                  {parseFloat(lat).toFixed(2)}°N, {Math.abs(parseFloat(lon)).toFixed(2)}°{parseFloat(lon) < 0 ? "W" : "E"}
+                </span>
+              </div>
+            )}
+            <p className="cp-map-click-hint">
+              <Crosshair size={11} />
+              Click map for point sounding
+            </p>
           </div>
         )}
 
@@ -1069,7 +997,7 @@ export default function ControlPanel({
             <Calendar size={14} />
             Date / Time (UTC)
           </label>
-          {source === "obs" || source === "acars" ? (
+          {source === "obs" ? (
             <div className="cp-dt-picker">
               <div className="cp-dt-hours">
                 {[
@@ -1363,7 +1291,7 @@ export default function ControlPanel({
             type="button"
             className={`cp-toggle-btn ${smoothEnabled ? "cp-toggle-btn--active" : ""}`}
             onClick={() => setSmoothEnabled((v) => !v)}
-            title="Apply Gaussian smoothing to T, Td, and wind profiles — reduces noise in ACARS and model data"
+            title="Apply Gaussian smoothing to T, Td, and wind profiles — reduces noise in model data"
           >
             <Waves size={14} />
             <span>Profile Smoothing</span>

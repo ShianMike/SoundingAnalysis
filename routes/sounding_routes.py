@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from sounding import (
     STATIONS, STATION_WMO,
     fetch_sounding, fetch_psu_bufkit, fetch_bufkit_sounding,
+    fetch_point_sounding,
     fetch_vad_data,
     compute_parameters, plot_sounding,
     get_latest_sounding_time, find_nearest_station,
@@ -63,20 +64,24 @@ def get_sounding():
     if station:
         station = station.upper()
 
+    # Point sounding: lat/lon without station for forecast sources
+    is_point_sounding = (
+        station is None
+        and lat is not None and lon is not None
+        and source in ("bufkit", "psu")
+    )
+
     if source == "obs" and (not station or station not in STATION_WMO):
         return jsonify({"error": f"Unknown station '{station}'. Provide a valid 3-letter ID."}), 400
 
-    if source == "rap" and lat is None and lon is None:
-        if station and station in STATIONS:
-            _, lat, lon = STATIONS[station]
-        else:
-            return jsonify({"error": "RAP source requires lat/lon or a known station."}), 400
-
     try:
-        data = fetch_sounding(
-            station_id=station, dt=dt, source=source,
-            lat=lat, lon=lon, model=model, fhour=fhour,
-        )
+        if is_point_sounding:
+            data = fetch_point_sounding(lat, lon, dt, model=model, fhour=int(fhour))
+        else:
+            data = fetch_sounding(
+                station_id=station, dt=dt, source=source,
+                lat=lat, lon=lon, model=model, fhour=fhour,
+            )
     except (ValueError, Exception) as fetch_err:
         fallback_data = None
         if source == "bufkit":
@@ -113,6 +118,11 @@ def get_sounding():
                 print(f"[VAD] Non-fatal error fetching VAD: {ve}")
 
         plot_id = station or source.upper()
+        if is_point_sounding:
+            lat_s = f"{abs(float(lat)):.2f}{'N' if float(lat) >= 0 else 'S'}"
+            lon_s = f"{abs(float(lon)):.2f}{'W' if float(lon) < 0 else 'E'}"
+            plot_id = f"{lat_s} {lon_s}"
+            source = "point"
         fig = plot_sounding(data, params, plot_id, dt, vad_data=vad_result,
                             sr_hodograph=sr_hodograph, theme=theme,
                             colorblind=colorblind,

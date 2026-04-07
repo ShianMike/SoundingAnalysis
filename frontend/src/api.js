@@ -83,7 +83,12 @@ export async function fetchSounding(params) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   }, 120000);
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(res.ok ? "Invalid response from server" : `Request failed (${res.status})`);
+  }
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 }
@@ -262,15 +267,6 @@ export async function fetchForecastProfiles(params) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Forecast profiles request failed");
   return data;
-}
-
-/**
- * Fetch ACARS/AMDAR airport locations for the map overlay.
- */
-export async function fetchAcarsAirports() {
-  const res = await fetchWithTimeout(`${API_BASE}/api/acars-airports`, {}, 10000);
-  if (!res.ok) throw new Error("Failed to fetch ACARS airports");
-  return res.json();
 }
 
 /**
