@@ -381,6 +381,7 @@ export default function App() {
             colorblind={colorblind}
             onToggleColorblind={toggleColorblind}
             onNavigateUpload={() => setPage("upload")}
+
             onShowShortcuts={() => setShowShortcuts(true)}
           />
           {showHistory && (

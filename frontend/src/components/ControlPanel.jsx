@@ -1414,6 +1414,16 @@ export default function ControlPanel({
               <Upload size={14} />
               <span>Upload</span>
             </button>
+            <a
+              href="https://shianmike.github.io/ModelForecast/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cp-settings-btn"
+              title="Open gridded model forecast maps"
+            >
+              <Map size={14} />
+              <span>Forecast</span>
+            </a>
           </div>
         </div>
 

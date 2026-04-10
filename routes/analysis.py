@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request
 from metpy.units import units as mpu
 
 import matplotlib
+import matplotlib.cm as mpl_cm
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -184,9 +185,9 @@ def ensemble_plume():
 
         n = len(profiles)
         if cb:
-            colors = plt.cm.viridis(np.linspace(0.2, 0.9, n))
+            colors = plt.get_cmap("viridis")(np.linspace(0.2, 0.9, n))
         else:
-            colors = plt.cm.plasma(np.linspace(0.15, 0.85, n))
+            colors = plt.get_cmap("plasma")(np.linspace(0.15, 0.85, n))
 
         # Interpolate each member to a common pressure grid for percentile bands.
         p_grid = np.arange(1000, 99, -25, dtype=float)  # hPa (surface to upper levels)
@@ -427,7 +428,7 @@ def forecast_profiles():
     if len(results) == 0:
         return jsonify({"error": "No forecast profiles could be loaded.", "errors": errors}), 400
 
-    return _nan_safe(jsonify({
+    return jsonify(_nan_safe({
         "frames": results,
         "errors": errors if errors else None,
         "meta": {
@@ -499,7 +500,7 @@ def compare_soundings():
             "params": serialized,
             "meta": {
                 "station": stn,
-                "stationName": STATIONS.get(stn, (stn or src.upper(),))[0],
+                "stationName": STATIONS.get(stn or "", (stn or src.upper(),))[0],
                 "source": src,
                 "date": dt.strftime("%Y-%m-%d %HZ"),
                 "levels": len(data["pressure"]),
@@ -615,6 +616,8 @@ def merge_profiles_endpoint():
 
     if len(items) != 2:
         return jsonify({"error": "Exactly 2 soundings required for merging."}), 400
+
+    dt = get_latest_sounding_time()
 
     try:
         datasets = []

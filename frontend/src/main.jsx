@@ -9,10 +9,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Register service worker for offline support (production only)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    const base = import.meta.env.BASE_URL || '/';
-    navigator.serviceWorker.register(`${base}sw.js`).catch(() => {});
-  });
+// Service worker: register in production, unregister in development
+if ('serviceWorker' in navigator) {
+  if (import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+      const base = import.meta.env.BASE_URL || '/';
+      navigator.serviceWorker.register(`${base}sw.js`).catch(() => {});
+    });
+  } else {
+    // Unregister any stale SW from prior sessions so it doesn't intercept Vite dev requests
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      for (const r of regs) r.unregister();
+    });
+  }
 }
