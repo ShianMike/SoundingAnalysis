@@ -47,7 +47,7 @@ _is_production = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
 
 csp = {
     "default-src": "'self'",
-    "script-src":  "'self' 'unsafe-inline'",
+    "script-src":  "'self'",
     "style-src":   "'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
     "font-src":    "'self' https://fonts.gstatic.com data:",
     "img-src":     "'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
