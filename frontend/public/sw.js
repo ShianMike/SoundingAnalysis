@@ -9,9 +9,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         .then((clients) => clients.forEach((c) => c.navigate(c.url)))
     );
   });
-  // Stop here — do NOT register any fetch handler
-  return;
-}
+} else {
 
 const CACHE_NAME = "sounding-v4";
 const STATIC_ASSETS = [
@@ -88,3 +86,5 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+} // end else (production)

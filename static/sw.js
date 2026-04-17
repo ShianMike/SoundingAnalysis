@@ -1,3 +1,16 @@
+// In dev mode (Vite), self-destruct so the SW doesn't intercept module requests
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  self.addEventListener("install", () => self.skipWaiting());
+  self.addEventListener("activate", (event) => {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .then(() => self.registration.unregister())
+        .then(() => self.clients.matchAll())
+        .then((clients) => clients.forEach((c) => c.navigate(c.url)))
+    );
+  });
+} else {
+
 const CACHE_NAME = "sounding-v4";
 const STATIC_ASSETS = [
   "./",
@@ -73,3 +86,5 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+} // end else (production)

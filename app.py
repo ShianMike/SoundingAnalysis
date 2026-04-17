@@ -18,6 +18,8 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 # ─── Allowed origins (lock down CORS) ──────────────────────────────
 ALLOWED_ORIGINS = [
+    "https://soundingscopepy.app",
+    "https://www.soundingscopepy.app",
     "https://shianmike.github.io",
     "https://soundinganalysis-752306366750.asia-southeast1.run.app",
     "https://soundinganalysis-uvktu4ziyq-as.a.run.app",
@@ -56,6 +58,7 @@ csp = {
                    "https://www.spc.noaa.gov https://spc.noaa.gov "
                    "https://api.weather.gov "
                    "https://api.livestormchasing.com https://edge.livestormchasing.com "
+                   "https://soundingscopepy.app https://www.soundingscopepy.app "
                    "https://soundinganalysis-752306366750.asia-southeast1.run.app "
                    "https://soundinganalysis-uvktu4ziyq-as.a.run.app "
                    "https://*.run.app https://*.a.run.app",
