@@ -14,7 +14,7 @@ from flask_talisman import Talisman
 
 import routes  # noqa: registers blueprints
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 # ─── Allowed origins (lock down CORS) ──────────────────────────────
 ALLOWED_ORIGINS = [
