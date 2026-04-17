@@ -61,7 +61,10 @@ csp = {
                    "https://soundingscopepy.app https://www.soundingscopepy.app "
                    "https://soundinganalysis-752306366750.asia-southeast1.run.app "
                    "https://soundinganalysis-uvktu4ziyq-as.a.run.app "
-                   "https://*.run.app https://*.a.run.app",
+                   "https://*.run.app https://*.a.run.app "
+                   "https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
+                   "https://*.tile.opentopomap.org https://tilecache.rainviewer.com "
+                   "https://*.openstreetmap.org",
     "media-src":   "'self' blob:",
     "frame-ancestors": "'none'",
     "base-uri":    "'self'",
