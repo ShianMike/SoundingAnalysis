@@ -11,7 +11,6 @@ const HEIGHT_COLORS = [
   { maxKm: 6, color: "#22c55e", label: "3–6 km" },
   { maxKm: 9, color: "#3b82f6", label: "6–9 km" },
   { maxKm: 12, color: "#a855f7", label: "9–12 km" },
-  { maxKm: Infinity, color: "#888", label: ">12 km" },
 ];
 
 function windComponents(wd, ws) {
@@ -25,7 +24,7 @@ function heightColor(hAgl) {
   for (const hc of HEIGHT_COLORS) {
     if (km <= hc.maxKm) return hc.color;
   }
-  return "#888";
+  return "#a855f7"; // 9–12 km color as fallback (should never exceed 12 km now)
 }
 
 function streamwisenessColor(sw) {
@@ -87,7 +86,7 @@ export default function InteractiveHodograph({ profile, params, theme = "dark" }
     return () => ro.disconnect();
   }, []);
 
-  /* Build wind vectors with height info */
+  /* Build wind vectors with height info — capped at 12 km AGL */
   const windData = useMemo(() => {
     if (!profile || profile.length === 0) return [];
     const sfcH = profile[0]?.h ?? 0;
@@ -96,7 +95,8 @@ export default function InteractiveHodograph({ profile, params, theme = "dark" }
       .map((lev) => {
         const comp = windComponents(lev.wd, lev.ws);
         return { ...comp, hAgl: lev.h - sfcH, p: lev.p, wd: lev.wd, ws: lev.ws };
-      });
+      })
+      .filter((w) => w.hAgl <= 12000);
   }, [profile]);
 
   /* Determine max speed for scale */
@@ -375,7 +375,6 @@ export default function InteractiveHodograph({ profile, params, theme = "dark" }
       legY += gradH + 6;
     } else {
       for (const hc of HEIGHT_COLORS) {
-        if (hc.maxKm === Infinity && !windData.some((w) => w.hAgl > 12000)) continue;
         ctx.fillStyle = hc.color;
         ctx.fillRect(legX, legY, 12, 10);
         ctx.fillStyle = colors.text;

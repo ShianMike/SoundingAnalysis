@@ -6,13 +6,13 @@
 [![Made with Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Made with React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Deployed on Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?style=flat-square&logo=googlecloud&logoColor=white)](https://soundinganalysis-752306366750.asia-southeast1.run.app)
-[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-222?style=flat-square&logo=github&logoColor=white)](https://shianmike.github.io/SoundingAnalysis/)
+[![Website](https://img.shields.io/badge/Website-live-0f766e?style=flat-square&logo=googlechrome&logoColor=white)](https://soundingscopepy.app)
 [![License](https://img.shields.io/badge/license-Educational%20%2F%20Research-green?style=flat-square)](#license)
 [![MetPy](https://img.shields.io/badge/MetPy-powered-orange?style=flat-square&logo=python&logoColor=white)](https://unidata.github.io/MetPy/)
 
 A full-stack atmospheric sounding analysis platform that fetches real upper-air data from multiple sources, computes 50+ thermodynamic and kinematic parameters, and renders comprehensive Skew-T / Hodograph analysis with interactive overlays, live radar, and severe-weather risk scanning — all in a single Progressive Web App. Supports point soundings at any lat/lon via Open-Meteo pressure-level API.
 
-**Live site:** <https://shianmike.github.io/SoundingAnalysis/>
+**Live site:** <https://soundingscopepy.app>
 
 ---
 
@@ -418,7 +418,7 @@ Set `VITE_API_URL` to point to your backend (defaults to `http://localhost:5000`
 | Component | Platform | Region | URL |
 |---|---|---|---|
 | **Backend API** | Google Cloud Run | asia-southeast1 (Singapore) | `https://soundinganalysis-752306366750.asia-southeast1.run.app` |
-| **Frontend** | GitHub Pages | — | `https://shianmike.github.io/SoundingAnalysis/` |
+| **Frontend** | Custom Domain | — | `https://soundingscopepy.app` |
 
 **Cloud Run configuration:** 1 GiB memory, 1 vCPU, max 2 instances, 300 s timeout, concurrency 10/instance.
 

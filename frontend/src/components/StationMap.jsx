@@ -21,7 +21,8 @@ function RadarLayer({ url, opacity, ...rest }) {
   }, [opacity]);
   useEffect(() => {
     if (ref.current && url !== prevUrl.current) {
-      ref.current.setUrl(url);
+      ref.current.setUrl(url, false);
+      ref.current.redraw();
       prevUrl.current = url;
     }
   }, [url]);
@@ -86,6 +87,27 @@ function buildMosaicFrames(count = 24) {
       + String(t.getUTCHours()).padStart(2, "0")
       + String(t.getUTCMinutes()).padStart(2, "0");
     frames.push({ time: Math.floor(t.getTime() / 1000), ts });
+  }
+  return frames;
+}
+
+/** Build synthetic single-site archive frames from estimated 5-min scan intervals.
+ *  Used as a fallback when the IEM scan-list API returns no results. */
+function buildSingleSiteFrames(radar, product, count = 24) {
+  const now = new Date();
+  now.setUTCSeconds(0, 0);
+  now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5);
+  const frames = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const t = new Date(now.getTime() - i * 5 * 60_000);
+    const yyyy = t.getUTCFullYear().toString();
+    const mm   = String(t.getUTCMonth() + 1).padStart(2, "0");
+    const dd   = String(t.getUTCDate()).padStart(2, "0");
+    const hh   = String(t.getUTCHours()).padStart(2, "0");
+    const mi   = String(t.getUTCMinutes()).padStart(2, "0");
+    const ts   = `${yyyy}${mm}${dd}${hh}${mi}`;
+    const url  = `https://mesonet.agron.iastate.edu/archive/data/${yyyy}/${mm}/${dd}/GIS/ridge/${radar}/${product}/${radar}_${product}_${ts}.png`;
+    frames.push({ url, time: Math.floor(t.getTime() / 1000), ts });
   }
   return frames;
 }
@@ -501,26 +523,41 @@ function velImageBounds(wld, width = 1000, height = 1000) {
 }
 
 /** Fetch velocity scan list + world file for a radar/product, return frames. */
+/** Compute approximate ImageOverlay bounds for a NEXRAD site from lat/lon.
+ *  IEM archive images cover ~230 km radius (≈2.07° lat). */
+function nexradBoundsFromLatLon(lat, lon) {
+  const latR = 2.07;
+  const lonR = latR / Math.cos((lat * Math.PI) / 180);
+  return [[lat - latR, lon - lonR], [lat + latR, lon + lonR]];
+}
+
 async function fetchVelFrames(radar, product, hours = VEL_FRAME_HOURS) {
   const end = new Date();
   const start = new Date(end.getTime() - hours * 3600_000);
   const iso = (d) => d.toISOString().replace(/\.\d+Z/, "Z");
 
-  // 1. Get scan list first
+  // 1. Get scan list
   const listRes = await fetch(`https://mesonet.agron.iastate.edu/json/radar.py?operation=list&radar=${radar}&product=${product}&start=${iso(start)}&end=${iso(end)}`);
   if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
   const listData = await listRes.json();
   const scans = listData.scans || [];
   if (!scans.length) return { frames: [], bounds: null };
 
-  // 2. Use the first actual scan's timestamp to fetch the world file (always exists)
+  // 2. Try to get precise bounds from world file; fall back to lat/lon approximation
+  let bounds = null;
   const firstTs = scans[0].ts.replace(/[-:TZ]/g, "").slice(0, 12);
   const firstDate = scans[0].ts.slice(0, 10).split("-");
   const wldUrl = `https://mesonet.agron.iastate.edu/archive/data/${firstDate[0]}/${firstDate[1]}/${firstDate[2]}/GIS/ridge/${radar}/${product}/${radar}_${product}_${firstTs}.wld`;
   const wldRes = await fetch(wldUrl).catch(() => null);
-  if (!wldRes || !wldRes.ok) return { frames: [], bounds: null };
-  const wld = parseWorldFile(await wldRes.text());
-  const bounds = velImageBounds(wld);
+  if (wldRes?.ok) {
+    const wld = parseWorldFile(await wldRes.text());
+    bounds = velImageBounds(wld);
+  } else {
+    // Fall back to analytical bounds from radar lat/lon
+    const site = NEXRAD_SITES.find((s) => s[0] === radar);
+    if (site) bounds = nexradBoundsFromLatLon(site[1], site[2]);
+  }
+  if (!bounds) return { frames: [], bounds: null };
 
   // 3. Build frame objects with archive image URLs
   const frames = scans.map((s) => {
@@ -1019,8 +1056,21 @@ export default function StationMap({
       const id = setInterval(load, 300_000);
       return () => { cancelled = true; clearInterval(id); };
     } else if (radarSource === "singlesite") {
-      // Single-site via NWS WMS — no frames needed, layer is always live
-      return;
+      const load = async () => {
+        try {
+          // IEM archives N0B (super-res base reflectivity); N0Q is no longer available
+          const { frames, bounds } = await fetchVelFrames(velocityRadar.id, "N0B", 2);
+          if (cancelled) return;
+          setRadarFrames(frames);
+          setSsRadarBounds(bounds);
+          setRadarFrame(Math.max(0, frames.length - 1));
+        } catch (e) {
+          console.warn("IEM single-site reflectivity frame error:", e);
+        }
+      };
+      load();
+      const id = setInterval(load, 120_000);
+      return () => { cancelled = true; clearInterval(id); };
     } else {
       // Mosaic: build frames from timestamps (last 2 hrs, 5-min intervals)
       const frames = buildMosaicFrames(24);
@@ -2323,10 +2373,19 @@ export default function StationMap({
             )}
           </Pane>
 
-          {/* Single-site NEXRAD super-res base reflectivity via NWS WMS */}
-          {showRadar && radarSource === "singlesite" && (
+          {/* Single-site NEXRAD reflectivity — archive ImageOverlay with real scan timestamps */}
+          {showRadar && radarSource === "singlesite" && ssRadarBounds && radarFrames[radarFrame]?.url ? (
+            <ImageOverlay
+              key={`ss-bref-frame-${velocityRadar.id}-${radarFrames[radarFrame].ts}`}
+              pane="radar-tiles"
+              url={radarFrames[radarFrame].url}
+              bounds={ssRadarBounds}
+              opacity={0.85}
+              attribution={`${velocityRadar.id} N0B via IEM`}
+            />
+          ) : showRadar && radarSource === "singlesite" ? (
             <WMSTileLayer
-              key={`ss-bref-${velocityRadar.id}`}
+              key={`ss-bref-wms-${velocityRadar.id}`}
               pane="radar-tiles"
               url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bref/ows`}
               layers={`k${velocityRadar.id.toLowerCase()}_sr_bref`}
@@ -2336,62 +2395,77 @@ export default function StationMap({
               maxZoom={18}
               attribution="NWS NEXRAD"
             />
-          )}
+          ) : null}
 
-          {/* Range ring + site marker for single-site radar */}
-          {showRadar && radarSource === "singlesite" && (
-            <Pane name="ss-range" style={{ zIndex: 310, pointerEvents: "none" }}>
-              <Circle
-                center={[velocityRadar.lat, velocityRadar.lon]}
-                radius={230000}
-                pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+          {/* Range ring + site marker for single-site radar — Pane always mounted to avoid react-leaflet remount errors */}
+          <Pane name="ss-range" style={{ zIndex: 310, pointerEvents: "none" }}>
+            {showRadar && radarSource === "singlesite" && (
+              <>
+                <Circle
+                  center={[velocityRadar.lat, velocityRadar.lon]}
+                  radius={230000}
+                  pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+                />
+                <CircleMarker
+                  center={[velocityRadar.lat, velocityRadar.lon]}
+                  radius={4}
+                  pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
+                >
+                  <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
+                    {velocityRadar.id}
+                  </Tooltip>
+                </CircleMarker>
+              </>
+            )}
+          </Pane>
+
+          {/* NEXRAD velocity animation — archived IEM frames with WMS fallback while frames load */}
+          <Pane name="velocity-tiles" style={{ zIndex: 305 }}>
+            {showVelocity && velBounds && velFrames[velFrame]?.url ? (
+              <ImageOverlay
+                key={`vel-frame-${velocityRadar.id}-${velProduct}-${velFrames[velFrame].ts}`}
+                pane="velocity-tiles"
+                url={velFrames[velFrame].url}
+                bounds={velBounds}
+                opacity={0.85}
+                attribution="Velocity via IEM"
               />
-              <CircleMarker
-                center={[velocityRadar.lat, velocityRadar.lon]}
-                radius={4}
-                pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
-              >
-                <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
-                  {velocityRadar.id}
-                </Tooltip>
-              </CircleMarker>
-            </Pane>
-          )}
-
-          {/* NEXRAD Velocity overlay — NWS WMS super-res base velocity */}
-          {showVelocity && (
-            <WMSTileLayer
-              key={`vel-bvel-${velocityRadar.id}`}
-              url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bvel/ows`}
-              layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
-              format="image/png"
-              transparent={true}
-              opacity={0.85}
-              zIndex={300}
-              maxZoom={18}
-              attribution="NWS NEXRAD"
-            />
-          )}
-
-          {/* Range ring + site marker for velocity radar */}
-          {showVelocity && (
-            <Pane name="vel-range" style={{ zIndex: 310, pointerEvents: "none" }}>
-              <Circle
-                center={[velocityRadar.lat, velocityRadar.lon]}
-                radius={230000}
-                pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+            ) : showVelocity ? (
+              <WMSTileLayer
+                key={`vel-bvel-${velocityRadar.id}`}
+                pane="velocity-tiles"
+                url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bvel/ows`}
+                layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
+                format="image/png"
+                transparent={true}
+                opacity={0.85}
+                maxZoom={18}
+                attribution="NWS NEXRAD"
               />
-              <CircleMarker
-                center={[velocityRadar.lat, velocityRadar.lon]}
-                radius={4}
-                pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
-              >
-                <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
-                  {velocityRadar.id}
-                </Tooltip>
-              </CircleMarker>
-            </Pane>
-          )}
+            ) : null}
+          </Pane>
+
+          {/* Range ring + site marker for velocity radar — Pane always mounted */}
+          <Pane name="vel-range" style={{ zIndex: 310, pointerEvents: "none" }}>
+            {showVelocity && (
+              <>
+                <Circle
+                  center={[velocityRadar.lat, velocityRadar.lon]}
+                  radius={230000}
+                  pathOptions={{ color: "#00e5ff", weight: 1.2, fillColor: "transparent", fillOpacity: 0, dashArray: "6 4", opacity: 0.5 }}
+                />
+                <CircleMarker
+                  center={[velocityRadar.lat, velocityRadar.lon]}
+                  radius={4}
+                  pathOptions={{ color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 1, weight: 1 }}
+                >
+                  <Tooltip direction="top" offset={[0, -6]} permanent className="smap-vel-site-label">
+                    {velocityRadar.id}
+                  </Tooltip>
+                </CircleMarker>
+              </>
+            )}
+          </Pane>
 
           {/* SPC outlook polygons (render first so stations sit on top) */}
           {showOutlook && outlookData && <OutlookLayer data={outlookData} outlookType={effectiveType} />}
@@ -2409,60 +2483,56 @@ export default function StationMap({
           {/* SPC Mesoscale Discussions & Watches */}
           {showMdWatch && <MdWatchLayer mdData={mdData} watchData={watchData} />}
 
-          {/* Lightning strikes */}
-          {showLightning && lightningStrikes.length > 0 && (
-            <Pane name="lightning-layer" style={{ zIndex: 425 }}>
-              {lightningStrikes.map((s) => {
-                const age = Date.now() - s.time;
-                const opacity = Math.max(0.2, 1 - age / 300_000);
-                return (
-                  <CircleMarker
-                    key={s.id}
-                    center={[s.lat, s.lon]}
-                    radius={3}
-                    pathOptions={{
-                      color: "#fff",
-                      fillColor: age < 10_000 ? "#ffffff" : age < 60_000 ? "#ffe066" : "#ffaa00",
-                      fillOpacity: opacity,
-                      weight: age < 10_000 ? 2 : 1,
-                      className: age < 10_000 ? "smap-lightning-flash" : "",
-                    }}
-                  />
-                );
-              })}
-            </Pane>
-          )}
+          {/* Lightning strikes — Pane always mounted */}
+          <Pane name="lightning-layer" style={{ zIndex: 425 }}>
+            {showLightning && lightningStrikes.length > 0 && lightningStrikes.map((s) => {
+              const age = Date.now() - s.time;
+              const opacity = Math.max(0.2, 1 - age / 300_000);
+              return (
+                <CircleMarker
+                  key={s.id}
+                  center={[s.lat, s.lon]}
+                  radius={3}
+                  pathOptions={{
+                    color: "#fff",
+                    fillColor: age < 10_000 ? "#ffffff" : age < 60_000 ? "#ffe066" : "#ffaa00",
+                    fillOpacity: opacity,
+                    weight: age < 10_000 ? 2 : 1,
+                    className: age < 10_000 ? "smap-lightning-flash" : "",
+                  }}
+                />
+              );
+            })}
+          </Pane>
 
-          {/* TVS / Mesocyclone storm attribute markers */}
-          {showStorms && stormData && stormData.features.length > 0 && (
-            <Pane name="storm-attr" style={{ zIndex: 430 }}>
-              {stormData.features.map((f, i) => {
-                const p = f.properties;
-                const [lng, lat] = f.geometry.coordinates;
-                const isTvs = p.tvs === "TVS";
-                const mesoRank = parseInt(p.meso, 10) || 0;
-                const color = isTvs ? "#dc2626" : mesoRank >= 5 ? "#ff4400" : mesoRank >= 3 ? "#ff8800" : "#ffcc00";
-                const icon = isTvs ? TVS_ICON : makeMesoIcon(color, mesoRank);
-                return (
-                  <Marker
-                    key={`storm-${p.nexrad}-${p.storm_id}-${i}`}
-                    position={[lat, lng]}
-                    icon={icon}
-                  >
-                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip" permanent={false}>
-                      <div className="smap-tt-inner">
-                        <div className="smap-tt-header">
-                          <span className="smap-tt-id" style={{ color }}>{isTvs ? "\u26a0 TVS" : `Meso ${mesoRank}`}</span>
-                          <span className="smap-tt-name">{p.nexrad} {p.storm_id}</span>
-                        </div>
-                        <span className="smap-tt-type">VIL {p.vil} · {p.max_dbz} dBZ · Top {p.top} kft</span>
+          {/* TVS / Mesocyclone storm attribute markers — Pane always mounted */}
+          <Pane name="storm-attr" style={{ zIndex: 430 }}>
+            {showStorms && stormData && stormData.features.length > 0 && stormData.features.map((f, i) => {
+              const p = f.properties;
+              const [lng, lat] = f.geometry.coordinates;
+              const isTvs = p.tvs === "TVS";
+              const mesoRank = parseInt(p.meso, 10) || 0;
+              const color = isTvs ? "#dc2626" : mesoRank >= 5 ? "#ff4400" : mesoRank >= 3 ? "#ff8800" : "#ffcc00";
+              const icon = isTvs ? TVS_ICON : makeMesoIcon(color, mesoRank);
+              return (
+                <Marker
+                  key={`storm-${p.nexrad}-${p.storm_id}-${i}`}
+                  position={[lat, lng]}
+                  icon={icon}
+                >
+                  <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip" permanent={false}>
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id" style={{ color }}>{isTvs ? "\u26a0 TVS" : `Meso ${mesoRank}`}</span>
+                        <span className="smap-tt-name">{p.nexrad} {p.storm_id}</span>
                       </div>
-                    </Tooltip>
-                  </Marker>
-                );
-              })}
-            </Pane>
-          )}
+                      <span className="smap-tt-type">VIL {p.vil} · {p.max_dbz} dBZ · Top {p.top} kft</span>
+                    </div>
+                  </Tooltip>
+                </Marker>
+              );
+            })}
+          </Pane>
 
           {/* Road / city labels on top of all weather overlays but below popups */}
           <Pane name="top-labels" style={{ zIndex: 399, pointerEvents: "none" }}>
@@ -2474,11 +2544,12 @@ export default function StationMap({
             />
           </Pane>
 
-          {/* Spotter Network — live chaser positions + field reports */}
-          {showSpotters && spotterData && (
-            <Pane name="spotter-layer" style={{ zIndex: 435 }}>
-              {/* Chaser positions — small green dots */}
-              {spotterData.positions.map((s, i) => (
+          {/* Spotter Network — Pane always mounted */}
+          <Pane name="spotter-layer" style={{ zIndex: 435 }}>
+            {showSpotters && spotterData && (
+              <>
+                {/* Chaser positions — small green dots */}
+                {spotterData.positions.map((s, i) => (
                 <CircleMarker
                   key={`sp-${i}`}
                   center={[s.lat, s.lon]}
@@ -2527,8 +2598,9 @@ export default function StationMap({
                   </CircleMarker>
                 );
               })}
-            </Pane>
-          )}
+              </>
+            )}
+          </Pane>
 
           {/* Highlight ring for selected chaser */}
           {highlightSpotter && (
@@ -2558,19 +2630,19 @@ export default function StationMap({
           <FlyToCoords coords={flyToCoords} onDone={() => setFlyToCoords(null)} />
           <MapResizeHandler trigger={isFullscreen} />
 
-          {/* Proximity search result markers + lines */}
-          {proximityResult && (
-            <Pane name="proximity-layer" style={{ zIndex: 445 }}>
+          {/* Proximity search result — Pane always mounted */}
+          <Pane name="proximity-layer" style={{ zIndex: 445 }}>
+            {proximityResult && (
               <CircleMarker
                 center={[proximityResult.lat, proximityResult.lon]}
                 radius={6}
                 pathOptions={{ color: "#f43f5e", fillColor: "#f43f5e", fillOpacity: 0.9, weight: 2 }}
               />
-            </Pane>
-          )}
+            )}
+          </Pane>
 
-          {stationRender.clusters.length > 0 && (
-            <Pane name="station-clusters" style={{ zIndex: 448 }}>
+          {/* Station clusters — Pane always mounted */}
+          <Pane name="station-clusters" style={{ zIndex: 448 }}>
               {stationRender.clusters.map((c) => (
                 <CircleMarker
                   key={`cluster-${c.id}`}
@@ -2603,8 +2675,7 @@ export default function StationMap({
                   </Tooltip>
                 </CircleMarker>
               ))}
-            </Pane>
-          )}
+          </Pane>
 
           {stationRender.stations.map((s) => {
             const risk = riskMap[s.id];
@@ -2697,10 +2768,9 @@ export default function StationMap({
             );
           })}
 
-          {/* Wind barb arrows from risk-scan shear data */}
-          {showWindBarbs && riskData && (
-            <Pane name="wind-barbs-layer" style={{ zIndex: 455, pointerEvents: "none" }}>
-              {riskData.stations.filter(s => s.bwdDir != null && s.bwd > 5).map((s) => {
+          {/* Wind barb arrows from risk-scan shear data — Pane always mounted */}
+          <Pane name="wind-barbs-layer" style={{ zIndex: 455, pointerEvents: "none" }}>
+            {showWindBarbs && riskData && riskData.stations.filter(s => s.bwdDir != null && s.bwd > 5).map((s) => {
                 const rad = ((s.bwdDir + 180) % 360) * Math.PI / 180; // point in shear direction
                 const len = Math.min(0.8, s.bwd / 60); // degrees, scaled by magnitude
                 const endLat = s.lat + len * Math.cos(rad);
@@ -2723,42 +2793,39 @@ export default function StationMap({
                 );
               })}
             </Pane>
-          )}
 
-          {/* Favorite station star markers */}
-          {showFavorites && favorites.length > 0 && (
-            <Pane name="favorites-layer" style={{ zIndex: 460 }}>
-              {favorites.map((fid) => {
-                const s = stations.find((st) => st.id === fid);
-                if (!s) return null;
-                return (
-                  <Marker
-                    key={`fav-${fid}`}
-                    position={[s.lat, s.lon]}
-                    icon={L.divIcon({
-                      className: "smap-fav-icon",
-                      iconSize: [20, 20],
-                      iconAnchor: [10, 10],
-                      html: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" stroke="#fff" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>`,
-                    })}
-                    eventHandlers={{
-                      click: () => onStationSelect(fid),
-                    }}
-                  >
-                    <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip">
-                      <div className="smap-tt-inner">
-                        <div className="smap-tt-header">
-                          <span className="smap-tt-id" style={{ color: "#f59e0b" }}>★ {s.id}</span>
-                          <span className="smap-tt-name">{s.name}</span>
-                        </div>
-                        <span className="smap-tt-type">Favorite station</span>
+          {/* Favorite station star markers — Pane always mounted */}
+          <Pane name="favorites-layer" style={{ zIndex: 460 }}>
+            {showFavorites && favorites.length > 0 && favorites.map((fid) => {
+              const s = stations.find((st) => st.id === fid);
+              if (!s) return null;
+              return (
+                <Marker
+                  key={`fav-${fid}`}
+                  position={[s.lat, s.lon]}
+                  icon={L.divIcon({
+                    className: "smap-fav-icon",
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10],
+                    html: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" stroke="#fff" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>`,
+                  })}
+                  eventHandlers={{
+                    click: () => onStationSelect(fid),
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -12]} className="smap-tooltip">
+                    <div className="smap-tt-inner">
+                      <div className="smap-tt-header">
+                        <span className="smap-tt-id" style={{ color: "#f59e0b" }}>★ {s.id}</span>
+                        <span className="smap-tt-name">{s.name}</span>
                       </div>
-                    </Tooltip>
-                  </Marker>
-                );
-              })}
-            </Pane>
-          )}
+                      <span className="smap-tt-type">Favorite station</span>
+                    </div>
+                  </Tooltip>
+                </Marker>
+              );
+            })}
+          </Pane>
         </MapContainer>
 
         {/* Floating legend overlays — each in its own container */}

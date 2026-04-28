@@ -1828,7 +1828,7 @@ def plot_sounding(data, params, station_id, dt, vad_data=None, sr_hodograph=Fals
              fontsize=10, color=FG_FAINT, fontfamily="monospace",
              fontweight="bold")
     fig.text(0.96, 0.013,
-             "shianmike.github.io/SoundingAnalysis",
+             "soundingscopepy.app",
              fontsize=10, color=ACCENT, ha="right", va="bottom",
              fontfamily="monospace", fontweight="bold")
     

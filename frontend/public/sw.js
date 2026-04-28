@@ -11,7 +11,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
   });
 } else {
 
-const CACHE_NAME = "sounding-v4";
+const CACHE_NAME = "sounding-v5";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -40,6 +40,10 @@ self.addEventListener("activate", (event) => {
 // Fetch — network-first for API & navigation, cache-first for hashed assets
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // Cross-origin requests (map tiles, fonts, CDN resources): let the browser
+  // handle them directly — avoids CSP connect-src issues and opaque-response problems
+  if (url.origin !== self.location.origin) return;
 
   // API calls: network-first, cache fallback for GET only
   if (url.pathname.startsWith("/api/")) {

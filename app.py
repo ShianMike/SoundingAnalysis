@@ -17,13 +17,14 @@ import routes  # noqa: registers blueprints
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 # ─── Allowed origins (lock down CORS) ──────────────────────────────
-ALLOWED_ORIGINS = [
-    "https://soundingscopepy.app",
-    "https://www.soundingscopepy.app",
-    "https://shianmike.github.io",
-    "https://soundinganalysis-752306366750.asia-southeast1.run.app",
-    "https://soundinganalysis-uvktu4ziyq-as.a.run.app",
-]
+# Loaded from private backend_config.py (gitignored).
+# Falls back to an empty list if the file is absent (e.g. CI, first-time setup).
+try:
+    from backend_config import ALLOWED_ORIGINS  # type: ignore
+    ALLOWED_ORIGINS = list(ALLOWED_ORIGINS)
+except ImportError:
+    ALLOWED_ORIGINS = []
+
 # In local dev, also allow localhost origins
 if os.environ.get("FLASK_DEBUG") or os.environ.get("FLASK_ENV") == "development":
     ALLOWED_ORIGINS += ["http://localhost:3000", "http://localhost:5000", "http://127.0.0.1:3000", "http://127.0.0.1:5000"]
@@ -52,11 +53,13 @@ csp = {
     "font-src":    "'self' https://fonts.gstatic.com data:",
     "img-src":     "'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
                    "https://*.tile.opentopomap.org https://tilecache.rainviewer.com "
-                   "https://mesonet.agron.iastate.edu https://*.openstreetmap.org",
+                   "https://mesonet.agron.iastate.edu https://*.openstreetmap.org "
+                   "https://opengeo.ncep.noaa.gov",
     "connect-src": "'self' https://api.rainviewer.com https://mesonet.agron.iastate.edu "
                    "https://api.open-meteo.com "
                    "https://www.spc.noaa.gov https://spc.noaa.gov "
-                   "https://api.weather.gov "
+                   "https://api.weather.gov https://mapservices.weather.noaa.gov "
+                   "https://www.spotternetwork.org "
                    "https://api.livestormchasing.com https://edge.livestormchasing.com "
                    "https://soundingscopepy.app https://www.soundingscopepy.app "
                    "https://soundinganalysis-752306366750.asia-southeast1.run.app "
@@ -64,7 +67,9 @@ csp = {
                    "https://*.run.app https://*.a.run.app "
                    "https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
                    "https://*.tile.opentopomap.org https://tilecache.rainviewer.com "
-                   "https://*.openstreetmap.org",
+                   "https://*.openstreetmap.org "
+                   "https://opengeo.ncep.noaa.gov wss://ws1.blitzortung.org "
+                   "https://fonts.googleapis.com https://fonts.gstatic.com",
     "media-src":   "'self' blob:",
     "frame-ancestors": "'none'",
     "base-uri":    "'self'",
@@ -84,12 +89,6 @@ Talisman(
     content_security_policy_nonce_in=["script-src"],
     referrer_policy="strict-origin-when-cross-origin",
     frame_options="DENY",
-    feature_policy={
-        "geolocation":  "'none'",
-        "camera":       "'none'",
-        "microphone":   "'none'",
-        "payment":      "'none'",
-    },
     permissions_policy={
         "geolocation":       "()",
         "camera":            "()",
@@ -101,9 +100,7 @@ Talisman(
         "accelerometer":     "()",
         "autoplay":          "()",
         "display-capture":   "()",
-        "document-domain":   "()",
         "fullscreen":        "(self)",
-        "interest-cohort":   "()",
     },
     session_cookie_secure=_is_production,
     session_cookie_http_only=True,
