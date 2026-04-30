@@ -44,7 +44,7 @@ function dayLabel(d) {
   return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-export default function SoundingTimeline({ station, currentDate, onSelectTime, source }) {
+export default function SoundingTimeline({ station, currentDate, onSelectTime }) {
   const scrollRef = useRef(null);
   const activeRef = useRef(null);
   const [history, setHistory] = useState([]);

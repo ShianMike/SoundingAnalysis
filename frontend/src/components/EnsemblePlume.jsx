@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Layers, ArrowLeft, Loader2, AlertTriangle, Info, RefreshCw, Lightbulb, HelpCircle, Zap, MapPin, Search, X } from "lucide-react";
+import { Layers, ArrowLeft, Loader2, AlertTriangle, RefreshCw, HelpCircle, Zap, MapPin, Search, X } from "lucide-react";
 import { fetchEnsemblePlume } from "../api";
 import "./EnsemblePlume.css";
 
@@ -153,8 +153,8 @@ export default function EnsemblePlume({ station, stations = [], onBack, theme, c
           {showHelp && (
             <div className="ens-help-box">
               <p><strong>What is this?</strong> A forecast plume overlays soundings from multiple forecast hours (e.g. f000, f003, f006…) onto one diagram, showing how the atmosphere is predicted to evolve over time.</p>
-              <p><strong>How to use:</strong> Pick a station, model, data source, and forecast range, then click "Generate Plume". The first forecast hour (f000 = analysis) is drawn in bold; later hours are semi-transparent to show the spread.</p>
-              <p><strong>Source tips:</strong> "Penn State (latest)" has the most recent model run and works best for current data. "Iowa State (archive)" is better for past dates.</p>
+              <p><strong>How to use:</strong> Pick a station, model, data source, and forecast range, then click &quot;Generate Plume&quot;. The first forecast hour (f000 = analysis) is drawn in bold; later hours are semi-transparent to show the spread.</p>
+              <p><strong>Source tips:</strong> &quot;Penn State (latest)&quot; has the most recent model run and works best for current data. &quot;Iowa State (archive)&quot; is better for past dates.</p>
             </div>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function EnsemblePlume({ station, stations = [], onBack, theme, c
 
             {/* Quick combos — known working */}
             <div className="ens-quick-combos">
-              <div className="ens-quick-combos-label"><Zap size={11} /> Try a station that's available now:</div>
+              <div className="ens-quick-combos-label"><Zap size={11} /> Try a station that&apos;s available now:</div>
               <div className="ens-quick-combos-grid">
                 {QUICK_COMBOS.map((c) => (
                   <button key={c.station} className="ens-combo-chip" onClick={() => handleQuickCombo(c)}>
@@ -320,7 +320,7 @@ export default function EnsemblePlume({ station, stations = [], onBack, theme, c
           <div className="ens-empty-state">
             <div className="ens-empty-icon"><Layers size={24} /></div>
             <div className="ens-empty-title">No plume generated yet</div>
-            <div className="ens-empty-desc">Configure the settings above and click "Generate Plume" to overlay forecast soundings on one Skew-T diagram.</div>
+            <div className="ens-empty-desc">Configure the settings above and click &quot;Generate Plume&quot; to overlay forecast soundings on one Skew-T diagram.</div>
           </div>
         )}
 

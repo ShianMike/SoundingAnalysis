@@ -1,33 +1,34 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, WMSTileLayer, ImageOverlay, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, CircleMarker, Marker, Circle, Popup, Tooltip, Pane, GeoJSON, Polyline } from "react-leaflet";
 import L from "leaflet";
-import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, Radio, ChevronDown, Star, Navigation, Search, FileText, Minus, Compass, Shield } from "lucide-react";
+import { X, Crosshair, CloudLightning, Wind, Maximize2, Minimize2, Layers, Play, Pause, Zap, RefreshCw, AlertTriangle, Tornado, Binoculars, FileWarning, ChevronDown, Star, Navigation, FileText, Minus, Compass, Shield } from "lucide-react";
 import { fetchSpcOutlook, fetchSpcOutlookStations, fetchSpcDiscussion, fetchWindField, fetchNwsWarnings, fetchStormAttributes, fetchSpcMds, fetchSpcWatches, fetchSpotterNetwork, fetchOutlook } from "../api";
 import { getFavorites } from "../favorites";
+import { nearestNexrad } from "../config/constants";
+import { bearingDeg, haversineKm, clampNum, frameToHourOffset, WIND_MAX_HOUR_OFFSET } from "../utils/mapGeometry";
+import { fmtRadarTime, buildMosaicFrames } from "../utils/radarFrames";
+import {
+  WARNING_SUBCAT_STYLES,
+  VALID_WARNING_EVENTS,
+  firstParam,
+  classifyWarning,
+  parseEventMotion,
+  escapeHtml,
+  warningStyle,
+} from "../utils/warnings";
 import WindCanvas from "./WindCanvas";
 import ChaserPanel from "./ChaserPanel";
+import RadarLayer from "./StationMap/RadarLayer";
+import MdWatchLayer from "./StationMap/MdWatchLayer";
+import MapViewTracker from "./StationMap/MapViewTracker";
+import MapClickHandler from "./StationMap/MapClickHandler";
+import FlyToStation from "./StationMap/FlyToStation";
+import { FlyToCoords, MapResizeHandler } from "./StationMap/mapHelpers";
 import "leaflet/dist/leaflet.css";
 import "./StationMap.css";
 import "./ChaserPanel.css";
 
-/* ── Wrapper that keeps a SINGLE TileLayer alive and swaps URL via
-   setUrl() instead of destroying / recreating the Leaflet layer.
-   This avoids re-fetching every visible tile on each frame change. ── */
-function RadarLayer({ url, opacity, ...rest }) {
-  const ref = useRef(null);
-  const prevUrl = useRef(url);
-  useEffect(() => {
-    if (ref.current) ref.current.setOpacity(opacity);
-  }, [opacity]);
-  useEffect(() => {
-    if (ref.current && url !== prevUrl.current) {
-      ref.current.setUrl(url, false);
-      ref.current.redraw();
-      prevUrl.current = url;
-    }
-  }, [url]);
-  return <TileLayer ref={ref} url={url} opacity={opacity} {...rest} />;
-}
+// `RadarLayer` lives in `./StationMap/RadarLayer.jsx`.
 
 /* ── base-map tile options ───────────────────────────────────── */
 const BASE_MAPS = [
@@ -64,65 +65,8 @@ async function fetchRadarFrames(retries = 2) {
   }
 }
 
-/** Format a UNIX timestamp to a short UTC label like "14:05Z". */
-function fmtRadarTime(ts) {
-  const d = new Date(ts * 1000);
-  return d.toISOString().slice(11, 16) + "Z";
-}
-
-/** Build IEM mosaic frame list — last ~2 hours at 5-min intervals.
- *  IEM RIDGE tiles accept timestamps as YYYYMMDDHHmm in the URL path.
- *  Returns [{time (unix), ts (YYYYMMDDHHmm string)}] oldest→newest. */
-function buildMosaicFrames(count = 24) {
-  const now = new Date();
-  // Round down to nearest 5 minutes
-  now.setUTCSeconds(0, 0);
-  now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5);
-  const frames = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const t = new Date(now.getTime() - i * 5 * 60_000);
-    const ts = t.getUTCFullYear().toString()
-      + String(t.getUTCMonth() + 1).padStart(2, "0")
-      + String(t.getUTCDate()).padStart(2, "0")
-      + String(t.getUTCHours()).padStart(2, "0")
-      + String(t.getUTCMinutes()).padStart(2, "0");
-    frames.push({ time: Math.floor(t.getTime() / 1000), ts });
-  }
-  return frames;
-}
-
-/** Build synthetic single-site archive frames from estimated 5-min scan intervals.
- *  Used as a fallback when the IEM scan-list API returns no results. */
-function buildSingleSiteFrames(radar, product, count = 24) {
-  const now = new Date();
-  now.setUTCSeconds(0, 0);
-  now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5);
-  const frames = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const t = new Date(now.getTime() - i * 5 * 60_000);
-    const yyyy = t.getUTCFullYear().toString();
-    const mm   = String(t.getUTCMonth() + 1).padStart(2, "0");
-    const dd   = String(t.getUTCDate()).padStart(2, "0");
-    const hh   = String(t.getUTCHours()).padStart(2, "0");
-    const mi   = String(t.getUTCMinutes()).padStart(2, "0");
-    const ts   = `${yyyy}${mm}${dd}${hh}${mi}`;
-    const url  = `https://mesonet.agron.iastate.edu/archive/data/${yyyy}/${mm}/${dd}/GIS/ridge/${radar}/${product}/${radar}_${product}_${ts}.png`;
-    frames.push({ url, time: Math.floor(t.getTime() / 1000), ts });
-  }
-  return frames;
-}
-
-const WIND_MAX_HOUR_OFFSET = 12;
-
-function clampNum(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function frameToHourOffset(frameIdx, frameCount, maxOffset = WIND_MAX_HOUR_OFFSET) {
-  if (frameCount <= 1) return 0;
-  const ratio = clampNum(frameIdx, 0, frameCount - 1) / (frameCount - 1);
-  return Math.round(ratio * maxOffset);
-}
+// Pure radar-frame builders + geometry helpers live in `utils/radarFrames.js`
+// and `utils/mapGeometry.js` (imported above).
 
 /* ── NWS Active Warnings ─────────────────────────────────────── */
 // Fetched via backend proxy: /api/overlays/warnings (see api.js)
@@ -130,86 +74,8 @@ function frameToHourOffset(frameIdx, frameCount, maxOffset = WIND_MAX_HOUR_OFFSE
 /* ── SPC Mesoscale Discussions & Watches ──────────────────────── */
 // Fetched via backend proxy: /api/overlays/spc-mds, /api/overlays/spc-watches (see api.js)
 
-const WATCH_STYLES = {
-  "Tornado Watch":           { color: "#ff0000", fill: "#ff000022", label: "TOR" },
-  "Severe Thunderstorm Watch": { color: "#ffa500", fill: "#ffa50022", label: "SVR" },
-};
-
-function mdStyle() {
-  return {
-    color: "#00e5ff",
-    weight: 2,
-    fillColor: "#00e5ff",
-    fillOpacity: 0.08,
-    dashArray: "6 4",
-  };
-}
-
-function watchStyle(feature) {
-  const ev = feature.properties?.type || feature.properties?.event || "";
-  const s = Object.entries(WATCH_STYLES).find(([k]) => ev.includes(k));
-  if (s) return { color: s[1].color, weight: 2.5, fillColor: s[1].color, fillOpacity: 0.1, dashArray: "10 5" };
-  return { color: "#ffa500", weight: 2, fillColor: "#ffa500", fillOpacity: 0.08, dashArray: "10 5" };
-}
-
-function MdWatchLayer({ mdData, watchData }) {
-  const hasMd = mdData?.features?.length > 0;
-  const hasWatch = watchData?.features?.length > 0;
-  if (!hasMd && !hasWatch) return null;
-  return (
-    <Pane name="spc-md-watch" style={{ zIndex: 415, pointerEvents: "auto" }}>
-      {hasWatch && (
-        <GeoJSON
-          key={"w-" + watchData.features.length + (watchData.features[0]?.properties?.number || "")}
-          data={watchData}
-          style={watchStyle}
-          onEachFeature={(feature, layer) => {
-            const p = feature.properties;
-            const ev = p.type || p.event || "Watch";
-            const isTor = ev.includes("Tornado");
-            const num = p.number || p.wn || "";
-            const expires = p.expires || p.expiration || "";
-            const expStr = expires ? new Date(expires).toLocaleString() : "";
-            layer.bindPopup(
-              `<div class="smap-warn-popup">
-                <div class="smap-warn-badge" style="background:${isTor ? '#ff000022' : '#ffa50022'};color:${isTor ? '#ff0000' : '#ffa500'};border-color:${isTor ? '#ff000055' : '#ffa50055'}">
-                  ${isTor ? 'TOR' : 'SVR'} WATCH ${num}
-                </div>
-                <div class="smap-warn-headline">${ev}${num ? ` #${num}` : ''}</div>
-                ${expStr ? `<div class="smap-warn-time">Expires: ${expStr}</div>` : ""}
-              </div>`,
-              { className: "smap-popup smap-warn-popup-wrap", minWidth: 220, maxWidth: 320 }
-            );
-          }}
-        />
-      )}
-      {hasMd && (
-        <GeoJSON
-          key={"md-" + mdData.features.length + (mdData.features[0]?.properties?.number || "")}
-          data={mdData}
-          style={mdStyle}
-          onEachFeature={(feature, layer) => {
-            const p = feature.properties;
-            const num = p.number || p.md_num || "";
-            const concerning = p.concerning || p.hazard || "";
-            const areas = p.areas || p.states || "";
-            layer.bindPopup(
-              `<div class="smap-warn-popup">
-                <div class="smap-warn-badge" style="background:#00e5ff22;color:#00e5ff;border-color:#00e5ff55">
-                  MD ${num}
-                </div>
-                <div class="smap-warn-headline">Mesoscale Discussion ${num}</div>
-                ${concerning ? `<div class="smap-warn-area">Concerning: ${concerning}</div>` : ""}
-                ${areas ? `<div class="smap-warn-area">${areas}</div>` : ""}
-              </div>`,
-              { className: "smap-popup smap-warn-popup-wrap", minWidth: 220, maxWidth: 320 }
-            );
-          }}
-        />
-      )}
-    </Pane>
-  );
-}
+// `MdWatchLayer` and its private styling helpers (`WATCH_STYLES`, `mdStyle`,
+// `watchStyle`) live in `./StationMap/MdWatchLayer.jsx`.
 
 /* ── Lightning overlay (Blitzortung) ─────────────────────────── */
 const BLITZ_WS_SERVERS = [
@@ -277,6 +143,10 @@ function useLightningData(enabled) {
   const [strikes, setStrikes] = useState([]);
   const wsRef = useRef(null);
   const strikesRef = useRef([]);
+  // Monotonic counter — ensures every strike id is unique even when the
+  // Blitzortung feed emits multiple packets within the same millisecond
+  // at coordinates that round to the same 3 decimal places.
+  const strikeSeqRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -314,8 +184,9 @@ function useLightningData(enabled) {
           ) return;
 
           const now = Date.now();
+          const seq = ++strikeSeqRef.current;
           strikesRef.current = [
-            { ...strike, id: `${Math.round(strike.time)}_${strike.lat.toFixed(3)}_${strike.lon.toFixed(3)}` },
+            { ...strike, id: `${Math.round(strike.time)}_${strike.lat.toFixed(3)}_${strike.lon.toFixed(3)}_${seq}` },
             ...strikesRef.current.filter((s) => now - s.time < STRIKE_TTL),
           ].slice(0, MAX_STRIKES);
         };
@@ -354,39 +225,10 @@ function useLightningData(enabled) {
   return strikes;
 }
 
-// Event → colour + short label
-const WARNING_STYLES = {
-  "Tornado Warning":              { color: "#ff0000", weight: 3, label: "TOR" },
-  "Particularly Dangerous Situation Tornado Warning": { color: "#ff0000", weight: 4, label: "PDS TOR" },
-  "Severe Thunderstorm Warning":   { color: "#ffa500", weight: 2.5, label: "SVR" },
-  "Flash Flood Warning":           { color: "#00ff00", weight: 2, label: "FFW" },
-  "Tornado Watch":                 { color: "#ffff00", weight: 2, label: "TOA", dash: "8 4" },
-  "Severe Thunderstorm Watch":     { color: "#ffa500", weight: 2, label: "SVA", dash: "8 4" },
-  "Special Weather Statement":     { color: "#ffe4b5", weight: 1.5, label: "SPS" },
-  "Flood Warning":                 { color: "#228b22", weight: 1.5, label: "FLW" },
-};
-// Ordered priority for display (highest first)
-const WARNING_PRIORITY = [
-  "Tornado Warning", "Particularly Dangerous Situation Tornado Warning",
-  "Severe Thunderstorm Warning", "Flash Flood Warning",
-  "Tornado Watch", "Severe Thunderstorm Watch",
-  "Special Weather Statement", "Flood Warning",
-];
-
-// fetchNwsWarnings is now imported from api.js (backend proxy)
-// Client-side filtering of valid warning events is applied in the useEffect
-
-function warningStyle(feature) {
-  const ev = feature.properties?.event || "";
-  const s = WARNING_STYLES[ev] || { color: "#ccc", weight: 1 };
-  return {
-    color: s.color,
-    weight: s.weight,
-    fillColor: s.color,
-    fillOpacity: ev.includes("Watch") ? 0.08 : 0.18,
-    dashArray: s.dash || null,
-  };
-}
+// NWS-warning constants + helpers (`WARNING_SUBCAT_STYLES`,
+// `VALID_WARNING_EVENTS`, `WARNING_PRIORITY`, `firstParam`,
+// `classifyWarning`, `parseEventMotion`, `escapeHtml`, `warningStyle`)
+// live in `utils/warnings.js` and are imported at the top of this file.
 
 function WarningsLayer({ data }) {
   const geoKey = useMemo(() => {
@@ -402,25 +244,72 @@ function WarningsLayer({ data }) {
         data={data}
         style={warningStyle}
         onEachFeature={(feature, layer) => {
-          const p = feature.properties;
+          const p = feature.properties || {};
+          const params = p.parameters || {};
+          const key = classifyWarning(feature) || "SPS";
+          const s = WARNING_SUBCAT_STYLES[key] || { color: "#ccc", label: "WARN", cls: "" };
+
           const ev = p.event || "Alert";
-          const s = WARNING_STYLES[ev];
           const headline = p.headline || ev;
           const areas = p.areaDesc || "";
           const onset = p.onset ? new Date(p.onset).toLocaleString() : "";
           const expires = p.expires ? new Date(p.expires).toLocaleString() : "";
-          layer.bindPopup(
-            `<div class="smap-warn-popup">
-              <div class="smap-warn-badge" style="background:${s?.color || '#ccc'}22;color:${s?.color || '#ccc'};border-color:${s?.color || '#ccc'}55">
-                ${s?.label || "WARN"}
+
+          // Hazard / Source / Impact lines (Weatherwise-style)
+          const isTor  = ev.includes("Tornado");
+          const isSvr  = ev === "Severe Thunderstorm Warning";
+          const detect = isTor
+            ? firstParam(params, "tornadoDetection")
+            : (firstParam(params, "windThreat") || firstParam(params, "hailThreat"));
+          const damage = isTor
+            ? firstParam(params, "tornadoDamageThreat")
+            : firstParam(params, "thunderstormDamageThreat");
+          const hail   = firstParam(params, "maxHailSize");
+          const wind   = firstParam(params, "maxWindGust");
+          const motion = parseEventMotion(firstParam(params, "eventMotionDescription"));
+
+          let hazard = "";
+          if (isTor) hazard = "Tornado";
+          else if (isSvr) hazard = "Severe Thunderstorm";
+          else if (ev === "Flash Flood Warning") hazard = "Flash Flood";
+
+          const row = (label, value) =>
+            `<div class="smap-warn-row"><span class="smap-warn-label">${label}</span><span class="smap-warn-value">${value}</span></div>`;
+
+          const rows = [];
+          if (hazard) rows.push(row("Hazard", escapeHtml(hazard)));
+          if (detect) rows.push(row("Source", escapeHtml(detect)));
+          if (damage) rows.push(row("Impact", escapeHtml(damage)));
+          if (hail || wind) {
+            const hailTxt = hail ? `${escapeHtml(hail)}${/[a-z]/i.test(hail) ? "" : " in"}` : "—";
+            const windTxt = wind ? escapeHtml(wind) : "—";
+            rows.push(
+              `<div class="smap-warn-grid">
+                <div class="smap-warn-cell"><span class="smap-warn-label">Hail</span><span class="smap-warn-value">${hailTxt}</span></div>
+                <div class="smap-warn-cell"><span class="smap-warn-label">Wind</span><span class="smap-warn-value">${windTxt}</span></div>
+              </div>`
+            );
+          }
+          if (motion && (Number.isFinite(motion.dirDeg) || Number.isFinite(motion.speedKt))) {
+            const dirTxt   = Number.isFinite(motion.dirDeg) ? `${motion.dirDeg}°` : "—";
+            const speedTxt = Number.isFinite(motion.speedKt)
+              ? `${motion.speedKt} kt${Number.isFinite(motion.mph) ? ` (≈${motion.mph} mph)` : ""}`
+              : "—";
+            rows.push(row("Motion", `from ${dirTxt} at ${speedTxt}`));
+          }
+
+          const badgeCls = `smap-warn-badge ${s.cls ? `is-${s.cls.replace(/^smap-warn-/, "")}` : ""}`.trim();
+          const html = `<div class="smap-warn-popup">
+              <div class="${badgeCls}" style="background:${s.color}22;color:${s.color};border-color:${s.color}55">
+                ${escapeHtml(s.label || "WARN")}
               </div>
-              <div class="smap-warn-headline">${headline}</div>
-              <div class="smap-warn-area">${areas}</div>
-              ${onset ? `<div class="smap-warn-time">Onset: ${onset}</div>` : ""}
-              ${expires ? `<div class="smap-warn-time">Expires: ${expires}</div>` : ""}
-            </div>`,
-            { className: "smap-popup smap-warn-popup-wrap", minWidth: 240, maxWidth: 340 }
-          );
+              <div class="smap-warn-headline">${escapeHtml(headline)}</div>
+              <div class="smap-warn-area">${escapeHtml(areas)}</div>
+              ${rows.length ? `<div class="smap-warn-details">${rows.join("")}</div>` : ""}
+              ${onset ? `<div class="smap-warn-time">Onset: ${escapeHtml(onset)}</div>` : ""}
+              ${expires ? `<div class="smap-warn-time">Expires: ${escapeHtml(expires)}</div>` : ""}
+            </div>`;
+          layer.bindPopup(html, { className: "smap-popup smap-warn-popup-wrap", minWidth: 260, maxWidth: 360 });
         }}
       />
     </Pane>
@@ -471,7 +360,6 @@ function makeMesoIcon(color, rank) {
 // Parsing of GR-format feed is done server-side in routes/overlays.py
 
 // Report type → colour mapping (still needed client-side for rendering)
-const SN_REPORT_TYPES = { 1: "Tornado", 2: "Funnel Cloud", 3: "Rotating Wall Cloud", 4: "Hail", 5: "Wind Damage", 6: "Flooding", 7: "Other" };
 const SN_REPORT_COLORS = {
   Tornado:                "#ff0000",
   "Funnel Cloud":         "#ff6600",
@@ -498,7 +386,10 @@ function riskColor(stp) {
 }
 
 /* ── Velocity product definitions ─────────────────────────────── */
-/* IEM RIDGE only archives N0S (Storm-Relative Mean Velocity) for NEXRAD sites */
+/* IEM RIDGE only archives N0S (Storm-Relative Mean Velocity) for NEXRAD
+   velocity — base-velocity products (N0V/N0U) are not exposed as tiles. We
+   therefore use N0S for BOTH the static and animated views so they always
+   match visually (same product, same render pipeline). */
 const VELOCITY_PRODUCTS = [
   { id: "N0S", label: "SRM 0.5°", desc: "Storm-Relative Mean Velocity (0.5° tilt) — removes storm motion, best for mesocyclone rotation couplets and tornado signatures" },
 ];
@@ -506,31 +397,7 @@ const VELOCITY_PRODUCTS = [
 const VEL_ANIM_INTERVAL_MS = 800;
 const VEL_FRAME_HOURS = 1; // how many hours of scans to fetch
 
-/** Parse IEM scan timestamps → archive image URLs + bounds from world file.
- *  World file format: pixelSizeX, 0, 0, -pixelSizeY, topLeftX, topLeftY */
-function parseWorldFile(text) {
-  const lines = text.trim().split(/\r?\n/).map(Number);
-  return { dx: lines[0], dy: lines[3], x0: lines[4], y0: lines[5] };
-}
-
-function velImageBounds(wld, width = 1000, height = 1000) {
-  // wld: {dx, dy, x0, y0} — dy is negative
-  const south = wld.y0 + wld.dy * height;
-  const north = wld.y0;
-  const west = wld.x0;
-  const east = wld.x0 + wld.dx * width;
-  return [[south, west], [north, east]];
-}
-
-/** Fetch velocity scan list + world file for a radar/product, return frames. */
-/** Compute approximate ImageOverlay bounds for a NEXRAD site from lat/lon.
- *  IEM archive images cover ~230 km radius (≈2.07° lat). */
-function nexradBoundsFromLatLon(lat, lon) {
-  const latR = 2.07;
-  const lonR = latR / Math.cos((lat * Math.PI) / 180);
-  return [[lat - latR, lon - lonR], [lat + latR, lon + lonR]];
-}
-
+/** Fetch IEM scan timestamps and return archived RIDGE tile frames. */
 async function fetchVelFrames(radar, product, hours = VEL_FRAME_HOURS) {
   const end = new Date();
   const start = new Date(end.getTime() - hours * 3600_000);
@@ -541,150 +408,27 @@ async function fetchVelFrames(radar, product, hours = VEL_FRAME_HOURS) {
   if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
   const listData = await listRes.json();
   const scans = listData.scans || [];
-  if (!scans.length) return { frames: [], bounds: null };
+  if (!scans.length) return { frames: [] };
 
-  // 2. Try to get precise bounds from world file; fall back to lat/lon approximation
-  let bounds = null;
-  const firstTs = scans[0].ts.replace(/[-:TZ]/g, "").slice(0, 12);
-  const firstDate = scans[0].ts.slice(0, 10).split("-");
-  const wldUrl = `https://mesonet.agron.iastate.edu/archive/data/${firstDate[0]}/${firstDate[1]}/${firstDate[2]}/GIS/ridge/${radar}/${product}/${radar}_${product}_${firstTs}.wld`;
-  const wldRes = await fetch(wldUrl).catch(() => null);
-  if (wldRes?.ok) {
-    const wld = parseWorldFile(await wldRes.text());
-    bounds = velImageBounds(wld);
-  } else {
-    // Fall back to analytical bounds from radar lat/lon
-    const site = NEXRAD_SITES.find((s) => s[0] === radar);
-    if (site) bounds = nexradBoundsFromLatLon(site[1], site[2]);
-  }
-  if (!bounds) return { frames: [], bounds: null };
-
-  // 3. Build frame objects with archive image URLs
+  // Build frame objects with IEM's archived tile layer URL. Using TileLayer avoids
+  // blurring/reprojection artifacts from stretching the raw archive PNG as one image.
   const frames = scans.map((s) => {
     const ts = s.ts.replace(/[-:TZ]/g, "").slice(0, 12); // YYYYMMDDHHmm
-    const d = s.ts.slice(0, 10).split("-"); // [YYYY, MM, DD]
-    const url = `https://mesonet.agron.iastate.edu/archive/data/${d[0]}/${d[1]}/${d[2]}/GIS/ridge/${radar}/${product}/${radar}_${product}_${ts}.png`;
+    const url = `https://mesonet.agron.iastate.edu/c/tile.py/1.0.0/ridge::${radar}-${product}-${ts}/{z}/{x}/{y}.png`;
     const time = Math.floor(new Date(s.ts.endsWith("Z") ? s.ts : s.ts + "Z").getTime() / 1000);
     return { url, time, ts };
   });
-  return { frames, bounds };
+  return { frames };
 }
 
-/* ── NEXRAD WSR-88D sites (CONUS) for velocity overlay ──────── */
-const NEXRAD_SITES = [
-  ["ABR",45.46,-98.41],["ABX",35.15,-106.82],["AKQ",36.98,-77.01],
-  ["AMA",35.23,-101.71],["AMX",25.61,-80.41],["APX",44.91,-84.72],
-  ["ARX",43.82,-91.19],["ATX",48.19,-122.50],["BBX",39.50,-121.63],
-  ["BGM",42.20,-75.98],["BMX",33.17,-86.77],["BOX",41.96,-71.14],
-  ["BRO",25.92,-97.42],["BUF",42.95,-78.74],["BYX",24.60,-81.70],
-  ["CAE",33.95,-81.12],["CBW",46.04,-67.81],["CBX",43.49,-116.24],
-  ["CCX",40.92,-78.00],["CLE",41.41,-81.86],["CLX",32.66,-81.04],
-  ["CRP",27.78,-97.51],["CXX",44.51,-73.17],["CYS",41.15,-104.81],
-  ["DAX",38.50,-121.68],["DDC",37.76,-99.97],["DFX",29.27,-100.28],
-  ["DGX",32.28,-89.98],["DIX",39.95,-74.41],["DLH",46.84,-92.21],
-  ["DMX",41.73,-93.72],["DOX",38.83,-75.44],["DTX",42.70,-83.47],
-  ["DVN",41.61,-90.58],["DYX",32.54,-99.25],["EAX",38.81,-94.26],
-  ["EMX",31.89,-110.63],["ENX",42.59,-74.06],["EOX",31.46,-85.46],
-  ["EPZ",31.87,-106.70],["ESX",35.70,-114.89],["EVX",30.56,-85.92],
-  ["EWX",29.70,-98.03],["EYX",35.10,-117.56],["FCX",37.02,-80.27],
-  ["FDR",34.36,-98.98],["FDX",34.64,-103.63],["FFC",33.36,-84.57],
-  ["FSD",43.59,-96.73],["FSX",34.57,-111.20],["FTG",39.79,-104.55],
-  ["FWS",32.57,-97.30],["GGW",48.21,-106.63],["GJX",39.06,-108.21],
-  ["GLD",39.37,-101.70],["GRB",44.50,-88.11],["GRK",30.72,-97.38],
-  ["GRR",42.89,-85.54],["GSP",34.88,-82.22],["GWX",33.90,-88.33],
-  ["GYX",43.89,-70.26],["HDX",33.08,-106.12],["HGX",29.47,-95.08],
-  ["HNX",36.31,-119.63],["HPX",36.74,-87.28],["HTX",34.93,-86.08],
-  ["HWA",38.51,-82.97],["ICT",37.65,-97.44],["ICX",37.59,-112.86],
-  ["ILN",39.42,-83.82],["ILX",40.15,-89.34],["IND",39.71,-86.28],
-  ["INX",36.18,-95.56],["IWA",33.29,-111.67],["IWX",41.36,-85.70],
-  ["JAX",30.48,-81.70],["JGX",32.68,-83.35],["JKL",37.59,-83.31],
-  ["KEY",24.55,-81.78],["KSG",31.48,-82.31],["LBB",33.65,-101.81],
-  ["LCH",30.13,-93.22],["LIX",30.34,-89.83],["LNX",41.96,-100.58],
-  ["LOT",41.60,-88.08],["LRX",40.74,-116.80],["LSX",38.70,-90.68],
-  ["LTX",33.99,-78.43],["LVX",37.98,-85.94],["LWX",38.98,-77.48],
-  ["LZK",34.84,-92.26],["MAF",31.94,-102.19],["MAX",42.08,-122.72],
-  ["MBX",48.39,-100.86],["MHX",34.78,-76.88],["MKX",42.97,-88.55],
-  ["MLB",28.11,-80.65],["MOB",30.68,-88.24],["MPX",44.85,-93.57],
-  ["MQT",46.53,-87.55],["MRX",36.17,-83.40],["MSX",47.04,-113.99],
-  ["MTX",41.26,-112.45],["MUX",37.16,-121.90],["MVX",47.53,-97.33],
-  ["MXX",32.54,-85.79],["NKX",32.92,-117.04],["NQA",35.34,-89.87],
-  ["OAX",41.32,-96.37],["OHX",36.25,-86.56],["OKX",40.87,-72.86],
-  ["OTX",47.68,-117.63],["PAH",37.07,-88.77],["PBZ",40.53,-80.22],
-  ["PDT",45.69,-118.85],["POE",34.41,-116.16],["PUX",38.46,-104.18],
-  ["RAX",35.67,-78.49],["RGX",39.75,-119.46],["RIW",43.07,-108.48],
-  ["RLX",38.31,-81.72],["RTX",45.71,-122.97],["SFX",43.11,-112.69],
-  ["SGF",37.24,-93.40],["SHV",32.45,-93.84],["SJT",31.37,-100.49],
-  ["SOX",33.82,-117.64],["SRX",35.29,-94.36],["TBW",27.71,-82.40],
-  ["TFX",47.46,-111.39],["TLH",30.40,-84.33],["TLX",35.33,-97.28],
-  ["TWX",38.99,-96.23],["TYX",43.76,-75.68],["UDX",44.13,-102.83],
-  ["UEX",40.32,-98.44],["VAX",30.89,-83.00],["VBX",34.84,-120.40],
-  ["VNX",36.74,-98.13],["VTX",34.41,-119.18],["VWX",38.26,-87.72],
-  ["YUX",32.50,-114.66],
-];
+/* ── NEXRAD sites + nearest-site helper now live in config/constants.js ── */
+// Imported at top of file as `nearestNexrad`. Kept this comment as a marker
+// so future readers know where to find the canonical list.
 
-function nearestNexrad(lat, lon) {
-  let best = NEXRAD_SITES[0], bestD = Infinity;
-  for (const s of NEXRAD_SITES) {
-    const d = (s[1] - lat) ** 2 + (s[2] - lon) ** 2;
-    if (d < bestD) { bestD = d; best = s; }
-  }
-  return { id: best[0], lat: best[1], lon: best[2] };
-}
-
-function _toRad(deg) { return (deg * Math.PI) / 180; }
-function _toDeg(rad) { return (rad * 180) / Math.PI; }
-
-function bearingDeg(lat1, lon1, lat2, lon2) {
-  const phi1 = _toRad(lat1);
-  const phi2 = _toRad(lat2);
-  const dLon = _toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) -
-            Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
-  return (_toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371.0;
-  const dLat = _toRad(lat2 - lat1);
-  const dLon = _toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-            Math.cos(_toRad(lat1)) * Math.cos(_toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+// `bearingDeg` and `haversineKm` are imported from `utils/mapGeometry.js`.
 
 /* ── Track map center + view bounds for nearest-radar and decimation ───────────── */
-function MapViewTracker({ onCenterChange, onViewChange }) {
-  const map = useMap();
-  const report = useCallback(() => {
-    const c = map.getCenter();
-    const b = map.getBounds();
-    onCenterChange?.(c.lat, c.lng);
-    onViewChange?.({
-      zoom: map.getZoom(),
-      south: b.getSouth(),
-      west: b.getWest(),
-      north: b.getNorth(),
-      east: b.getEast(),
-    });
-  }, [map, onCenterChange, onViewChange]);
-
-  useMapEvents({
-    moveend() {
-      report();
-    },
-    zoomend() {
-      report();
-    },
-  });
-
-  // Fire once on mount
-  useEffect(() => {
-    report();
-  }, [report]);
-
-  return null;
-}
+// MapViewTracker lives in `./StationMap/MapViewTracker.jsx`.
 
 /* ── SPC outlook category styling ───────────────────────────── */
 const SPC_CATEGORIES = [
@@ -827,65 +571,8 @@ function CustomOutlookLayer({ data, outlookType }) {
   );
 }
 
-/* ── click-for-coords layer ─────────────────────────────────── */
-function MapClickHandler({ enabled, onLatLonSelect, onRightClick, onMapClick, onMouseMove, disableRightClick = false }) {
-  useMapEvents({
-    click(e) {
-      if (onMapClick && onMapClick(e.latlng.lat, e.latlng.lng, e) === true) return;
-      if (enabled && onLatLonSelect) {
-        onLatLonSelect(e.latlng.lat.toFixed(2), e.latlng.lng.toFixed(2));
-      }
-    },
-    mousemove(e) {
-      onMouseMove?.(e.latlng.lat, e.latlng.lng);
-    },
-    contextmenu(e) {
-      if (disableRightClick) {
-        e.originalEvent.preventDefault();
-        return;
-      }
-      // Right-click → proximity search
-      if (onRightClick) {
-        e.originalEvent.preventDefault();
-        onRightClick(e.latlng.lat, e.latlng.lng);
-      }
-    },
-  });
-  return null;
-}
-
-/* ── fly-to when selected station changes ───────────────────── */
-function FlyToStation({ station, stations }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!station) return;
-    const s = stations.find((st) => st.id === station);
-    if (s) map.flyTo([s.lat, s.lon], 7, { duration: 0.6 });
-  }, [station]); // eslint-disable-line react-hooks/exhaustive-deps
-  return null;
-}
-
-/* ── fly-to arbitrary lat/lon (for chaser panel) ────────────── */
-function FlyToCoords({ coords, onDone }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!coords) return;
-    map.flyTo([coords.lat, coords.lon], Math.max(map.getZoom(), 9), { duration: 0.5 });
-    onDone?.();
-  }, [coords]); // eslint-disable-line react-hooks/exhaustive-deps
-  return null;
-}
-
-/* ── Invalidate map size when container changes ────────────── */
-function MapResizeHandler({ trigger }) {
-  const map = useMap();
-  useEffect(() => {
-    // Small delay lets the CSS transition finish before recalculating
-    const id = setTimeout(() => map.invalidateSize(), 350);
-    return () => clearTimeout(id);
-  }, [trigger, map]);
-  return null;
-}
+// MapClickHandler / FlyToStation / FlyToCoords / MapResizeHandler all
+// live in the `./StationMap/` directory now — see imports at top of file.
 
 /* ── main component ─────────────────────────────────────────── */
 export default function StationMap({
@@ -909,17 +596,18 @@ export default function StationMap({
   const [showOutlook, setShowOutlook] = useState(true);
   const [showRadar, setShowRadar] = useState(false);
   const [radarSource, setRadarSource] = useState("mosaic"); // "composite" | "mosaic" | "singlesite"
-  const [ssRadarBounds, setSsRadarBounds] = useState(null); // [[south,west],[north,east]] for single-site ImageOverlay
   const [showVelocity, setShowVelocity] = useState(false);
+  // "animated" = IEM N0S archive frames (Storm-Relative Mean Velocity, supports playback)
+  // "live"     = NCEP WMS Super-Res Base Velocity (raw Doppler, single live frame, no playback)
+  const [velocitySource, setVelocitySource] = useState("animated");
   const [velocityRadar, setVelocityRadar] = useState({ id: "TLX", lat: 35.33, lon: -97.28 });   // nearest NEXRAD
   const [velCacheBust, setVelCacheBust] = useState(() => Date.now());
   const [velScanTime, setVelScanTime] = useState(null);        // latest volume scan UTC string
-  const [velProduct, setVelProduct] = useState("N0S");          // active velocity product
+  const [velProduct, setVelProduct] = useState("N0S");          // active velocity product (IEM archives only N0S)
   const [velAvailProducts, setVelAvailProducts] = useState([]);  // IEM available products for current radar
 
   // Animated velocity state
   const [velFrames, setVelFrames] = useState([]);     // [{url, time, ts}]
-  const [velBounds, setVelBounds] = useState(null);   // [[south,west],[north,east]]
   const [velFrame, setVelFrame] = useState(0);
   const [velPlaying, setVelPlaying] = useState(false);
   const velTimerRef = useRef(null);
@@ -1040,7 +728,6 @@ export default function StationMap({
     setRadarFrames([]);
     setRadarFrame(0);
     setRadarPlaying(false);
-    setSsRadarBounds(null);
     if (radarSource === "composite") {
       const load = async () => {
         const { past, nowcast } = await fetchRadarFrames();
@@ -1059,10 +746,9 @@ export default function StationMap({
       const load = async () => {
         try {
           // IEM archives N0B (super-res base reflectivity); N0Q is no longer available
-          const { frames, bounds } = await fetchVelFrames(velocityRadar.id, "N0B", 2);
+          const { frames } = await fetchVelFrames(velocityRadar.id, "N0B", 2);
           if (cancelled) return;
           setRadarFrames(frames);
-          setSsRadarBounds(bounds);
           setRadarFrame(Math.max(0, frames.length - 1));
         } catch (e) {
           console.warn("IEM single-site reflectivity frame error:", e);
@@ -1114,18 +800,19 @@ export default function StationMap({
 
   // Fetch velocity animation frames from IEM archive
   useEffect(() => {
-    if (!showVelocity) {
+    if (!showVelocity || velocitySource !== "animated") {
       setVelScanTime(null); setVelFrames([]); setVelFrame(0); setVelPlaying(false);
+      // Still expose product list so the user can switch products in animated mode.
+      setVelAvailProducts(showVelocity ? VELOCITY_PRODUCTS : []);
       return;
     }
     let cancelled = false;
     setVelAvailProducts(VELOCITY_PRODUCTS);
     const load = async () => {
       try {
-        const { frames, bounds } = await fetchVelFrames(velocityRadar.id, velProduct);
+        const { frames } = await fetchVelFrames(velocityRadar.id, velProduct);
         if (cancelled) return;
         setVelFrames(frames);
-        setVelBounds(bounds);
         setVelFrame(Math.max(0, frames.length - 1)); // default to latest
         if (frames.length) {
           const last = frames[frames.length - 1];
@@ -1141,7 +828,7 @@ export default function StationMap({
     load();
     const id = setInterval(load, 120_000); // refresh every 2 min
     return () => { cancelled = true; clearInterval(id); };
-  }, [showVelocity, velocityRadar.id, velProduct, velCacheBust, refreshEpoch]);
+  }, [showVelocity, velocitySource, velocityRadar.id, velProduct, velCacheBust, refreshEpoch]);
 
   // Advance velocity animation frame
   useEffect(() => {
@@ -1348,13 +1035,15 @@ export default function StationMap({
   useEffect(() => {
     if (!showWarnings) { setWarningsData(null); return; }
     let cancelled = false;
-    const validEvents = new Set(Object.keys(WARNING_STYLES));
     const load = async () => {
       setWarningsLoading(true);
       const data = await fetchNwsWarnings();
-      // Client-side filter: keep only events we style + that have geometry
+      // Client-side filter: keep only events we style + that have geometry.
+      // Sub-categories (PDS, Observed, Tornado Emergency, Destructive SVR) are
+      // derived from `parameters` on each feature, so we filter on the parent
+      // event name here.
       const features = (data.features || []).filter(
-        (f) => f.geometry && validEvents.has(f.properties?.event)
+        (f) => f.geometry && VALID_WARNING_EVENTS.has(f.properties?.event)
       );
       if (!cancelled) { setWarningsData({ type: "FeatureCollection", features }); setWarningsLoading(false); }
     };
@@ -2048,12 +1737,30 @@ export default function StationMap({
                 <button
                   className={`smap-tbtn ${showVelocity ? "active" : ""}`}
                   onClick={() => { setShowVelocity((v) => { if (!v) setVelCacheBust(Date.now()); return !v; }); setShowRadar(false); }}
-                  title="Toggle NEXRAD velocity overlay (single-site) — super-res base velocity for tornado rotation signatures"
+                  title="Toggle NEXRAD velocity overlay (single-site) — Doppler radial velocity for tornado rotation signatures"
                 >
                   <Wind size={11} />
                   Velocity{showVelocity && <span className="smap-radar-badge">{velocityRadar.id}</span>}
                 </button>
-                {showVelocity && velAvailProducts.length > 0 && (
+                {showVelocity && (
+                  <div className="smap-day-btns smap-vel-source-btns">
+                    <button
+                      className={`smap-day-btn${velocitySource === "live" ? " active" : ""}`}
+                      onClick={() => { setVelocitySource("live"); setVelCacheBust(Date.now()); }}
+                      title="Live NCEP super-res base velocity — sharp Doppler pixels, single current frame, no playback"
+                    >
+                      Live
+                    </button>
+                    <button
+                      className={`smap-day-btn${velocitySource === "animated" ? " active" : ""}`}
+                      onClick={() => setVelocitySource("animated")}
+                      title="IEM archived storm-relative mean velocity — animated playback of the last hour of scans"
+                    >
+                      Animated
+                    </button>
+                  </div>
+                )}
+                {showVelocity && velocitySource === "animated" && velAvailProducts.length > 0 && (
                   <div className="smap-day-btns smap-vel-product-btns">
                     {velAvailProducts.map((vp) => (
                       <button
@@ -2373,14 +2080,13 @@ export default function StationMap({
             )}
           </Pane>
 
-          {/* Single-site NEXRAD reflectivity — archive ImageOverlay with real scan timestamps */}
-          {showRadar && radarSource === "singlesite" && ssRadarBounds && radarFrames[radarFrame]?.url ? (
-            <ImageOverlay
-              key={`ss-bref-frame-${velocityRadar.id}-${radarFrames[radarFrame].ts}`}
+          {/* Single-site NEXRAD reflectivity — archived IEM RIDGE tiles with real scan timestamps */}
+          {showRadar && radarSource === "singlesite" && radarFrames[radarFrame]?.url ? (
+            <RadarLayer
               pane="radar-tiles"
               url={radarFrames[radarFrame].url}
-              bounds={ssRadarBounds}
               opacity={0.85}
+              maxZoom={18}
               attribution={`${velocityRadar.id} N0B via IEM`}
             />
           ) : showRadar && radarSource === "singlesite" ? (
@@ -2419,20 +2125,21 @@ export default function StationMap({
             )}
           </Pane>
 
-          {/* NEXRAD velocity animation — archived IEM frames with WMS fallback while frames load */}
+          {/* NEXRAD velocity — user picks the source:
+                "animated" → IEM N0S (Storm-Relative Mean Velocity) archive frames with playback.
+                "live"     → NCEP WMS Super-Res Base Velocity, single live frame, no playback. */}
           <Pane name="velocity-tiles" style={{ zIndex: 305 }}>
-            {showVelocity && velBounds && velFrames[velFrame]?.url ? (
-              <ImageOverlay
-                key={`vel-frame-${velocityRadar.id}-${velProduct}-${velFrames[velFrame].ts}`}
+            {showVelocity && velocitySource === "animated" && velFrames[velFrame]?.url ? (
+              <RadarLayer
                 pane="velocity-tiles"
                 url={velFrames[velFrame].url}
-                bounds={velBounds}
                 opacity={0.85}
+                maxZoom={18}
                 attribution="Velocity via IEM"
               />
-            ) : showVelocity ? (
+            ) : showVelocity && velocitySource === "live" ? (
               <WMSTileLayer
-                key={`vel-bvel-${velocityRadar.id}`}
+                key={`vel-bvel-${velocityRadar.id}-${velCacheBust}`}
                 pane="velocity-tiles"
                 url={`https://opengeo.ncep.noaa.gov/geoserver/k${velocityRadar.id.toLowerCase()}/k${velocityRadar.id.toLowerCase()}_sr_bvel/ows`}
                 layers={`k${velocityRadar.id.toLowerCase()}_sr_bvel`}
@@ -2859,11 +2566,13 @@ export default function StationMap({
             <div className="smap-legend-float smap-legend-vel">
               <div className="smap-legend smap-legend-vel-row">
                 <span className="smap-legend-vel-title">
-                  {velocityRadar.id} {(() => { const vp = VELOCITY_PRODUCTS.find((p) => p.id === velProduct); return vp ? vp.label : velProduct; })()}
+                  {velocityRadar.id} {velocitySource === "live"
+                    ? "BV 0.5° (Live)"
+                    : (() => { const vp = VELOCITY_PRODUCTS.find((p) => p.id === velProduct); return vp ? vp.label : velProduct; })()}
                 </span>
-                {velFrames[velFrame] ? (
+                {velocitySource === "animated" && velFrames[velFrame] ? (
                   <span className="smap-legend-vel-time">{fmtRadarTime(velFrames[velFrame].time)}</span>
-                ) : velScanTime ? (
+                ) : velocitySource === "animated" && velScanTime ? (
                   <span className="smap-legend-vel-time">{velScanTime}</span>
                 ) : null}
               </div>

@@ -16,8 +16,6 @@ const P_MIN = 100;   // hPa top
 const P_MAX = 1050;  // hPa bottom
 const T_MIN = -50;   // °C left
 const T_MAX = 50;    // °C right
-const SKEW_ANGLE = 45; // degrees
-
 /* Pressure levels for isotherms / isobars */
 const ISOBARS = [100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 850, 900, 925, 950, 1000];
 const ISOTHERMS = d3.range(-80, 60, 10);
@@ -43,11 +41,6 @@ function es(tC) {
 function satMixingRatio(tC, pHpa) {
   const e = es(tC);
   return (621.97 * e) / (pHpa - e);
-}
-
-/** Potential temperature (K) */
-function theta(tC, pHpa) {
-  return (tC + 273.15) * Math.pow(1000 / pHpa, 0.286);
 }
 
 /** Temperature from theta and pressure */
@@ -147,7 +140,7 @@ export default function InteractiveSkewT({
   const [cursor, setCursor] = useState(null); // { x, y } in canvas coords
   const [showCrosshair, setShowCrosshair] = useState(true);
   const [showParcel, setShowParcel] = useState(true);
-  const [showBarbs, setShowBarbs] = useState(true);
+  const [showBarbs] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const isPanning = useRef(false);
@@ -558,7 +551,7 @@ export default function InteractiveSkewT({
       ctx.textBaseline = "middle";
       ctx.fillText(item.label, legendX + 24, ly + 5);
     });
-  }, [profile, sbParcel, mlParcel, params, dims, colors, toX, yScale, showParcel, showBarbs, zoom, panOffset]);
+  }, [profile, sbParcel, mlParcel, params, dims, colors, toX, yScale, showParcel, showBarbs, zoom, panOffset, plotW, plotH]);
 
   /* ── Crosshair overlay ──────────────────────────────── */
   useEffect(() => {

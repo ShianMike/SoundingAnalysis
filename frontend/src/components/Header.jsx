@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Github, MessageSquarePlus, X, Send, Loader2 } from "lucide-react";
+import { X, Send, Loader2 } from "lucide-react";
 import "./Header.css";
 
 export default function Header({ showFeedback, onCloseFeedback }) {

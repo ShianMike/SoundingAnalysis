@@ -52,12 +52,15 @@ AGENT_BUILDING_GUIDE.txt
 # Local deployment / platform metadata
 .vercel/
 
+# Local AI agent config
+.openclaude-profile.json
+
 # Deployment scripts — contain project-specific GCP config & URLs (private)
 deploy.ps1
 deploy-cloudrun.ps1
 setup-cloud-armor.ps1
-dev.ps1
 audit-security.ps1
+# dev.ps1 is safe to track (no secrets)
 
 # Backend config — sensitive parameters (API keys, origins, secrets)
 backend_config.py

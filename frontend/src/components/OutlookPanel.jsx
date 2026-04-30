@@ -35,7 +35,7 @@ export default function OutlookPanel({ data, onClose, onStationSelect }) {
   const [filter, setFilter] = useState("ALL");
 
   const summary = data?.summary;
-  const stations = data?.stations || [];
+  const stations = useMemo(() => data?.stations || [], [data?.stations]);
 
   const filtered = useMemo(() => {
     if (filter === "ALL") return stations.filter((s) => s.categorical !== "NONE");

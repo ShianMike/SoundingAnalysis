@@ -9,6 +9,8 @@ const EnsemblePlume  = lazy(() => import("./components/EnsemblePlume"));
 import { fetchStations, fetchSources, fetchSounding } from "./api";
 import { saveToHistory } from "./history";
 import "./App.css";
+import { useAppStore } from "./store/useAppStore";
+import { useShallow } from "zustand/shallow";
 
 /* ── URL ↔ params helpers ────────────────────────────────── */
 function parseUrlParams() {
@@ -39,56 +41,70 @@ function updateUrl(params) {
   window.history.replaceState(null, "", newUrl);
 }
 
-/* ── Persisted preferences (theme / colorblind) ──────────── */
-function loadPref(key, fallback) {
-  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
-}
-function savePref(key, val) {
-  try { localStorage.setItem(key, val); } catch { /* noop */ }
-}
-
 export default function App() {
-  const [stations, setStations] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [models, setModels] = useState([]);
-  const [psuModels, setPsuModels] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [riskData, setRiskData] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showMap, setShowMap] = useState(true);
-  const [showRisk, setShowRisk] = useState(false);
-  const [showTimeSeries, setShowTimeSeries] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
-  const [showVwp, setShowVwp] = useState(false);
-
-  const [compareHistoryData, setCompareHistoryData] = useState(null);
-  const [lastParams, setLastParams] = useState(null);
-  const [selectedStation, setSelectedStation] = useState("OUN");
-  const [source, setSource] = useState("obs");
-  const [showFeedback, setShowFeedback] = useState(false);
-
-  // ── Page routing (main / upload) ──────────────────────────
-  const [page, setPage] = useState("main");
-
-  // ── Theme & accessibility prefs ───────────────────────────
-  const [theme, setThemeState] = useState(() => loadPref("sa_theme", "dark"));
-  const [colorblind, setColorblindState] = useState(() => loadPref("sa_cb", "false") === "true");
+  // Only subscribe to the slice of store this component actually uses.
+  // `useShallow` keeps the destructure shape but skips re-renders when
+  // unrelated fields change.
+  const {
+    stations, setGlobalData,
+    setLoading,
+    setResult,
+    error, setError,
+    initialLoading, setInitialLoading,
+    setRiskData,
+    showHistory, toggleHistory, setShowHistory,
+    toggleMap,
+    toggleTimeSeries,
+    toggleCompare, setShowCompare,
+    toggleVwp,
+    showFeedback, setShowFeedback,
+    lastParams, setLastParams,
+    selectedStation, setSelectedStation,
+    source, setSource,
+    page, setPage,
+    theme,
+    colorblind,
+    setCompareHistoryData,
+  } = useAppStore(useShallow((s) => ({
+    stations: s.stations,
+    setGlobalData: s.setGlobalData,
+    setLoading: s.setLoading,
+    setResult: s.setResult,
+    error: s.error,
+    setError: s.setError,
+    initialLoading: s.initialLoading,
+    setInitialLoading: s.setInitialLoading,
+    setRiskData: s.setRiskData,
+    showHistory: s.showHistory,
+    toggleHistory: s.toggleHistory,
+    setShowHistory: s.setShowHistory,
+    toggleMap: s.toggleMap,
+    toggleTimeSeries: s.toggleTimeSeries,
+    toggleCompare: s.toggleCompare,
+    setShowCompare: s.setShowCompare,
+    toggleVwp: s.toggleVwp,
+    showFeedback: s.showFeedback,
+    setShowFeedback: s.setShowFeedback,
+    lastParams: s.lastParams,
+    setLastParams: s.setLastParams,
+    selectedStation: s.selectedStation,
+    setSelectedStation: s.setSelectedStation,
+    source: s.source,
+    setSource: s.setSource,
+    page: s.page,
+    setPage: s.setPage,
+    theme: s.theme,
+    colorblind: s.colorblind,
+    setCompareHistoryData: s.setCompareHistoryData,
+  })));
 
   // Apply to <html> on mount & change
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    savePref("sa_theme", theme);
   }, [theme]);
   useEffect(() => {
     document.documentElement.setAttribute("data-cb", String(colorblind));
-    savePref("sa_cb", String(colorblind));
   }, [colorblind]);
-
-  const toggleTheme = () => setThemeState((t) => (t === "dark" ? "light" : "dark"));
-  const toggleColorblind = () => setColorblindState((v) => !v);
 
   /** Scroll a section into view after React re-renders */
   const scrollToSection = (id) => {
@@ -111,14 +127,16 @@ export default function App() {
     setError(null);
     Promise.all([fetchStations(), fetchSources()])
       .then(([stationsData, sourcesData]) => {
-        setStations(stationsData);
-        setSources(sourcesData.sources);
-        setModels(sourcesData.models);
-        setPsuModels(sourcesData.psuModels || []);
+        setGlobalData({
+          stations: stationsData,
+          sources: sourcesData.sources,
+          models: sourcesData.models,
+          psuModels: sourcesData.psuModels || []
+        });
       })
       .catch(() => setError("Failed to connect to API. Is the backend running?"))
       .finally(() => setInitialLoading(false));
-  }, []);
+  }, [setError, setGlobalData, setInitialLoading]);
 
   useEffect(() => {
     loadInitialData();
@@ -183,10 +201,6 @@ export default function App() {
     scrollToSection("section-compare");
   };
 
-  const handleMapStationSelect = (stationId) => {
-    setSelectedStation(stationId);
-  };
-
   const handleTimelineSelect = (dateKey) => {
     // Re-fetch sounding for the same station with a different date
     handleSubmit({
@@ -198,6 +212,7 @@ export default function App() {
 
   const handleRiskStationSelect = (stationId, riskMeta) => {
     // Load sounding for a station from risk scan results
+    setRiskData(riskMeta);
     if (riskMeta?.model) {
       // Forecast scan — load PSU sounding (backend falls back to BUFKIT)
       handleSubmit({
@@ -248,14 +263,6 @@ export default function App() {
     });
   };
 
-  const handleSourceChange = (src) => {
-    setSource(src);
-  };
-
-  const handleStationChange = (id) => {
-    setSelectedStation(id);
-  };
-
   // ── Auto-refresh polling ──────────────────────────────────
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(300000); // 5 min default
@@ -281,11 +288,11 @@ export default function App() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key.toLowerCase()) {
-        case "h": e.preventDefault(); setShowHistory((v) => !v); break;
-        case "c": e.preventDefault(); setShowCompare((v) => !v); break;
-        case "m": e.preventDefault(); setShowMap((v) => !v); break;
-        case "t": e.preventDefault(); setShowTimeSeries((v) => !v); break;
-        case "v": e.preventDefault(); setShowVwp((v) => !v); break;
+        case "h": e.preventDefault(); toggleHistory(); break;
+        case "c": e.preventDefault(); toggleCompare(); break;
+        case "m": e.preventDefault(); toggleMap(); break;
+        case "t": e.preventDefault(); toggleTimeSeries(); break;
+        case "v": e.preventDefault(); toggleVwp(); break;
         case "?": e.preventDefault(); setShowShortcuts((v) => !v); break;
         case "escape": setShowShortcuts(false); break;
         default: break;
@@ -293,7 +300,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [toggleCompare, toggleHistory, toggleMap, toggleTimeSeries, toggleVwp]);
 
   const [showShortcuts, setShowShortcuts] = useState(false);
 
@@ -340,48 +347,18 @@ export default function App() {
       ) : (
         <main className="app-main">
           <ControlPanel
-            stations={stations}
-            sources={sources}
-            models={models}
-            psuModels={psuModels}
             onSubmit={handleSubmit}
-            loading={loading}
-            initialLoading={initialLoading}
             onRetry={loadInitialData}
             connectError={initialLoading ? null : (stations.length === 0 ? error : null)}
-            riskData={riskData}
-            onRiskDataChange={(data) => { setRiskData(data); if (data) { setShowRisk(true); scrollToSection("section-risk"); } }}
-            showRisk={showRisk}
-            onToggleRisk={() => setShowRisk((v) => { if (!v) scrollToSection("section-risk"); return !v; })}
-            showHistory={showHistory}
-            onToggleHistory={() => setShowHistory((v) => !v)}
-            showMap={showMap}
-            onToggleMap={() => setShowMap((v) => { if (!v) scrollToSection("section-map"); return !v; })}
-            showTimeSeries={showTimeSeries}
-            onToggleTimeSeries={() => setShowTimeSeries((v) => { if (!v) scrollToSection("section-timeseries"); return !v; })}
-            showCompare={showCompare}
-            onToggleCompare={() => setShowCompare((v) => { if (!v) scrollToSection("section-compare"); return !v; })}
-            showVwp={showVwp}
-            onToggleVwp={() => setShowVwp((v) => { if (!v) scrollToSection("section-vwp"); return !v; })}
             onNavigateEnsemble={() => setPage("ensemble")}
-            selectedStation={selectedStation}
-            onStationChange={handleStationChange}
-            onSourceChange={handleSourceChange}
             mapLatLon={lastParams?._mapLat != null ? { lat: lastParams._mapLat, lon: lastParams._mapLon } : null}
             mapStormMotion={lastParams?._mapStormDirection != null ? {
               direction: lastParams._mapStormDirection,
               speed: lastParams._mapStormSpeed,
             } : null}
             mapBoundaryOrientation={lastParams?._mapBoundaryOrientation != null ? lastParams._mapBoundaryOrientation : null}
-            onFeedbackClick={() => setShowFeedback((v) => !v)}
-            showFeedback={showFeedback}
             urlParams={urlParamsRef.current}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            colorblind={colorblind}
-            onToggleColorblind={toggleColorblind}
             onNavigateUpload={() => setPage("upload")}
-
             onShowShortcuts={() => setShowShortcuts(true)}
           />
           {showHistory && (
@@ -395,44 +372,18 @@ export default function App() {
           )}
 
           <ResultsView
-            result={result}
-            loading={loading}
-            error={error}
-            riskData={riskData}
-            showRisk={showRisk}
-            showMap={showMap}
-            showTimeSeries={showTimeSeries}
-            onCloseTimeSeries={() => setShowTimeSeries(false)}
-            showCompare={showCompare}
-            onCloseCompare={() => setShowCompare(false)}
-            showVwp={showVwp}
-            onCloseVwp={() => setShowVwp(false)}
-
-            compareHistoryData={compareHistoryData}
-            onCompareHistoryConsumed={() => setCompareHistoryData(null)}
-            stations={stations}
-            selectedStation={selectedStation}
-            source={source}
-            lastParams={lastParams}
             autoRefresh={autoRefresh}
             onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
             refreshInterval={refreshInterval}
             onRefreshIntervalChange={setRefreshInterval}
-            theme={theme}
             onTimelineSelect={handleTimelineSelect}
             onRiskStationSelect={handleRiskStationSelect}
             mapProps={{
-              stations,
-              riskData,
-              selectedStation,
-              onStationSelect: handleMapStationSelect,
               onLatLonSelect: handleMapLatLonSelect,
               onStormMotionSelect: handleMapStormMotionSelect,
               onBoundaryOrientationSelect: handleMapBoundaryOrientationSelect,
-              onClose: () => setShowMap(false),
               onFetchLatest: handleFetchLatest,
               onCompareStations: handleCompareStations,
-
             }}
           />
         </main>

@@ -1419,6 +1419,138 @@ body.smap-fullscreen-active .control-panel {
 [data-theme=\"light\"] .smap-warn-area { color: #555; }
 [data-theme=\"light\"] .smap-warn-time { color: #777; }
 
+/* ── Weatherwise-style sub-category enhancements ─────────────── */
+/* Wider popup so Hazard / Source / Impact rows never wrap mid-word. */
+.smap-warn-popup-wrap .leaflet-popup-content {
+  min-width: 280px !important;
+}
+.smap-warn-popup {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Detail rows shown in the popup (Hazard / Source / Impact / Motion / Hail+Wind). */
+.smap-warn-details {
+  margin: 8px 0 6px 0;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-theme=\"light\"] .smap-warn-details { background: rgba(0, 0, 0, 0.04); }
+
+/* Row = label (uppercase, muted) on its own line, then value beneath. */
+.smap-warn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.smap-warn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+}
+.smap-warn-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.smap-warn-label {
+  color: #8a8f96;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 9px;
+  line-height: 1.2;
+}
+.smap-warn-value {
+  color: #f1f1f1;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.3;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+[data-theme=\"light\"] .smap-warn-label { color: #6b7280; }
+[data-theme=\"light\"] .smap-warn-value { color: #1f2937; }
+
+/* Sub-category badge accents — override the inline color tint applied
+   in JS so the highest-tier alerts read more strongly in the popup. */
+.smap-warn-badge.is-emg {
+  background: linear-gradient(90deg, #ff00ff 0%, #ff1493 100%) !important;
+  color: #fff !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 8px rgba(255, 0, 255, 0.55);
+  animation: smap-warn-badge-pulse 1.4s ease-in-out infinite;
+}
+.smap-warn-badge.is-pds {
+  background: rgba(255, 20, 147, 0.18) !important;
+  color: #ff1493 !important;
+  border-color: rgba(255, 20, 147, 0.7) !important;
+  box-shadow: 0 0 6px rgba(255, 20, 147, 0.35);
+}
+.smap-warn-badge.is-obs {
+  background: rgba(220, 20, 60, 0.18) !important;
+  color: #ff5570 !important;
+  border-color: rgba(220, 20, 60, 0.7) !important;
+}
+.smap-warn-badge.is-svr-dst {
+  background: rgba(255, 69, 0, 0.18) !important;
+  color: #ff7a3a !important;
+  border-color: rgba(255, 69, 0, 0.7) !important;
+  box-shadow: 0 0 6px rgba(255, 69, 0, 0.35);
+}
+.smap-warn-badge.is-svr-con {
+  background: rgba(255, 140, 0, 0.18) !important;
+  color: #ffa64a !important;
+  border-color: rgba(255, 140, 0, 0.7) !important;
+}
+
+/* Polygon emphasis on the map.
+   Leaflet copies the className we return from `style()` onto the SVG path,
+   so we can target each tier with a CSS-only filter / animation. */
+.smap-warn-poly.smap-warn-emg {
+  filter: drop-shadow(0 0 6px rgba(255, 0, 255, 0.85))
+          drop-shadow(0 0 12px rgba(255, 20, 147, 0.6));
+  animation: smap-warn-poly-pulse 1.6s ease-in-out infinite;
+}
+.smap-warn-poly.smap-warn-pds {
+  filter: drop-shadow(0 0 4px rgba(255, 20, 147, 0.7))
+          drop-shadow(0 0 8px rgba(255, 20, 147, 0.45));
+  animation: smap-warn-poly-glow 2.4s ease-in-out infinite;
+}
+.smap-warn-poly.smap-warn-svr-dst {
+  filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.65))
+          drop-shadow(0 0 8px rgba(255, 69, 0, 0.4));
+  animation: smap-warn-poly-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes smap-warn-poly-pulse {
+  0%, 100% { fill-opacity: 0.30; stroke-opacity: 1.00; }
+  50%      { fill-opacity: 0.55; stroke-opacity: 0.85; }
+}
+@keyframes smap-warn-poly-glow {
+  0%, 100% { fill-opacity: 0.22; }
+  50%      { fill-opacity: 0.38; }
+}
+@keyframes smap-warn-badge-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 0, 255, 0.55); }
+  50%      { box-shadow: 0 0 14px rgba(255, 0, 255, 0.95), 0 0 22px rgba(255, 20, 147, 0.6); }
+}
+
+/* Honour reduced-motion preferences — keep the colour cues, drop the animation. */
+@media (prefers-reduced-motion: reduce) {
+  .smap-warn-poly.smap-warn-emg,
+  .smap-warn-poly.smap-warn-pds,
+  .smap-warn-poly.smap-warn-svr-dst,
+  .smap-warn-badge.is-emg {
+    animation: none !important;
+  }
+}
+
 /* ── Proximity Search overlay (rendered outside Leaflet) ────── */
 .smap-prox-overlay {
   position: absolute;

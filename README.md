@@ -312,6 +312,7 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 ├── gunicorn.conf.py       # Gunicorn WSGI config (reads PORT from env)
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Container image for Cloud Run
+├── dev.ps1                # One-command local dev (Flask on :5001 + Vite on :3000)
 ├── deploy.ps1             # Build frontend → deploy to GitHub Pages
 ├── deploy-cloudrun.ps1    # Deploy backend to Google Cloud Run
 ├── setup-cloud-armor.ps1  # Optional Cloud Armor WAF setup
@@ -376,6 +377,18 @@ Okabe-Ito / Wong 2011 color-safe palette for all plot traces:
 
 ## Quick Start
 
+### One-command local dev (Windows)
+
+```powershell
+.\dev.ps1
+```
+
+Creates/activates the Python venv, installs Python and Node dependencies if needed, then starts:
+- **Flask backend** on `http://localhost:5001` (with hot-reload on `.py` changes)
+- **Vite frontend** on `http://localhost:3000` (with HMR)
+
+Press `Ctrl+C` to stop everything cleanly.
+
 ### Backend (Python)
 
 ```bash
@@ -397,7 +410,7 @@ python -m sounding --list-sources                             # Show all sources
 
 ```bash
 python app.py
-# → http://localhost:5000
+# → http://localhost:5001
 ```
 
 ### Frontend (React)
@@ -406,10 +419,10 @@ python app.py
 cd frontend
 npm install
 npm run dev
-# → http://localhost:5173
+# → http://localhost:3000
 ```
 
-Set `VITE_API_URL` to point to your backend (defaults to `http://localhost:5000`).
+Set `VITE_API_URL` to point to your backend (defaults to `http://localhost:5001`).
 
 ---
 

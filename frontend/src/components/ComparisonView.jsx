@@ -8,8 +8,6 @@ import {
   MapPin,
   Calendar,
   Database,
-  ChevronDown,
-  Search,
   Download,
 } from "lucide-react";
 import { fetchCompare, fetchComposite, fetchMergeProfiles } from "../api";
@@ -240,7 +238,7 @@ export default function ComparisonView({ stations, onClose, historyData, onHisto
       setError(null);
       if (onHistoryConsumed) onHistoryConsumed();
     }
-  }, [historyData]);
+  }, [historyData, onHistoryConsumed]);
 
   const updateSlot = (idx, slot) => {
     setSlots((prev) => prev.map((s, i) => (i === idx ? slot : s)));

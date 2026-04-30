@@ -1,36 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
-  Search,
-  MapPin,
-  Calendar,
   Database,
-  Layers,
-  Clock,
   Loader2,
   ChevronDown,
-  ChevronRight,
-  Zap,
-  ArrowUpDown,
-  History,
-  Map,
-  Star,
-  TrendingUp,
-  GitCompareArrows,
   MessageSquarePlus,
   Github,
-  Thermometer,
-  Wind,
-  RotateCcw,
-  Crosshair,
   Keyboard,
-  Waves,
-  Radio,
   Sun,
   Moon,
-  Eye,
-  Upload,
-  Minus,
-  X,
   GripVertical,
   ChevronUp,
   Sliders,
@@ -40,217 +17,100 @@ import {
 import { fetchRiskScan, fetchForecastRiskScan } from "../api";
 import { getFavorites, toggleFavorite } from "../favorites";
 import "./ControlPanel.css";
+import { useAppStore } from "../store/useAppStore";
+import { useShallow } from "zustand/shallow";
+import { useDraggable } from "../hooks/useDraggable";
+import ToolsTab from "./ControlPanel/ToolsTab";
+import ModifyTab from "./ControlPanel/ModifyTab";
+import DataTab from "./ControlPanel/DataTab";
+import { nearestNexrad } from "../config/constants";
 
-/* ── NEXRAD radar sites for VAD nearest-radar lookup ──────── */
-const NEXRAD_SITES = [
-  ["KABR",45.46,-98.41],["KABX",35.15,-106.82],["KAKQ",36.98,-77.01],
-  ["KAMA",35.23,-101.71],["KAMX",25.61,-80.41],["KAPX",44.91,-84.72],
-  ["KARX",43.82,-91.19],["KATX",48.19,-122.50],["KBBX",39.50,-121.63],
-  ["KBGM",42.20,-75.98],["KBMX",33.17,-86.77],["KBOX",41.96,-71.14],
-  ["KBRO",25.92,-97.42],["KBUF",42.95,-78.74],["KBYX",24.60,-81.70],
-  ["KCAE",33.95,-81.12],["KCBW",46.04,-67.81],["KCBX",43.49,-116.24],
-  ["KCCX",40.92,-78.00],["KCLE",41.41,-81.86],["KCLX",32.66,-81.04],
-  ["KCRP",27.78,-97.51],["KCXX",44.51,-73.17],["KCYS",41.15,-104.81],
-  ["KDAX",38.50,-121.68],["KDDC",37.76,-99.97],["KDFX",29.27,-100.28],
-  ["KDGX",32.28,-89.98],["KDIX",39.95,-74.41],["KDLH",46.84,-92.21],
-  ["KDMX",41.73,-93.72],["KDOX",38.83,-75.44],["KDTX",42.70,-83.47],
-  ["KDVN",41.61,-90.58],["KDYX",32.54,-99.25],["KEAX",38.81,-94.26],
-  ["KEMX",31.89,-110.63],["KENX",42.59,-74.06],["KEOX",31.46,-85.46],
-  ["KEPZ",31.87,-106.70],["KESX",35.70,-114.89],["KEVX",30.56,-85.92],
-  ["KEWX",29.70,-98.03],["KEYX",35.10,-117.56],["KFCX",37.02,-80.27],
-  ["KFDR",34.36,-98.98],["KFDX",34.64,-103.63],["KFFC",33.36,-84.57],
-  ["KFSD",43.59,-96.73],["KFSX",34.57,-111.20],["KFTG",39.79,-104.55],
-  ["KFWS",32.57,-97.30],["KGGW",48.21,-106.63],["KGJX",39.06,-108.21],
-  ["KGLD",39.37,-101.70],["KGRB",44.50,-88.11],["KGRK",30.72,-97.38],
-  ["KGRR",42.89,-85.54],["KGSP",34.88,-82.22],["KGWX",33.90,-88.33],
-  ["KGYX",43.89,-70.26],["KHDX",33.08,-106.12],["KHGX",29.47,-95.08],
-  ["KHNX",36.31,-119.63],["KHPX",36.74,-87.28],["KHTX",34.93,-86.08],
-  ["KHWA",38.51,-82.97],["KICT",37.65,-97.44],["KICX",37.59,-112.86],
-  ["KILN",39.42,-83.82],["KILX",40.15,-89.34],["KIND",39.71,-86.28],
-  ["KINX",36.18,-95.56],["KIWA",33.29,-111.67],["KIWX",41.36,-85.70],
-  ["KJAX",30.48,-81.70],["KJGX",32.68,-83.35],["KJKL",37.59,-83.31],
-  ["KKEY",24.55,-81.78],["KLBB",33.65,-101.81],["KLCH",30.13,-93.22],
-  ["KLIX",30.34,-89.83],["KLNX",41.96,-100.58],["KLOT",41.60,-88.08],
-  ["KLRX",40.74,-116.80],["KLSX",38.70,-90.68],["KLTX",33.99,-78.43],
-  ["KLVX",37.98,-85.94],["KLWX",38.98,-77.48],["KLZK",34.84,-92.26],
-  ["KMAF",31.94,-102.19],["KMAX",42.08,-122.72],["KMBX",48.39,-100.86],
-  ["KMHX",34.78,-76.88],["KMKX",42.97,-88.55],["KMLB",28.11,-80.65],
-  ["KMOB",30.68,-88.24],["KMPX",44.85,-93.57],["KMQT",46.53,-87.55],
-  ["KMRX",36.17,-83.40],["KMSX",47.04,-113.99],["KMTX",41.26,-112.45],
-  ["KMUX",37.16,-121.90],["KMVX",47.53,-97.33],["KMXX",32.54,-85.79],
-  ["KNKX",32.92,-117.04],["KNQA",35.34,-89.87],["KOAX",41.32,-96.37],
-  ["KOHX",36.25,-86.56],["KOKX",40.87,-72.86],["KOTX",47.68,-117.63],
-  ["KPAH",37.07,-88.77],["KPBZ",40.53,-80.22],["KPDT",45.69,-118.85],
-  ["KPOE",34.41,-116.16],["KPUX",38.46,-104.18],["KRAX",35.67,-78.49],
-  ["KRGX",39.75,-119.46],["KRIW",43.07,-108.48],["KRLX",38.31,-81.72],
-  ["KRTX",45.71,-122.97],["KSFX",43.11,-112.69],["KSGF",37.24,-93.40],
-  ["KSHV",32.45,-93.84],["KSJT",31.37,-100.49],["KSOX",33.82,-117.64],
-  ["KSRX",35.29,-94.36],["KTBW",27.71,-82.40],["KTFX",47.46,-111.39],
-  ["KTLH",30.40,-84.33],["KTLX",35.33,-97.28],["KTWX",38.99,-96.23],
-  ["KTYX",43.76,-75.68],["KUDX",44.13,-102.83],["KUEX",40.32,-98.44],
-  ["KVAX",30.89,-83.00],["KVBX",34.84,-120.40],["KVNX",36.74,-98.13],
-  ["KVTX",34.41,-119.18],["KVWX",38.26,-87.72],["KYUX",32.50,-114.66],
-];
-
+/** Local thin wrapper preserving the existing `"KXXX"` return shape used here. */
 function nearestNexradForVad(lat, lon) {
-  let best = NEXRAD_SITES[0], bestD = Infinity;
-  for (const s of NEXRAD_SITES) {
-    const d = (s[1] - lat) ** 2 + (s[2] - lon) ** 2;
-    if (d < bestD) { bestD = d; best = s; }
-  }
-  return best[0];  // Returns e.g. "KTLX"
+  const r = nearestNexrad(lat, lon);
+  return r ? r.idK : null;
 }
 
-const SOURCE_META = {
-  obs: {
-    label: "Observed Radiosonde",
-    desc: "Real observed upper-air data from the Iowa Environmental Mesonet and University of Wyoming archives.",
-  },
-  bufkit: {
-    label: "BUFKIT Forecast",
-    desc: "Station-based forecast soundings from HRRR, RAP, NAM, GFS, and other models via Iowa State archive.",
-  },
-  psu: {
-    label: "PSU BUFKIT (Latest)",
-    desc: "Latest model run from Penn State's real-time BUFKIT feed. Supports RAP, HRRR, NAM, GFS, and more.",
-  },
-};
-
-/* Model metadata: short label, resolution hint, max forecast hour, step */
-const MODEL_META = {
-  hrrr:    { short: "HRRR",     res: "3 km · hourly",     maxF: 48,  step: 1, lag: 3, interval: 1 },
-  rap:     { short: "RAP",      res: "13 km · hourly",    maxF: 21,  step: 1, lag: 3, interval: 1 },
-  nam:     { short: "NAM",      res: "12 km · hourly",    maxF: 84,  step: 1, lag: 5, interval: 6 },
-  namnest: { short: "NAM Nest", res: "3 km · hourly",     maxF: 60,  step: 1, lag: 5, interval: 6 },
-  nam4km:  { short: "NAM 4km",  res: "4 km · hourly",     maxF: 60,  step: 1, lag: 5, interval: 6 },
-  gfs:     { short: "GFS",      res: "global · 3-hourly", maxF: 384, step: 3, lag: 6, interval: 6 },
-  sref:    { short: "SREF",     res: "ens mean · 3-hr",   maxF: 87,  step: 3, lag: 6, interval: 6 },
-  hiresw:  { short: "HiResW",   res: "NMMB / ARW",        maxF: 48,  step: 1, lag: 5, interval: 6 },
-};
-
-/* Common quick-pick forecast hours */
-const FHOUR_PRESETS = [0, 3, 6, 12, 18, 24, 36, 48];
-
 export default function ControlPanel({
-  stations,
-  sources,
-  models,
-  psuModels,
   onSubmit,
-  loading,
-  initialLoading,
   onRetry,
   connectError,
-  riskData,
-  onRiskDataChange,
-  showRisk,
-  onToggleRisk,
-  showHistory,
-  onToggleHistory,
-  showMap,
-  onToggleMap,
-  showTimeSeries,
-  onToggleTimeSeries,
-  showCompare,
-  onToggleCompare,
-  showVwp,
-  onToggleVwp,
   onNavigateEnsemble,
-  selectedStation,
-  onStationChange,
-  onSourceChange,
   mapLatLon,
   mapStormMotion,
   mapBoundaryOrientation,
-  onFeedbackClick,
-  showFeedback: feedbackActive,
   urlParams,
-  theme,
-  onToggleTheme,
-  colorblind,
-  onToggleColorblind,
   onNavigateUpload,
   onShowShortcuts,
 }) {
-  /* ── Drag & collapse state for fullscreen-float mode ─────── */
-  const [floatCollapsed, setFloatCollapsed] = useState(false);
-  const [dragPos, setDragPos] = useState({ x: 16, y: 16 });
-  const dragRef = useRef(null);
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+  // Subscribe to only this component's slice of the store with shallow
+  // equality so unrelated store mutations (result, error, lastParams, page,
+  // compareHistoryData, …) don't trigger re-renders here.
+  const {
+    stations, sources, models, psuModels, loading, initialLoading,
+    riskData, setRiskData, showRisk, toggleRisk,
+    showHistory, toggleHistory,
+    showMap, toggleMap,
+    showTimeSeries, toggleTimeSeries,
+    showCompare, toggleCompare,
+    showVwp, toggleVwp,
+    station, setStation,
+    source, setSource,
+    feedbackActive, toggleFeedback,
+    theme, toggleTheme, colorblind, toggleColorblind,
+  } = useAppStore(useShallow((s) => ({
+    stations: s.stations,
+    sources: s.sources,
+    models: s.models,
+    psuModels: s.psuModels,
+    loading: s.loading,
+    initialLoading: s.initialLoading,
+    riskData: s.riskData,
+    setRiskData: s.setRiskData,
+    showRisk: s.showRisk,
+    toggleRisk: s.toggleRisk,
+    showHistory: s.showHistory,
+    toggleHistory: s.toggleHistory,
+    showMap: s.showMap,
+    toggleMap: s.toggleMap,
+    showTimeSeries: s.showTimeSeries,
+    toggleTimeSeries: s.toggleTimeSeries,
+    showCompare: s.showCompare,
+    toggleCompare: s.toggleCompare,
+    showVwp: s.showVwp,
+    toggleVwp: s.toggleVwp,
+    station: s.selectedStation,
+    setStation: s.setSelectedStation,
+    source: s.source,
+    setSource: s.setSource,
+    feedbackActive: s.showFeedback,
+    toggleFeedback: s.toggleFeedback,
+    theme: s.theme,
+    toggleTheme: s.toggleTheme,
+    colorblind: s.colorblind,
+    toggleColorblind: s.toggleColorblind,
+  })));
 
-  const onPointerDown = useCallback((e) => {
-    if (!document.body.classList.contains("smap-fullscreen-active")) return;
-    // Don't start drag if clicking a button (let the click event fire)
-    if (e.target.closest("button")) return;
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY, posX: dragPos.x, posY: dragPos.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }, [dragPos]);
+  const onFeedbackClick = toggleFeedback;
+  const onToggleColorblind = toggleColorblind;
+  const onToggleTheme = toggleTheme;
+  const onToggleRisk = toggleRisk;
+  const onToggleHistory = toggleHistory;
+  const onToggleMap = toggleMap;
+  const onToggleTimeSeries = toggleTimeSeries;
+  const onToggleCompare = toggleCompare;
+  const onToggleVwp = toggleVwp;
+  const onRiskDataChange = setRiskData;
+  /* ── Drag & collapse state for fullscreen-float mode ───────
+     Logic lives in `hooks/useDraggable.js`. */
+  const {
+    dragPos,
+    floatCollapsed,
+    toggleFloatCollapsed,
+    dragRef,
+    dragHandlers,
+  } = useDraggable();
 
-  /** Minimum Y = bottom of the map toolbar + gap so sidebar never overlaps it */
-  const getMinY = useCallback(() => {
-    const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
-    if (tb) {
-      const rect = tb.getBoundingClientRect();
-      return rect.bottom + 8;        // 8px gap below toolbar
-    }
-    return 90;                         // safe fallback
-  }, []);
-
-  const onPointerMove = useCallback((e) => {
-    if (!isDragging.current) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    const minY = getMinY();
-    const pad = 12;
-    const panelW = dragRef.current ? dragRef.current.offsetWidth : 270;
-    setDragPos({
-      x: Math.max(pad, Math.min(window.innerWidth - panelW - pad, dragStart.current.posX + dx)),
-      y: Math.max(minY, Math.min(window.innerHeight - 40, dragStart.current.posY + dy)),
-    });
-  }, [getMinY]);
-
-  const onPointerUp = useCallback(() => {
-    isDragging.current = false;
-  }, []);
-
-  // Centre sidebar when entering fullscreen; reset when exiting
-  // Only react when the fullscreen state actually *changes* (not every class mutation)
-  const wasFullscreen = useRef(false);
-  useEffect(() => {
-    const obs = new MutationObserver(() => {
-      const active = document.body.classList.contains("smap-fullscreen-active");
-      if (active === wasFullscreen.current) return; // no change — ignore
-      wasFullscreen.current = active;
-      if (active) {
-        // Position at absolute top-left corner
-        setDragPos({ x: 0, y: 0 });
-        setFloatCollapsed(true);
-      } else {
-        setDragPos({ x: 16, y: 16 });
-        setFloatCollapsed(false);
-      }
-    });
-    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-
-  // When a toolbar dropdown opens/closes, push sidebar below the toolbar
-  useEffect(() => {
-    const tb = document.querySelector('.smap-fullscreen .smap-toolbar');
-    if (!tb) return;
-    const ro = new ResizeObserver(() => {
-      if (!document.body.classList.contains("smap-fullscreen-active")) return;
-      const bottom = tb.getBoundingClientRect().bottom;
-      setDragPos((prev) => ({ x: prev.x, y: (bottom > 0 ? bottom : 0) + 8 }));
-    });
-    ro.observe(tb);
-    return () => ro.disconnect();
-  });
-
-  const [source, setSourceLocal] = useState(urlParams?.source || "obs");
-  const [station, setStationLocal] = useState(urlParams?.station || "OUN");
   const [date, setDate] = useState(() => {
     // Convert YYYYMMDDHH back to datetime-local value for the input
     if (urlParams?.date && /^\d{10}$/.test(urlParams.date)) {
@@ -305,40 +165,26 @@ export default function ControlPanel({
 
 
 
-  // Sync source to parent
-  const setSource = (src) => {
-    setSourceLocal(src);
-    if (onSourceChange) onSourceChange(src);
-  };
-
-  // Sync station to parent
-  const setStation = (id) => {
-    setStationLocal(id);
-    if (onStationChange) onStationChange(id);
-  };
-
   // Point sounding mode — set when user clicks map for arbitrary lat/lon
   const [pointMode, setPointMode] = useState(false);
 
-  // Sync station from parent (map click) and scroll into view
+  // Sync lat/lon and scroll into view when station changes (e.g. map click)
   useEffect(() => {
-    if (selectedStation && selectedStation !== station) {
-      setStationLocal(selectedStation);
-      setPointMode(false);  // Station selection exits point mode
-      const stn = stations.find((s) => s.id === selectedStation);
-      if (stn) {
-        setLat(String(stn.lat));
-        setLon(String(stn.lon));
-      }
+    if (!station) return;
+    setPointMode(false);
+    const stn = stations.find((s) => s.id === station);
+    if (stn) {
+      setLat(String(stn.lat));
+      setLon(String(stn.lon));
     }
     // Scroll the selected station into view in the list
-    if (selectedStation && listRef.current) {
+    if (listRef.current) {
       requestAnimationFrame(() => {
-        const el = listRef.current?.querySelector(`.cp-station-item[data-id="${selectedStation}"]`);
+        const el = listRef.current?.querySelector(`.cp-station-item[data-id="${station}"]`);
         if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
       });
     }
-  }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [station]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync lat/lon from map click — enter point sounding mode
   useEffect(() => {
@@ -347,7 +193,7 @@ export default function ControlPanel({
       setLon(String(mapLatLon.lon));
       setPointMode(true);
     }
-  }, [mapLatLon]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapLatLon]);
 
   // Sync custom storm motion from map draw tool
   useEffect(() => {
@@ -619,9 +465,7 @@ export default function ControlPanel({
       {/* Drag handle – only visible in float mode */}
       <div
         className="cp-drag-handle"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        {...dragHandlers}
       >
         <GripVertical size={14} />
         <span className="cp-drag-label">Sounding Analysis</span>
@@ -629,7 +473,7 @@ export default function ControlPanel({
           <button
             type="button"
             className="cp-drag-btn"
-            onClick={() => setFloatCollapsed((v) => !v)}
+            onClick={toggleFloatCollapsed}
             title={floatCollapsed ? "Expand panel" : "Collapse panel"}
           >
             {floatCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -684,750 +528,97 @@ export default function ControlPanel({
 
       {/* ═══ DATA TAB ═══ */}
       {navTab === "data" && (
-      <form onSubmit={handleSubmit} className="cp-form">
-        {/* Source */}
-        <div className="cp-section">
-          <label className="cp-label">
-            <Database size={14} />
-            Data Source
-          </label>
-          <div className="cp-source-grid">
-            {sources.map((s) => {
-              const meta = SOURCE_META[s.id];
-              return (
-                <div key={s.id} className="cp-source-btn-wrap">
-                  <button
-                    type="button"
-                    className={`cp-source-btn ${source === s.id ? "active" : ""}`}
-                    onClick={() => setSource(s.id)}
-                    title={meta ? `${meta.label}\n${meta.desc}` : s.id.toUpperCase()}
-                  >
-                    <span className="cp-source-id">{s.id.toUpperCase()}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Station */}
-        {needsStation && (
-          <div className="cp-section">
-            <label className="cp-label">
-              <MapPin size={14} />
-              Station
-            </label>
-            <div className="cp-station-picker">
-              {/* Scan mode toggle */}
-              <div className="cp-scan-tabs">
-                <button
-                  type="button"
-                  className={`cp-scan-tab${scanMode === "obs" ? " active" : ""}`}
-                  onClick={() => setScanMode("obs")}
-                >
-                  <Eye size={12} /> Observed
-                </button>
-                <button
-                  type="button"
-                  className={`cp-scan-tab${scanMode === "forecast" ? " active" : ""}`}
-                  onClick={() => setScanMode("forecast")}
-                >
-                  <TrendingUp size={12} /> Forecast
-                </button>
-              </div>
-
-              {/* Forecast model + fhour pickers */}
-              {scanMode === "forecast" && (() => {
-                const meta = MODEL_META[fcstModel] || { maxF: 48, step: 1, lag: 3, interval: 1 };
-                const fh = parseInt(fcstFhour) || 0;
-                /* Mirror backend cycle logic: candidate = now - lag, snap to interval */
-                const lag = meta.lag || 3;
-                const interval = meta.interval || 1;
-                const candidate = new Date(Date.now() - lag * 3600000);
-                let initHour = candidate.getUTCHours();
-                if (interval > 1) initHour = Math.floor(initHour / interval) * interval;
-                const initDate = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth(), candidate.getUTCDate(), initHour));
-                const validDate = new Date(initDate.getTime() + fh * 3600000);
-                const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                const zLabel = `${validDate.getUTCDate()} ${months[validDate.getUTCMonth()]} ${String(validDate.getUTCHours()).padStart(2,"0")}Z`;
-                return (
-                  <div className="cp-scan-forecast-opts">
-                    <div className="cp-scan-row">
-                      <select
-                        className="cp-input cp-scan-select"
-                        value={fcstModel}
-                        onChange={(e) => {
-                          setFcstModel(e.target.value);
-                          const m = MODEL_META[e.target.value] || { maxF: 384, step: 1 };
-                          if (parseInt(fcstFhour) > m.maxF) setFcstFhour(String(m.maxF));
-                        }}
-                      >
-                        {["hrrr", "rap", "nam", "namnest", "gfs"].map((m) => (
-                          <option key={m} value={m}>
-                            {MODEL_META[m]?.short || m} (0–{MODEL_META[m]?.maxF}h)
-                          </option>
-                        ))}
-                      </select>
-                      <span className="cp-scan-valid-tag">F{fcstFhour} · {zLabel}</span>
-                    </div>
-                    <div className="cp-scan-slider-row">
-                      <span className="cp-scan-edge-label">0h</span>
-                      <input
-                        type="range"
-                        className="cp-scan-slider"
-                        min={0}
-                        max={meta.maxF}
-                        step={meta.step}
-                        value={fcstFhour}
-                        onChange={(e) => setFcstFhour(e.target.value)}
-                      />
-                      <span className="cp-scan-edge-label">{meta.maxF}h</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <button
-                type="button"
-                className="cp-risk-btn"
-                onClick={handleRiskScan}
-                disabled={scanning}
-              >
-                {scanning ? (
-                  <>
-                    <Loader2 size={14} className="spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Search size={14} />
-                    {riskData ? "Rescan Severe Risk" : "Scan Severe Risk"}
-                  </>
-                )}
-              </button>
-              {riskData && (
-                <p className="cp-risk-hint">
-                  {riskData.model
-                    ? `${(MODEL_META[riskData.model]?.short || riskData.model).toUpperCase()} F${riskData.fhour} · ${riskData.stations.length} stations`
-                    : `Scanned ${riskData.stations.length} stations at ${riskData.date}`}
-                </p>
-              )}
-              <div className="cp-station-toolbar">
-                <div className="cp-input-wrap cp-search-flex">
-                  <Search size={14} className="cp-input-icon" />
-                  <input
-                    type="text"
-                    className="cp-input"
-                    placeholder="Filter..."
-                    value={stationSearch}
-                    onChange={(e) => setStationSearch(e.target.value)}
-                  />
-                </div>
-                <div className="cp-sort-wrap">
-                  <ArrowUpDown size={12} className="cp-sort-icon" />
-                  <select
-                    className="cp-sort-select"
-                    value={sortMode}
-                    onChange={(e) => setSortMode(e.target.value)}
-                  >
-                    <option value="az">A → Z</option>
-                    <option value="za">Z → A</option>
-                    <option value="favs">★ Favs</option>
-                    <option value="risk-high">Risk ↓</option>
-                    <option value="risk-low">Risk ↑</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="cp-station-list" ref={listRef}>
-                {filteredStations.length === 0 && (
-                  <div className="cp-station-empty">No stations found</div>
-                )}
-                {filteredStations.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    data-id={s.id}
-                    className={`cp-station-item ${station === s.id ? "active" : ""}`}
-                    onClick={() => handleStationSelect(s.id, !!riskData)}
-                  >
-                    <span
-                      className={`cp-fav-star ${favorites.includes(s.id) ? "faved" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const { favorites: newFavs } = toggleFavorite(s.id);
-                        setFavorites(newFavs);
-                      }}
-                      title={favorites.includes(s.id) ? "Remove from favorites" : "Add to favorites"}
-                    >
-                      <Star size={12} fill={favorites.includes(s.id) ? "currentColor" : "none"} />
-                    </span>
-                    <span className="cp-station-item-id">{s.id}</span>
-                    <span className="cp-station-item-name">{s.name}</span>
-                    {s.risk ? (
-                      <span className={`cp-risk-score ${s.risk.stp >= 1 ? "high" : s.risk.stp >= 0.3 ? "med" : "low"}`}>
-                        {s.risk.stp.toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className="cp-station-item-coords">
-                        {s.lat.toFixed(1)}, {s.lon.toFixed(1)}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {lat && lon && !pointMode && (
-              <div className="cp-coords-preview">
-                <MapPin size={12} />
-                <span>{parseFloat(lat).toFixed(2)}°N, {Math.abs(parseFloat(lon)).toFixed(2)}°{parseFloat(lon) < 0 ? "W" : "E"}</span>
-                <span className="cp-coords-hint">· station selected</span>
-              </div>
-            )}
-            {pointMode && lat && lon && (
-              <div className="cp-point-banner">
-                <div className="cp-point-row">
-                  <Crosshair size={13} />
-                  <span className="cp-point-tag">POINT SOUNDING</span>
-                  <button
-                    type="button"
-                    className="cp-point-clear"
-                    onClick={() => {
-                      setPointMode(false);
-                      const stn = stations.find((s) => s.id === station);
-                      if (stn) {
-                        setLat(String(stn.lat));
-                        setLon(String(stn.lon));
-                      }
-                    }}
-                    title="Switch back to station mode"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-                <span className="cp-point-coords">
-                  {parseFloat(lat).toFixed(2)}°N, {Math.abs(parseFloat(lon)).toFixed(2)}°{parseFloat(lon) < 0 ? "W" : "E"}
-                </span>
-              </div>
-            )}
-            <p className="cp-map-click-hint">
-              <Crosshair size={11} />
-              Click map for point sounding
-            </p>
-          </div>
-        )}
-
-        {/* BUFKIT Model */}
-        {needsModel && (() => {
-          const modelList = source === "psu" ? (psuModels || []) : models;
-          const meta = MODEL_META[model] || { maxF: 384, step: 1 };
-          const maxF = meta.maxF;
-          const step = meta.step;
-          const currentFhour = Math.min(parseInt(fhour) || 0, maxF);
-          return (
-          <div className="cp-section">
-            <label className="cp-label">
-              <Layers size={14} />
-              Model
-            </label>
-            <div className="cp-model-grid">
-              {modelList.map((m) => {
-                const mm = MODEL_META[m.id];
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={`cp-model-btn ${model === m.id ? "active" : ""}`}
-                    onClick={() => {
-                      setModel(m.id);
-                      // Clamp forecast hour to new model's max
-                      const newMeta = MODEL_META[m.id] || { maxF: 384, step: 1 };
-                      const cur = parseInt(fhour) || 0;
-                      if (cur > newMeta.maxF) setFhour(String(newMeta.maxF));
-                    }}
-                    title={m.name}
-                  >
-                    <span className="cp-model-id">{mm?.short || m.id.toUpperCase()}</span>
-                    {mm && <span className="cp-model-res">{mm.res}</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Forecast hour */}
-            <div className="cp-fhour-section">
-              <div className="cp-fhour-header">
-                <Clock size={13} />
-                <span>Forecast Hour</span>
-                <span className="cp-fhour-value">F{String(currentFhour).padStart(2, "0")}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={maxF}
-                step={step}
-                className="cp-fhour-slider"
-                value={currentFhour}
-                onChange={(e) => setFhour(e.target.value)}
-              />
-              <div className="cp-fhour-range">
-                <span>F00</span>
-                <span>F{String(maxF).padStart(2, "0")}</span>
-              </div>
-              <div className="cp-fhour-presets">
-                {FHOUR_PRESETS.filter((h) => h <= maxF).map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    className={`cp-fhour-preset ${currentFhour === h ? "active" : ""}`}
-                    onClick={() => setFhour(String(h))}
-                  >
-                    {h === 0 ? "Anl" : `F${String(h).padStart(2, "0")}`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          );
-        })()}
-
-        {/* Date */}
-        <div className="cp-section">
-          <label className="cp-label">
-            <Calendar size={14} />
-            Date / Time (UTC)
-          </label>
-          {source === "obs" ? (
-            <div className="cp-dt-picker">
-              <div className="cp-dt-hours">
-                {[
-                  { id: "latest", label: "Latest" },
-                  { id: "00", label: "00Z" },
-                  { id: "12", label: "12Z" },
-                ].map((h) => (
-                  <button
-                    key={h.id}
-                    type="button"
-                    className={`cp-dt-hour${soundingHour === h.id ? " active" : ""}`}
-                    onClick={() => {
-                      setSoundingHour(h.id);
-                      if (h.id === "latest") {
-                        setDate("");
-                      } else if (date) {
-                        setDate(`${date.slice(0, 10)}T${h.id}:00`);
-                      }
-                    }}
-                  >
-                    {soundingHour === h.id && <Clock size={11} />}
-                    {h.label}
-                  </button>
-                ))}
-              </div>
-              <div className="cp-dt-date-wrap">
-                <Calendar size={13} className="cp-dt-date-icon" />
-                <input
-                  type="date"
-                  className="cp-dt-date-input"
-                  value={date ? date.slice(0, 10) : ""}
-                  onChange={(e) => {
-                    const d = e.target.value;
-                    if (d) {
-                      const hour = soundingHour === "12" ? "12:00" : "00:00";
-                      if (soundingHour === "latest") setSoundingHour("00");
-                      setDate(`${d}T${hour}`);
-                    } else {
-                      setDate("");
-                    }
-                  }}
-                />
-                {date && (
-                  <button type="button" className="cp-dt-clear" onClick={() => { setDate(""); setSoundingHour("latest"); }} title="Reset to latest">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-              {soundingHour === "latest" && (
-                <p className="cp-hint" style={{ margin: 0 }}>Auto-selects the most recent available sounding</p>
-              )}
-            </div>
-          ) : (
-            <div className="cp-dt-picker">
-              <div className="cp-dt-date-wrap">
-                <Clock size={13} className="cp-dt-date-icon" />
-                <input
-                  type="datetime-local"
-                  className="cp-dt-date-input"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-                {date && (
-                  <button type="button" className="cp-dt-clear" onClick={() => setDate("")} title="Clear date">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-              <p className="cp-hint" style={{ margin: 0 }}>Leave blank for the most recent time</p>
-            </div>
-          )}
-        </div>
-
-        {/* Submit */}
-        <button
-          type="submit"
-          className="cp-submit"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 size={16} className="spin" />
-              Analyzing...
-            </>
-          ) : (
-            <>
-              <Search size={16} />
-              Generate Sounding
-            </>
-          )}
-        </button>
-      </form>
+        <DataTab
+          sources={sources}
+          models={models}
+          psuModels={psuModels}
+          filteredStations={filteredStations}
+          riskData={riskData}
+          stations={stations}
+          source={source} setSource={setSource}
+          station={station}
+          lat={lat} setLat={setLat}
+          lon={lon} setLon={setLon}
+          date={date} setDate={setDate}
+          model={model} setModel={setModel}
+          fhour={fhour} setFhour={setFhour}
+          scanMode={scanMode} setScanMode={setScanMode}
+          fcstModel={fcstModel} setFcstModel={setFcstModel}
+          fcstFhour={fcstFhour} setFcstFhour={setFcstFhour}
+          soundingHour={soundingHour} setSoundingHour={setSoundingHour}
+          stationSearch={stationSearch} setStationSearch={setStationSearch}
+          sortMode={sortMode} setSortMode={setSortMode}
+          favorites={favorites}
+          onToggleFavorite={(id) => {
+            const { favorites: newFavs } = toggleFavorite(id);
+            setFavorites(newFavs);
+          }}
+          pointMode={pointMode} setPointMode={setPointMode}
+          needsStation={needsStation}
+          needsModel={needsModel}
+          scanning={scanning}
+          loading={loading}
+          listRef={listRef}
+          onSubmit={handleSubmit}
+          onStationSelect={handleStationSelect}
+          onRiskScan={handleRiskScan}
+        />
       )}
 
       {/* ═══ MODIFY TAB ═══ */}
-      {navTab === "modify" && (
-      <div className="cp-form">
-        <div className="cp-section-group">
-        <span className="cp-group-label">Modifications</span>
-
-        {/* Surface Modification */}
-        <div className={`cp-accordion ${sfcModEnabled ? "cp-accordion--active" : ""}`}>
-          <button
-            type="button"
-            className="cp-accordion-header"
-            onClick={() => setSfcModEnabled((v) => !v)}
-          >
-            <div className="cp-accordion-left">
-              <Thermometer size={14} className="cp-accordion-icon" />
-              <span className="cp-accordion-title">Surface Modification</span>
-            </div>
-            <div className="cp-accordion-right">
-              <span className={`cp-toggle-chip ${sfcModEnabled ? "on" : ""}`}>
-                {sfcModEnabled ? "ON" : "OFF"}
-              </span>
-              <ChevronRight size={14} className={`cp-accordion-chevron ${sfcModEnabled ? "open" : ""}`} />
-            </div>
-          </button>
-          <div className={`cp-accordion-body ${sfcModEnabled ? "expanded" : ""}`}>
-            <div className="cp-accordion-content">
-              <div className="cp-input-row">
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Temperature</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="—" value={sfcModT} onChange={(e) => setSfcModT(e.target.value)} />
-                    <span className="cp-unit-badge">°C</span>
-                  </div>
-                </div>
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Dewpoint</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="0.1" className="cp-input cp-input-sm" placeholder="—" value={sfcModTd} onChange={(e) => setSfcModTd(e.target.value)} />
-                    <span className="cp-unit-badge">°C</span>
-                  </div>
-                </div>
-              </div>
-              <div className="cp-input-row">
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Wind Speed</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="1" className="cp-input cp-input-sm" placeholder="—" value={sfcModWspd} onChange={(e) => setSfcModWspd(e.target.value)} />
-                    <span className="cp-unit-badge">kt</span>
-                  </div>
-                </div>
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Wind Dir</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="—" value={sfcModWdir} onChange={(e) => setSfcModWdir(e.target.value)} />
-                    <span className="cp-unit-badge">°</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="cp-reset-btn"
-                onClick={() => { setSfcModT(""); setSfcModTd(""); setSfcModWspd(""); setSfcModWdir(""); }}
-              >
-                <RotateCcw size={11} /> Reset values
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Custom Storm Motion */}
-        <div className={`cp-accordion ${smEnabled ? "cp-accordion--active" : ""}`}>
-          <button
-            type="button"
-            className="cp-accordion-header"
-            onClick={() => setSmEnabled((v) => !v)}
-          >
-            <div className="cp-accordion-left">
-              <Wind size={14} className="cp-accordion-icon" />
-              <span className="cp-accordion-title">Custom Storm Motion</span>
-            </div>
-            <div className="cp-accordion-right">
-              <span className={`cp-toggle-chip ${smEnabled ? "on" : ""}`}>
-                {smEnabled ? "ON" : "OFF"}
-              </span>
-              <ChevronRight size={14} className={`cp-accordion-chevron ${smEnabled ? "open" : ""}`} />
-            </div>
-          </button>
-          <div className={`cp-accordion-body ${smEnabled ? "expanded" : ""}`}>
-            <div className="cp-accordion-content">
-              <div className="cp-input-row">
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Direction</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="1" min="0" max="360" className="cp-input cp-input-sm" placeholder="—" value={smDirection} onChange={(e) => setSmDirection(e.target.value)} />
-                    <span className="cp-unit-badge">°</span>
-                  </div>
-                </div>
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Speed</label>
-                  <div className="cp-input-with-unit">
-                    <input type="number" step="1" className="cp-input cp-input-sm" placeholder="—" value={smSpeed} onChange={(e) => setSmSpeed(e.target.value)} />
-                    <span className="cp-unit-badge">kt</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="cp-reset-btn"
-                onClick={() => { setSmDirection(""); setSmSpeed(""); }}
-              >
-                <RotateCcw size={11} /> Reset values
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* VAD Wind Profile Overlay */}
-        <button
-          type="button"
-          className={`cp-toggle-btn ${vadEnabled ? "cp-toggle-btn--active" : ""}`}
-          onClick={() => setVadEnabled((v) => !v)}
-          title={`Overlay NEXRAD VAD winds on the hodograph from the nearest WSR-88D radar${(() => {
-            let vLat = parseFloat(lat), vLon = parseFloat(lon);
-            if ((!vLat || !vLon) && station) {
-              const stn = stations.find((s) => s.id === station);
-              if (stn) { vLat = stn.lat; vLon = stn.lon; }
-            }
-            if (vLat && vLon) return ` (${nearestNexradForVad(vLat, vLon)})`;
-            return "";
-          })()}`}
-        >
-          <Layers size={14} />
-          <span>VAD Wind Profile</span>
-          <span className={`cp-toggle-chip ${vadEnabled ? "on" : ""}`}>
-            {vadEnabled ? "ON" : "OFF"}
-          </span>
-        </button>
-
-        {/* Storm-Relative Hodograph */}
-        <button
-          type="button"
-          className={`cp-toggle-btn ${srHodoEnabled ? "cp-toggle-btn--active" : ""}`}
-          onClick={() => setSrHodoEnabled((v) => !v)}
-          title="Plot hodograph in storm-relative frame — subtracts Bunkers RM (or custom SM) from all winds so storm motion is at the origin"
-        >
-          <Crosshair size={14} />
-          <span>SR Hodograph</span>
-          <span className={`cp-toggle-chip ${srHodoEnabled ? "on" : ""}`}>
-            {srHodoEnabled ? "ON" : "OFF"}
-          </span>
-        </button>
-
-        {/* Boundary Line */}
-        <div className="cp-accordion-section">
-          <button
-            type="button"
-            className={`cp-toggle-btn ${boundaryEnabled ? "cp-toggle-btn--active" : ""}`}
-            onClick={() => setBoundaryEnabled((v) => !v)}
-            title="Draw a boundary orientation line on the hodograph — represents an outflow boundary, front, or dryline orientation"
-          >
-            <Minus size={14} />
-            <span>Boundary Line</span>
-            <span className={`cp-toggle-chip ${boundaryEnabled ? "on" : ""}`}>
-              {boundaryEnabled ? "ON" : "OFF"}
-            </span>
-          </button>
-          {boundaryEnabled && (
-            <div style={{ padding: "6px 10px" }}>
-              <div className="cp-input-row">
-                <div className="cp-input-group">
-                  <label className="cp-input-group-label">Orientation</label>
-                  <div className="cp-input-with-unit">
-                    <input
-                      type="number"
-                      step="5"
-                      min="0"
-                      max="360"
-                      className="cp-input cp-input-sm"
-                      placeholder="e.g. 210"
-                      value={boundaryOrientation}
-                      onChange={(e) => setBoundaryOrientation(e.target.value)}
-                    />
-                    <span className="cp-unit-badge">°</span>
-                  </div>
-                </div>
-              </div>
-              <p style={{ margin: "4px 0 0", fontSize: 10, color: "var(--fg-faint, #707070)" }}>
-                Direction the boundary runs (0–360°). e.g. 210° = SW–NE oriented.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Profile Smoothing */}
-        <div className="cp-accordion-section">
-          <button
-            type="button"
-            className={`cp-toggle-btn ${smoothEnabled ? "cp-toggle-btn--active" : ""}`}
-            onClick={() => setSmoothEnabled((v) => !v)}
-            title="Apply Gaussian smoothing to T, Td, and wind profiles — reduces noise in model data"
-          >
-            <Waves size={14} />
-            <span>Profile Smoothing</span>
-            <span className={`cp-toggle-chip ${smoothEnabled ? "on" : ""}`}>
-              {smoothEnabled ? "ON" : "OFF"}
-            </span>
-          </button>
-          {smoothEnabled && (
-            <div style={{ padding: "6px 10px" }}>
-              <label className="cp-field-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 50 }}>σ = {smoothSigma}</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  step="0.5"
-                  value={smoothSigma}
-                  onChange={(e) => setSmoothSigma(e.target.value)}
-                  style={{ flex: 1 }}
-                  title="Gaussian sigma in data levels (higher = smoother). Typical: 2-5"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-
-        </div>{/* end Modifications */}
-
-        <p className="cp-hint" style={{ marginTop: 4 }}>
-          These options modify the next sounding fetch. Go to Data tab and click Generate to apply.
-        </p>
-      </div>
-      )}
+      {navTab === "modify" && (() => {
+        // Build the VAD button hint: append the nearest WSR-88D radar id
+        // when we have a usable lat/lon (either from the form, or by
+        // looking up the selected station).
+        let vLat = parseFloat(lat), vLon = parseFloat(lon);
+        if ((!vLat || !vLon) && station) {
+          const stn = stations.find((s) => s.id === station);
+          if (stn) { vLat = stn.lat; vLon = stn.lon; }
+        }
+        const vadSuffix = (vLat && vLon) ? ` (${nearestNexradForVad(vLat, vLon)})` : "";
+        const vadTitleHint = `Overlay NEXRAD VAD winds on the hodograph from the nearest WSR-88D radar${vadSuffix}`;
+        return (
+          <ModifyTab
+            sfcModEnabled={sfcModEnabled} setSfcModEnabled={setSfcModEnabled}
+            sfcModT={sfcModT} setSfcModT={setSfcModT}
+            sfcModTd={sfcModTd} setSfcModTd={setSfcModTd}
+            sfcModWspd={sfcModWspd} setSfcModWspd={setSfcModWspd}
+            sfcModWdir={sfcModWdir} setSfcModWdir={setSfcModWdir}
+            smEnabled={smEnabled} setSmEnabled={setSmEnabled}
+            smDirection={smDirection} setSmDirection={setSmDirection}
+            smSpeed={smSpeed} setSmSpeed={setSmSpeed}
+            vadEnabled={vadEnabled} setVadEnabled={setVadEnabled}
+            vadTitleHint={vadTitleHint}
+            srHodoEnabled={srHodoEnabled} setSrHodoEnabled={setSrHodoEnabled}
+            boundaryEnabled={boundaryEnabled} setBoundaryEnabled={setBoundaryEnabled}
+            boundaryOrientation={boundaryOrientation} setBoundaryOrientation={setBoundaryOrientation}
+            smoothEnabled={smoothEnabled} setSmoothEnabled={setSmoothEnabled}
+            smoothSigma={smoothSigma} setSmoothSigma={setSmoothSigma}
+          />
+        );
+      })()}
 
       {/* ═══ TOOLS TAB ═══ */}
       {navTab === "tools" && (
-      <div className="cp-form">
-        <div className="cp-section-group">
-          <span className="cp-group-label">Views</span>
-          <div className="cp-tools-grid">
-            <button
-              type="button"
-              className={`cp-tool-btn ${showMap ? "active" : ""}`}
-              onClick={onToggleMap}
-            >
-              <Map size={13} />
-              {showMap ? "Hide" : "Map"}
-            </button>
-            {riskData && (
-              <button
-                type="button"
-                className={`cp-tool-btn ${showRisk ? "active" : ""}`}
-                onClick={onToggleRisk}
-              >
-                <Zap size={13} />
-                {showRisk ? "Hide" : "Risk"}
-              </button>
-            )}
-            <button
-              type="button"
-              className={`cp-tool-btn ${showTimeSeries ? "active" : ""}`}
-              onClick={onToggleTimeSeries}
-            >
-              <TrendingUp size={13} />
-              Trends
-            </button>
-            <button
-              type="button"
-              className={`cp-tool-btn ${showCompare ? "active" : ""}`}
-              onClick={onToggleCompare}
-            >
-              <GitCompareArrows size={13} />
-              Compare
-            </button>
-            <button
-              type="button"
-              className={`cp-tool-btn ${showVwp ? "active" : ""}`}
-              onClick={onToggleVwp}
-            >
-              <Radio size={13} />
-              VWP
-            </button>
-            <button
-              type="button"
-              className={`cp-tool-btn ${showHistory ? "active" : ""}`}
-              onClick={onToggleHistory}
-            >
-              <History size={13} />
-              History
-            </button>
-            <button
-              type="button"
-              className="cp-tool-btn"
-              onClick={onNavigateEnsemble}
-            >
-              <Layers size={13} />
-              Plume
-            </button>
-          </div>
-        </div>
-
-        <div className="cp-section-group">
-          <span className="cp-group-label">Settings</span>
-          <div className="cp-settings-grid">
-            <button
-              type="button"
-              className={`cp-settings-btn ${colorblind ? "active" : ""}`}
-              onClick={onToggleColorblind}
-              title="Toggle color-blind safe palette"
-            >
-              <Eye size={14} />
-              <span>CB Mode</span>
-            </button>
-            <button
-              type="button"
-              className="cp-settings-btn"
-              onClick={onNavigateUpload}
-              title="Upload custom sounding data"
-            >
-              <Upload size={14} />
-              <span>Upload</span>
-            </button>
-            <a
-              href="https://shianmike.github.io/ModelForecast/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cp-settings-btn"
-              title="Open gridded model forecast maps"
-            >
-              <Map size={14} />
-              <span>Forecast</span>
-            </a>
-          </div>
-        </div>
-
-      </div>
+        <ToolsTab
+          showMap={showMap}
+          showRisk={showRisk}
+          showTimeSeries={showTimeSeries}
+          showCompare={showCompare}
+          showVwp={showVwp}
+          showHistory={showHistory}
+          riskData={riskData}
+          colorblind={colorblind}
+          onToggleMap={onToggleMap}
+          onToggleRisk={onToggleRisk}
+          onToggleTimeSeries={onToggleTimeSeries}
+          onToggleCompare={onToggleCompare}
+          onToggleVwp={onToggleVwp}
+          onToggleHistory={onToggleHistory}
+          onNavigateEnsemble={onNavigateEnsemble}
+          onToggleColorblind={onToggleColorblind}
+          onNavigateUpload={onNavigateUpload}
+        />
       )}
 
       </div>{/* end cp-tab-content */}

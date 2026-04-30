@@ -165,5 +165,6 @@ def serve_spa(path):
 
 
 if __name__ == "__main__":
-    print("Starting Sounding API on http://localhost:5000")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5001))
+    print(f"Starting Sounding API on http://localhost:{port}")
+    app.run(debug=True, port=port)
